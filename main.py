@@ -84,10 +84,20 @@ async def create_bet(body: NewBet):
 @app.get(f"{API}/rounds/current")
 async def rounds_current():
     rid = await dbmod.kv_get(app.state.db, "current_round_id")
-    async with app.state.db.execute("SELECT id, status, closes_at, pot FROM rounds WHERE id=?", (rid,)) as cur:
+    async with app.state.db.execute(
+        "SELECT id, status, opens_at, closes_at, pot FROM rounds WHERE id=?", (rid,)
+    ) as cur:
         row = await cur.fetchone()
-        if not row: raise HTTPException(404, "No current round")
-        return {"round_id": row[0], "status": row[1], "closes_at": row[2], "pot": row[3]}
+        if not row:
+            raise HTTPException(404, "No current round")
+        return {
+            "round_id": row[0],
+            "status": row[1],
+            "opens_at": row[2],
+            "closes_at": row[3],
+            "pot": row[4],
+        }
+
 
 @app.get(f"{API}/rounds/recent")
 async def rounds_recent(limit: int = 10):
