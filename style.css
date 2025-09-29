@@ -1,0 +1,124 @@
+/* ========== $TREATZ Styles ========== */
+:root{
+  --orange:#FF6B00; --orange-hi:#FF9500;
+  --witch:#6A00FF; --slime:#00FFA3;
+  --jet:#0D0D0D; --white:#FFFFFF; --gray:#AAAAAA;
+  --bg-a:#2C0A44; --bg-b:#4D0D57;
+  --card:rgba(13,13,13,.72); --card-border:rgba(255,255,255,.12);
+  --shadow:0 10px 30px rgba(0,0,0,.45);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; color:var(--white); font-family:Rubik, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  background: linear-gradient(180deg,var(--bg-a),var(--bg-b));
+  overflow-x:hidden;
+}
+
+/* Background image full viewport cover */
+.bg{
+  position:fixed; inset:0;
+  background-image:url('../assets/bg_placeholder.jpg');
+  background-size:cover; background-position:center; background-repeat:no-repeat;
+  filter: saturate(1.05) brightness(.9);
+  z-index:-2;
+}
+
+/* Sticky Countdown */
+.countdown{
+  position:sticky; top:0; z-index:1000;
+  background:linear-gradient(90deg, rgba(255,107,0,.92), rgba(106,0,255,.92));
+  backdrop-filter: blur(8px);
+  border-bottom:1px solid rgba(255,255,255,.2);
+}
+.countdown__inner{max-width:1200px; margin:0 auto; padding:.55rem .9rem; display:flex; gap:.75rem; align-items:center; justify-content:center; flex-wrap:wrap}
+.countdown__label{font-weight:700; letter-spacing:.3px}
+.countdown__timer{font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem}
+.countdown__omen{font-size:.95rem; opacity:.9}
+
+/* Nav */
+.nav{position:relative; z-index:5;}
+.nav__wrap{
+  max-width:1200px; margin:12px auto 0; padding:0 16px; display:flex; align-items:center; justify-content:space-between;
+}
+.nav__brand img{height:44px; display:block}
+.nav__links a{
+  color:var(--white); text-decoration:none; margin-left:18px; font-weight:600; opacity:.9;
+}
+.nav__links a:hover{opacity:1; text-shadow:0 0 12px rgba(255,255,255,.35)}
+
+.tokenbar{
+  max-width:1200px; margin:10px auto 16px; padding:8px 16px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  background:linear-gradient(180deg, rgba(13,13,13,.85), rgba(13,13,13,.6));
+  border:1px solid var(--card-border); border-radius:14px; box-shadow:var(--shadow);
+}
+.tokenbar__label{opacity:.85; margin-right:6px}
+.tokenbar__address code{font-size:.95rem; user-select:all}
+.tokenbar__actions{display:flex; gap:10px; flex-wrap:wrap}
+
+/* Buttons */
+.btn{cursor:pointer; border:none; padding:.7rem 1rem; border-radius:12px; font-weight:800}
+.btn--primary{background:linear-gradient(180deg,var(--orange),var(--orange-hi)); color:#1a0b00}
+.btn--buy{background:linear-gradient(90deg,var(--slime),#94DAFF); color:#032316; font-weight:900}
+.btn--outline{background:transparent; color:var(--white); border:1px solid var(--white)}
+.btn--ghost{background:transparent; color:var(--white); opacity:.9}
+.btn:disabled{opacity:.6; cursor:not-allowed}
+
+/* Layout */
+.main{max-width:1200px; margin:0 auto; padding:24px 16px 80px}
+.section{margin:28px 0}
+.section__title{font-family:"Luckiest Guy", cursive; letter-spacing:.5px; font-size:2rem; margin:0 0 12px; text-shadow:0 2px 18px rgba(0,0,0,.35)}
+.card{
+  background:var(--card); border:1px solid var(--card-border); border-radius:16px; padding:16px;
+  box-shadow:var(--shadow)
+}
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+.grid-3{display:grid; grid-template-columns:2fr 1fr 1.2fr; gap:16px}
+@media (max-width:900px){
+  .grid-2,.grid-3{grid-template-columns:1fr}
+}
+
+.label{display:block; margin:.3rem 0 .35rem; font-weight:700}
+input[type="number"], input[type="text"]{
+  width:100%; padding:.75rem .9rem; border-radius:12px; border:1px solid var(--card-border); background:#0f0f10; color:var(--white);
+}
+.help{opacity:.8; font-size:.9rem}
+
+/* Radio choices */
+.choices{display:flex; gap:12px; margin:.25rem 0 1rem}
+.choice{display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.06); padding:.5rem .75rem; border-radius:12px; border:1px solid var(--card-border)}
+
+/* Coin flip visual */
+.cf-display{display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:220px}
+.coin{
+  position:relative; width:140px; height:140px; perspective:800px;
+}
+.coin__face{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  border-radius:50%; font-weight:900; letter-spacing:.5px;
+  border:3px solid rgba(255,255,255,.25);
+  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%), linear-gradient(180deg, rgba(255,107,0,.8), rgba(255,149,0,.8));
+  backface-visibility:hidden;
+}
+.coin__face--back{transform:rotateY(180deg); background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%), linear-gradient(180deg, rgba(0,255,163,.8), rgba(148,218,255,.8));}
+.coin.spin{animation:spin 1.2s cubic-bezier(.2,.6,.2,1) 1}
+@keyframes spin{0%{transform:rotateY(0)} 100%{transform:rotateY(720deg)}}
+.cf-status{margin-top:12px; font-weight:700}
+
+/* Jackpot */
+.stats{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:10px}
+.stat__label{display:block; opacity:.85; font-size:.9rem}
+.stat__value{display:block; font-family:"Luckiest Guy"; font-size:1.35rem}
+.progress{height:10px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; border:1px solid var(--card-border)}
+.progress__bar{height:100%; background:linear-gradient(90deg, var(--witch), var(--slime))}
+
+/* Mini table */
+.mini-table__head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px}
+.mini-table__list{list-style:none; margin:0; padding:0; max-height:220px; overflow:auto}
+.mini-table__list li{display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-bottom:1px dashed rgba(255,255,255,.12)}
+.mini-round__pill{padding:.25rem .5rem; border:1px solid var(--card-border); border-radius:999px; font-size:.85rem; opacity:.9}
+
+/* Footer */
+.footer{opacity:.8; text-align:center; margin-top:28px}
