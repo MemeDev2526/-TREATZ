@@ -16,6 +16,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://trickortreatsol.tech",
+        "https://YOUR_GITHUB_USERNAME.github.io",          # add this (top-level user pages)
+        "https://YOUR_GITHUB_USERNAME.github.io/REPO_NAME",# add if a project page
         "http://localhost:5173",
         "http://127.0.0.1:8000",
         "http://localhost:8000",
@@ -98,7 +100,6 @@ async def rounds_current():
             "pot": row[4],
         }
 
-
 @app.get(f"{API}/rounds/recent")
 async def rounds_recent(limit: int = 10):
     async with app.state.db.execute("SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT ?", (limit,)) as cur:
@@ -123,11 +124,14 @@ async def helius_webhook(request: Request):
         memo = ev.get("memo") or ev.get("description") or ""
         tx_sig = ev.get("signature") or ev.get("txHash") or ""
         amt = int(ev.get("amount", 0))
-        to_addr = ev.get("destination") or ""
-        sender = ev.get("source") or ""
+        to_addr = (ev.get("destination") or "").lower()
+        sender = (ev.get("source") or "").lower()
+
+        game_vault = settings.GAME_VAULT.lower()
+        jackpot_vault = settings.JACKPOT_VAULT.lower()
 
         # Coin flip deposits
-        if memo.startswith("BET:") and to_addr == settings.GAME_VAULT:
+        if memo.startswith("BET:") and to_addr == game_vault:
             try:
                 _, bet_id, choice = memo.split(":")
             except Exception:
@@ -150,7 +154,7 @@ async def helius_webhook(request: Request):
             await app.state.db.commit()
 
         # Jackpot entries
-        if memo.startswith("JP:") and to_addr == settings.JACKPOT_VAULT:
+        if memo.startswith("JP:") and to_addr == jackpot_vault and amt > 0:
             parts = memo.split(":")
             if len(parts) >= 2:
                 round_id = parts[1]
@@ -162,10 +166,12 @@ async def helius_webhook(request: Request):
                 "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
                 (round_id, sender, tickets, tx_sig)
             )
+            sol = amt / 1_000_000_000
             await app.state.db.execute(
                 "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
-                (amt, round_id)
+                (sol, round_id)
             )
+
             await app.state.db.commit()
 
     return {"ok": True}
