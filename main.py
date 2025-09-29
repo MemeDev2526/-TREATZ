@@ -5,6 +5,19 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+# main.py (top-level)
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="$TREATZ Backend", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://trickortreatsol.tech"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 
 from config import settings
 import db as dbmod
