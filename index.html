@@ -133,10 +133,29 @@
     window.TREATZ_CONFIG = {
       tokenAddress: "So11111111111111111111111111111111111111112",
       halloweenISO: "2025-10-31T00:00:00-04:00",
-      links: { discord: "#", telegram: "#", twitter: "#", whitepaper: "#" },
-      buyUrl: "#"
+      links: {
+        discord: "#",
+        telegram: "#",
+        twitter: "https://x.com/trickortreatzsol",
+        whitepaper: "https://trickortreatsol.tech/whitepaper"
+      },
+      buyUrl: "https://pump.fun/coin/YOUR_TOKEN_MINT",
+      apiBase: "https://YOUR-BACKEND.onrender.com/api"
     };
   </script>
   <script src="app.js?v=15" defer></script>
+
+<!-- Minimal Phantom-only wallet glue (safe to keep; no bundlers needed) -->
+<script type="module">
+  const hasPhantom = !!(window?.solana?.isPhantom);
+  window.addEventListener('treatz:wallet:connect', async ()=>{
+    if (!hasPhantom) return alert('Install Phantom to connect.');
+    try { await window.solana.connect(); alert('Wallet connected'); } catch(e){}
+  });
+  window.addEventListener('treatz:wallet:open', ()=>{
+    if (!hasPhantom) return alert('Install Phantom to open wallet.');
+    window.solana?.connect?.();
+  });
+</script>
 </body>
 </html>
