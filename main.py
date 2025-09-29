@@ -1,9 +1,3 @@
-import hmac, hashlib, os, json, time, secrets
-from typing import Optional, Literal, List, Dict, Any
-from datetime import datetime, timedelta
-
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
@@ -14,14 +8,15 @@ app = FastAPI(title="$TREATZ Backend", version="0.1.0")
 # CORS — add your Pages domain, localhost for dev, etc.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://trickortreatsol.tech",
-        "https://YOUR_GITHUB_USERNAME.github.io",          # add this (top-level user pages)
-        "https://YOUR_GITHUB_USERNAME.github.io/REPO_NAME",# add if a project page
-        "http://localhost:5173",
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
-    ],
+allow_origins=[
+    "https://trickortreatsol.tech",
+    "https://memedev2526.github.io",             # user pages (if used)
+    "https://memedev2526.github.io/treatz",      # project pages path (if used)
+    "http://localhost:5173",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+],
+
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -166,13 +161,13 @@ async def helius_webhook(request: Request):
                 "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
                 (round_id, sender, tickets, tx_sig)
             )
-            sol = amt / 1_000_000_000
+            # Keep pot in lamports (INTEGER). Frontend converts to SOL.
             await app.state.db.execute(
                 "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
-                (sol, round_id)
+                (amt, round_id)
             )
-
             await app.state.db.commit()
+
 
     return {"ok": True}
 
