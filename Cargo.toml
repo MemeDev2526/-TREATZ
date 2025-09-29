@@ -1,0 +1,3 @@
+[workspace]
+members = ["programs/treatz_flip"]
+resolver = "2"
