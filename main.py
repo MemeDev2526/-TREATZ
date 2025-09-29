@@ -9,13 +9,14 @@ app = FastAPI(title="$TREATZ Backend", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
 allow_origins=[
-    "https://trickortreatsol.tech",
-    "https://memedev2526.github.io",             # user pages (if used)
-    "https://memedev2526.github.io/treatz",      # project pages path (if used)
-    "http://localhost:5173",
+    "https://trickortreatsol.tech",                 # if/when you point the site here
+    "https://memedev2526.github.io",                # user pages root (good to allow)
+    "https://memedev2526.github.io/-TREATZ",        # your project pages path
+    "http://localhost:5173",                        # Vite dev
     "http://127.0.0.1:8000",
     "http://localhost:8000",
 ],
+
 
     allow_credentials=True,
     allow_methods=["*"],
