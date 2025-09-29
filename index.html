@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>$TREATZ — Halloween Meme Coin on Solana</title>
+  <meta name="description" content="$TREATZ — Trick-or-Treat coin toss & Jackpot Raffle. Spooky season on Solana." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- Sticky Countdown Banner -->
+  <div class="countdown" id="countdown">
+    <div class="countdown__inner">
+      <span class="countdown__label">⏳ Countdown to Halloween:</span>
+      <span class="countdown__timer" id="countdown-timer">--d --h --m --s</span>
+      <span class="countdown__omen" id="countdown-omen" aria-live="polite"></span>
+    </div>
+  </div>
+
+  <!-- Top Navigation -->
+  <header class="nav">
+    <div class="nav__wrap">
+      <a href="#" class="nav__brand">
+        <img src="assets/logo.svg" alt="$TREATZ" />
+      </a>
+      <nav class="nav__links">
+        <a href="#" id="link-discord" target="_blank" rel="noopener">Discord</a>
+        <a href="#" id="link-telegram" target="_blank" rel="noopener">Telegram</a>
+        <a href="#" id="link-twitter" target="_blank" rel="noopener">Twitter</a>
+        <a href="#" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
+      </nav>
+    </div>
+    <div class="tokenbar" role="group" aria-label="Token & Buy">
+      <div class="tokenbar__address">
+        <span class="tokenbar__label">Token:</span>
+        <code id="token-address">So11111111111111111111111111111111111111112</code>
+        <button class="btn btn--ghost" id="btn-copy">Copy</button>
+      </div>
+      <div class="tokenbar__actions">
+        <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
+        <button class="btn btn--outline" id="btn-connect">Connect Wallet</button>
+        <button class="btn btn--ghost" id="btn-openwallet">Open Wallet</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Full page background -->
+  <div class="bg" role="img" aria-label="Spooky cosmic candy background"></div>
+
+  <main class="main">
+    <!-- Trick or Treat Coin Toss -->
+    <section class="section" id="coin-flip">
+      <h2 class="section__title">🎃 Trick or Treat — Coin Toss</h2>
+      <div class="card grid-2">
+        <div class="card__col">
+          <div class="form">
+            <label class="label">Wager Amount (SOL)</label>
+            <input id="cf-amount" type="number" min="0" step="0.0001" placeholder="0.10" inputmode="decimal" />
+            <label class="label">Pick a side</label>
+            <div class="choices" role="radiogroup" aria-label="Coin side">
+              <label class="choice"><input type="radio" name="cf-side" value="TRICK" checked /> TRICK 👻</label>
+              <label class="choice"><input type="radio" name="cf-side" value="TREAT" /> TREAT 🍬</label>
+            </div>
+            <button class="btn btn--primary" id="cf-play">Flip that Coin</button>
+            <p class="help">House edge & on-chain fairness info will appear here.</p>
+          </div>
+        </div>
+        <div class="card__col">
+          <div class="cf-display" id="cf-display" aria-live="polite">
+            <div class="coin" id="coin">
+              <div class="coin__face coin__face--front">TRICK</div>
+              <div class="coin__face coin__face--back">TREAT</div>
+            </div>
+            <div class="cf-status" id="cf-status">Ready to flip.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Jackpot Raffle -->
+    <section class="section" id="jackpot">
+      <h2 class="section__title">🕯️ Jackpot Raffle</h2>
+      <div class="card grid-3">
+        <div class="card__col">
+          <div class="stats">
+            <div><span class="stat__label">Current Pot</span><span class="stat__value" id="jp-pot">—</span></div>
+            <div><span class="stat__label">Entries</span><span class="stat__value" id="jp-entries">—</span></div>
+            <div><span class="stat__label">Closes In</span><span class="stat__value" id="jp-countdown">—</span></div>
+          </div>
+          <div class="progress" aria-label="Time remaining">
+            <div class="progress__bar" id="jp-progress" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="card__col">
+          <div class="form">
+            <label class="label">Buy Tickets</label>
+            <input id="jp-amount" type="number" min="1" step="1" placeholder="1" />
+            <button class="btn btn--primary" id="jp-buy">Enter Raffle</button>
+            <p class="help">Tickets recorded on-chain. Auto-payout to winner. % burn to $TREATZ.</p>
+          </div>
+        </div>
+        <div class="card__col">
+          <div class="mini-table">
+            <div class="mini-table__head">
+              <span>Recent Rounds</span>
+              <button class="btn btn--ghost" id="jp-view-all">View All</button>
+            </div>
+            <ul class="mini-table__list" id="jp-recent">
+              <!-- recent rounds injected here -->
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- About -->
+    <section class="section" id="about">
+      <h2 class="section__title">About $TREATZ</h2>
+      <div class="card">
+        <p><strong>$TREATZ</strong> is the Halloween meme coin of Solana — bold, spooky, and made for one glorious pump. Just like trick-or-treating, it’s a dash to fill your bag with candy (and profits). Born from chaos, powered by memes, and dripping with Halloween FOMO — $TREATZ is here to haunt the charts, scare the paper hands, and reward the degens brave enough to grab a bag.</p>
+        <p>Play our <em>Trick or Treat</em> coin toss and the <em>Jackpot Raffle</em>, track burns and winners in real-time, and help us light the lanterns all the way to October 31.</p>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>© 2025 $TREATZ • Spooky season never sleeps.</p>
+    </footer>
+  </main>
+
+  <script>
+    window.TREATZ_CONFIG = {
+      tokenAddress: "So11111111111111111111111111111111111111112",
+      halloweenISO: "2025-10-31T00:00:00-04:00",
+      links: {
+        discord: "#",
+        telegram: "#",
+        twitter: "#",
+        whitepaper: "#"
+      },
+      buyUrl: "#"
+    };
+  </script>
+  <!-- Optional: include js/app.js from the ZIP to enable countdown + UI events -->
+  <script src="js/app.js"></script>
+</body>
+</html>
