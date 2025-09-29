@@ -1,6 +1,8 @@
 /* ========== $TREATZ App Logic (ready-to-wire) ======= */
 (function(){
   const C = window.TREATZ_CONFIG || {};
+  const API = (C.apiBase || '/api').replace(/\/$/, '');
+
   // Wire external links and token/buy
   document.getElementById('link-discord').href   = C.links.discord || '#';
   document.getElementById('link-telegram').href  = C.links.telegram || '#';
@@ -57,26 +59,64 @@
   }
   tick(); setInterval(tick, 1000);
 
+  // ---- LIVE JACKPOT DATA FROM BACKEND ----
+fetch(`${API}/rounds/current`)
+  .then(r => r.json())
+  .then(d => {
+    if (d && d.round_id) {
+      window.TREATZ.setJackpotRound({
+        id: d.round_id,
+        closeTs: Date.parse(d.closes_at || new Date().toISOString()),
+        pot: (d.pot || 0) / 1e9, // adjust divisor if your backend returns SOL or token units
+        entries: 0
+      });
+    }
+  })
+  .catch(()=>{/* keep mock defaults if API not ready */});
+
+fetch(`${API}/rounds/recent`)
+  .then(r => r.json())
+  .then(list => {
+    (list || []).forEach(r => window.TREATZ.addRecentRound({
+      id: r.id,
+      pot: (r.pot || 0) / 1e9
+    }));
+  })
+  .catch(()=>{});
+
   // Coin flip UI
   const playBtn = document.getElementById('cf-play');
   const coinEl  = document.getElementById('coin');
   const statusEl= document.getElementById('cf-status');
-  playBtn.addEventListener('click', ()=>{
+  playBtn.addEventListener('click', async ()=>{
     const amt = parseFloat(document.getElementById('cf-amount').value || '0');
     const side = (document.querySelector('input[name="cf-side"]:checked')||{}).value || 'TRICK';
     if (!amt || amt <= 0){ return toast('Enter a wager amount'); }
-    // Fire a wire-ready event your backend can hook into
+
     const payload = { amount: amt, side, ts: Date.now() };
     window.dispatchEvent(new CustomEvent('treatz:coinflip:submit', { detail: payload }));
-    // Temporary UX: animate coin then random result client-side (replace with verified oracle result)
+
+    // 1) Ask backend to create the bet
+    let bet;
+    try {
+      const body = { amount: Math.round(amt * 1e9), side }; // lamports; change if using SPL base units
+      const r = await fetch(`${API}/bets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!r.ok) throw new Error('server');
+      bet = await r.json(); // {bet_id, server_seed_hash, deposit, memo}
+    } catch (e) {
+      return toast('Server unavailable. Try again shortly.');
+    }
+
+    // 2) Show deposit instructions (until wallet-send is wired)
+    alert(`Send your wager now:\n\nDeposit: ${bet.deposit}\nMemo: ${bet.memo}\n\nKeep this page open; result posts after confirmation.`);
+
+    // 3) UX: spin coin while we wait on webhook settlement
     coinEl.classList.remove('spin'); void coinEl.offsetWidth; coinEl.classList.add('spin');
-    statusEl.textContent = 'Flipping…';
-    setTimeout(()=>{
-      const result = Math.random() < 0.5 ? 'TRICK' : 'TREAT';
-      statusEl.textContent = `Result: ${result}`;
-      toast(result === side ? 'You WIN 🎉' : 'You lost — the night is fickle 👻');
-      window.dispatchEvent(new CustomEvent('treatz:coinflip:result', { detail: { ...payload, result } }));
-    }, 1250);
+    statusEl.textContent = 'Waiting for on-chain confirmation…';
   });
 
   // Jackpot UI (mock data + wire-ready events)
