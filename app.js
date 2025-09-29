@@ -61,28 +61,39 @@
 
   // ---- LIVE JACKPOT DATA FROM BACKEND ----
 fetch(`${API}/rounds/current`)
-  .then(r => r.json())
+  .then(async r => {
+    if (!r.ok) throw new Error('bad status');
+    return r.json();
+  })
   .then(d => {
     if (d && d.round_id) {
+      const ct = Date.parse(d.closes_at || new Date().toISOString());
       window.TREATZ.setJackpotRound({
         id: d.round_id,
-        closeTs: Date.parse(d.closes_at || new Date().toISOString()),
-        pot: (d.pot || 0) / 1e9, // adjust divisor if your backend returns SOL or token units
-        entries: 0
+        closeTs: ct,
+        pot: (d.pot || 0) / 1e9,
+        entries: 0,
+        // If backend returns opens_at later, use it; otherwise infer a 30 min window
+        totalMs: (d.opens_at ? (ct - Date.parse(d.opens_at)) : (1000*60*30))
       });
     }
   })
   .catch(()=>{/* keep mock defaults if API not ready */});
 
+
 fetch(`${API}/rounds/recent`)
-  .then(r => r.json())
+  .then(async r => {
+    if (!r.ok) throw new Error('bad status');
+    return r.json();
+  })
   .then(list => {
-    (list || []).forEach(r => window.TREATZ.addRecentRound({
-      id: r.id,
-      pot: (r.pot || 0) / 1e9
+    (list || []).forEach(it => window.TREATZ.addRecentRound({
+      id: it.id,
+      pot: (it.pot || 0) / 1e9
     }));
   })
   .catch(()=>{});
+
 
   // Coin flip UI
   const playBtn = document.getElementById('cf-play');
@@ -128,14 +139,21 @@ fetch(`${API}/rounds/recent`)
 
   let round = {
     id: 'R' + Math.floor(Math.random()*9999),
-    closeTs: Date.now() + 1000*60*37, // 37 min from now (placeholder)
-    pot: 0, entries: 0
+    closeTs: Date.now() + 1000*60*37, // placeholder until API sets real closeTs
+    pot: 0, entries: 0,
+    totalMs: 1000*60*37 // initialize; replaced when API populates closeTs
   };
 
   function renderRound(){
+    // If totalMs not set, infer from first render (default 30 min)
+    if (!round.totalMs) {
+      const rem = Math.max(0, round.closeTs - Date.now());
+      round.totalMs = rem || (1000*60*30);
+    }
     jpPotEl.textContent = `${round.pot.toFixed(2)} SOL`;
     jpEntriesEl.textContent = `${round.entries}`;
   }
+
   function tickRound(){
     const now = Date.now();
     const rem = Math.max(0, round.closeTs - now);
@@ -144,13 +162,15 @@ fetch(`${API}/rounds/recent`)
     const sec = s%60;
     const h = Math.floor(s/3600);
     jpCdEl.textContent = `${h}h ${m}m ${sec}s`;
-    const total = 1000*60*60; // pretend 1h rounds for progress
-    const pct = 100 * (1 - rem/total);
+
+    const total = round.totalMs || (1000*60*30);
+    const pct = total ? (100 * (1 - rem/total)) : 0;
     jpProgEl.style.width = Math.max(0, Math.min(100, pct)) + '%';
+
     if (rem === 0){
       window.dispatchEvent(new CustomEvent('treatz:jackpot:close', { detail: { id: round.id } }));
       prependRecent(round);
-      round = { id: 'R' + Math.floor(Math.random()*9999), closeTs: Date.now() + 1000*60*60, pot: 0, entries: 0 };
+      round = { id: 'R' + Math.floor(Math.random()*9999), closeTs: Date.now() + 1000*60*60, pot: 0, entries: 0, totalMs: 1000*60*60 };
       renderRound();
     }
   }
