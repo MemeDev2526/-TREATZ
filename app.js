@@ -1,4 +1,4 @@
-/* ========== $TREATZ App Logic (ready-to-wire) ======== */
+/* ========== $TREATZ App Logic (ready-to-wire) ======= */
 (function(){
   const C = window.TREATZ_CONFIG || {};
   // Wire external links and token/buy
