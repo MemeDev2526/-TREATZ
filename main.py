@@ -25,19 +25,75 @@ allow_origins=[
 
 API = settings.API_PREFIX
 
+SCHEMA_SQL = """
+PRAGMA journal_mode=WAL;
+
+CREATE TABLE IF NOT EXISTS kv (
+  k TEXT PRIMARY KEY,
+  v TEXT
+);
+
+CREATE TABLE IF NOT EXISTS rounds (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  opens_at TEXT NOT NULL,
+  closes_at TEXT NOT NULL,
+  server_seed_hash TEXT,
+  client_seed TEXT,
+  pot INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS bets (
+  id TEXT PRIMARY KEY,
+  user TEXT,
+  client_seed TEXT,
+  server_seed_hash TEXT,
+  server_seed_reveal TEXT,
+  wager INTEGER,
+  side TEXT,
+  result TEXT,
+  win INTEGER,
+  status TEXT,
+  tx_sig TEXT,
+  created_at TEXT,
+  settled_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  round_id TEXT NOT NULL,
+  user TEXT,
+  tickets INTEGER NOT NULL,
+  tx_sig TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY(round_id) REFERENCES rounds(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rounds_opens_at ON rounds(opens_at);
+CREATE INDEX IF NOT EXISTS idx_entries_round ON entries(round_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_txsig ON entries(tx_sig);
+"""
+
+async def ensure_schema(db):
+    await db.executescript(SCHEMA_SQL)
+
 @app.on_event("startup")
 async def on_startup():
     app.state.db = await dbmod.connect(settings.DB_PATH)
+    await ensure_schema(app.state.db)  # <-- ensure tables/indexes exist
+
     # Ensure a current round exists
     if not await dbmod.kv_get(app.state.db, "current_round_id"):
         rid = f"R{secrets.randbelow(10_000):04d}"
-        closes = datetime.utcnow() + timedelta(minutes=30)
+        now = datetime.utcnow()
+        closes = now + timedelta(minutes=30)
         await app.state.db.execute(
             "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,pot) VALUES(?,?,?,?,?,?,?)",
-            (rid, "OPEN", datetime.utcnow().isoformat(), closes.isoformat(), _hash("seed:"+rid), secrets.token_hex(8), 0)
+            (rid, "OPEN", now.isoformat(), closes.isoformat(), _hash('seed:'+rid), secrets.token_hex(8), 0)
         )
-        await app.state.db.commit()
         await dbmod.kv_set(app.state.db, "current_round_id", rid)
+        await app.state.db.commit()
+
 
 @app.get(f"{API}/health")
 async def health():
