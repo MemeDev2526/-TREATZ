@@ -136,6 +136,14 @@
               <span class="stat__label">Closes In</span>
               <span class="stat__value" id="round-countdown">—</span>
             </div>
+            <div>
+              <span class="stat__label">Next Draw Starts In</span>
+              <span class="stat__value" id="round-next-countdown">—</span>
+            </div>
+            <div>
+              <span class="stat__label">Ticket Price</span>
+              <span class="stat__value"><strong id="ticket-price">—</strong> $TREATZ</span>
+            </div>
           </div>
           <div class="progress" aria-label="Time remaining">
             <div class="progress__bar" id="jp-progress" style="width:0%"></div>
@@ -193,7 +201,7 @@
   <script>
     window.TREATZ_CONFIG = {
       apiBase: "https://YOUR-SERVICE.onrender.com/api",  // ← set to your Render URL
-      token: { symbol: "$TREATZ", decimals: 9 },          // SPL mint decimals
+      token: { symbol: "$TREATZ", decimals: 6 },          // SPL mint decimals
       links: {
         discord: "https://discord.gg/yourinvite",
         telegram: "https://t.me/yourgroup",
