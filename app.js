@@ -45,6 +45,14 @@
       setTimeout(() => t.remove(), 250);
     }, 2200);
   };
+  
+  function isMobile() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+function phantomDeepLinkForThisSite() {
+  const url = location.href.split('#')[0];
+  return `https://phantom.app/ul/browse/${encodeURIComponent(url)}`;
+}
 
   /* =========================================================
      FX: Falling Wrappers / Candy / Ghosts
@@ -212,6 +220,13 @@
   link("link-twitter",   C.links?.twitter);
   link("link-whitepaper",C.links?.whitepaper);
   link("btn-buy",        C.buyUrl);
+
+const openInPhantom = document.getElementById("btn-open-in-phantom");
+if (openInPhantom) {
+  openInPhantom.href = phantomDeepLinkForThisSite();
+  // Show it if Phantom provider is missing and device is mobile
+  if (!window.solana && isMobile()) openInPhantom.style.display = "inline-block";
+}
 
   const tokenEl = $("#token-address");
   if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
@@ -442,14 +457,24 @@ async function ensureConfig() {
 async function connectWallet() {
   WALLET = getProvider();
   if (!WALLET) {
-    window.open("https://phantom.app/", "_blank");
-    throw new Error("Phantom not found");
+    // Desktop: open Phantom website. Mobile: open this site inside Phantom app.
+    if (isMobile()) {
+      location.href = phantomDeepLinkForThisSite();
+      throw new Error("Opening in Phantom…");
+    } else {
+      window.open("https://phantom.app/", "_blank");
+      throw new Error("Phantom not found");
+    }
   }
   const res = await WALLET.connect();
   PUBKEY = new solanaWeb3.PublicKey(res.publicKey.toString());
   document.getElementById("btn-connect").textContent = "Disconnect";
   document.getElementById("btn-openwallet").textContent = "Wallet…";
+  // hide helper deep-link once connected
+  const openInPhantom = document.getElementById("btn-open-in-phantom");
+  if (openInPhantom) openInPhantom.style.display = "none";
   return PUBKEY;
+}
 }
 async function disconnectWallet() {
   try { await WALLET?.disconnect(); } catch {}
