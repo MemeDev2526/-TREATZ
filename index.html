@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=12" />
+  <link rel="stylesheet" href="style.css?v=13" />
 </head>
 <body>
   <!-- Sticky Countdown Banner -->
@@ -22,14 +22,10 @@
 
   <!-- Top Navigation -->
   <header class="nav">
-    <header>
-      <img id="site-logo" alt="$TREATZ" style="height:48px;">
-  <!-- your nav links already here -->
-</header>
     <div class="nav__wrap">
       <a href="#" class="nav__brand">
-        <img src="assets/logo.svg" alt="$TREATZ"
-             onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'$TREATZ',style:'font-family:Luckiest Guy,cursive;font-size:28px;color:#FF6B00'}) )" />
+        <!-- Dynamic logo; app.js sets src from window.TREATZ_CONFIG.assets.logo -->
+        <img id="site-logo" alt="$TREATZ" style="height:48px;">
       </a>
       <nav class="nav__links">
         <a href="#" id="link-discord" target="_blank" rel="noopener">Discord</a>
@@ -91,9 +87,9 @@
       <div class="card grid-3">
         <div class="card__col">
           <div class="stats">
-            <div><span class="stat__label">Current Pot</span><span class="stat__value" id="jp-pot">—</span></div>
-            <div><span class="stat__label">Entries</span><span class="stat__value" id="jp-entries">—</span></div>
-            <div><span class="stat__label">Closes In</span><span class="stat__value" id="jp-countdown">—</span></div>
+            <div><span class="stat__label">Current Pot</span><span class="stat__value"><strong id="round-pot">—</strong> SOL</span></div>
+            <div><span class="stat__label">Round</span><span class="stat__value" id="round-id">—</span></div>
+            <div><span class="stat__label">Closes In</span><span class="stat__value" id="round-countdown">—</span></div>
           </div>
           <div class="progress" aria-label="Time remaining">
             <div class="progress__bar" id="jp-progress" style="width:0%"></div>
@@ -113,37 +109,9 @@
               <span>Recent Rounds</span>
               <button class="btn btn--ghost" id="jp-view-all">View All</button>
             </div>
-            <ul class="mini-table__list" id="jp-recent"></ul>
+            <!-- app.js fills this list from /rounds/recent -->
+            <ul class="mini-table__list recent-list" id="recent-rounds"></ul>
           </div>
-          <main>
-  <section class="jackpot">
-    <div>Round: <strong id="round-id">—</strong></div>
-    <div>Pot: <strong id="round-pot">—</strong> SOL</div>
-    <div>Closes in: <strong id="round-countdown">—</strong></div>
-  </section>
-
-  <section>
-    <h2>Recent Rounds</h2>
-    <ul id="recent-rounds" class="recent-list"></ul>
-  </section>
-
-  <section>
-    <h2>Place a Bet</h2>
-    <form id="bet-form" class="bet">
-      <label>Amount (lamports): <input name="amount" type="number" min="1" required></label>
-      <label>Side:
-        <select name="side">
-          <option>TRICK</option>
-          <option>TREAT</option>
-        </select>
-      </label>
-      <button type="submit">Create Bet</button>
-    </form>
-    <div class="muted small">
-      Deposit: <code id="bet-deposit">—</code> | Memo: <code id="bet-memo">—</code>
-    </div>
-  </section>
-</main>
         </div>
       </div>
     </section>
@@ -162,36 +130,41 @@
     </footer>
   </main>
 
-<script>
-  window.TREATZ_CONFIG = {
-    apiBase: "https://YOUR-SERVICE.onrender.com/api",  // <- set to your Render URL
-    links: {
-      twitter: "https://x.com/trickortreatsol?s=21",
-      whitepaper: "#"
-    },
-    buyUrl: "#",
-    tokenAddress: "$TREATZ_TOKEN_ADDRESS",
-    assets: {
-      logo: "assets/logo.png",     // you said: assets/logo.png
-      mascot: "assets/mascot.png"  // you said: assets/mascot.png
-    }
-  };
-</script>
+  <!-- Config BEFORE app.js -->
+  <script>
+    window.TREATZ_CONFIG = {
+      apiBase: "https://YOUR-SERVICE.onrender.com/api",  // <- set to your Render URL
+      links: {
+        discord: "https://discord.gg/yourinvite",
+        telegram: "https://t.me/yourgroup",
+        twitter: "https://x.com/trickortreatsol?s=21",
+        whitepaper: "#"
+      },
+      buyUrl: "#",
+      tokenAddress: "$TREATZ_TOKEN_ADDRESS",
+      assets: {
+        logo: "assets/logo.png",
+        mascot: "assets/mascot.png"
+      }
+    };
+  </script>
 
-  <script src="app.js?v=15" defer></script>
+  <script src="app.js?v=16" defer></script>
 
-<!-- Minimal Phantom-only wallet glue (safe to keep; no bundlers needed) -->
-<script type="module">
-  const hasPhantom = !!(window?.solana?.isPhantom);
-  window.addEventListener('treatz:wallet:connect', async ()=>{
-    if (!hasPhantom) return alert('Install Phantom to connect.');
-    try { await window.solana.connect(); alert('Wallet connected'); } catch(e){}
-  });
-  window.addEventListener('treatz:wallet:open', ()=>{
-    if (!hasPhantom) return alert('Install Phantom to open wallet.');
-    window.solana?.connect?.();
-  });
-</script>
-<img id="mascot-floater" alt="Mascot" style="position:fixed; right:24px; bottom:24px; width:96px; pointer-events:none; opacity:.9;">
+  <!-- Minimal Phantom-only wallet glue (safe to keep; no bundlers needed) -->
+  <script type="module">
+    const hasPhantom = !!(window?.solana?.isPhantom);
+    document.getElementById('btn-connect')?.addEventListener('click', async ()=>{
+      if (!hasPhantom) return alert('Install Phantom to connect.');
+      try { await window.solana.connect(); alert('Wallet connected'); } catch(e){}
+    });
+    document.getElementById('btn-openwallet')?.addEventListener('click', ()=>{
+      if (!hasPhantom) return alert('Install Phantom to open wallet.');
+      window.solana?.connect?.();
+    });
+  </script>
+
+  <!-- Mascot floater last -->
+  <img id="mascot-floater" alt="Mascot" style="position:fixed; right:24px; bottom:24px; width:96px; pointer-events:none; opacity:.9;">
 </body>
 </html>
