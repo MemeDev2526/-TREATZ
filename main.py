@@ -32,6 +32,19 @@ DEV_WALLET = getattr(settings, "DEV_WALLET", "")
 BURN_ADDRESS = getattr(settings, "BURN_ADDRESS", "")
 SLOTS_PER_MIN = 150  # approx. Solana slots per minute; good enough for 2–30m rounds
 
+# --- top of main.py (near imports) ---
+from fastapi import Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+ADMIN_TOKEN = getattr(settings, "ADMIN_TOKEN", "")
+_auth_scheme = HTTPBearer(auto_error=False)
+def admin_guard(creds: HTTPAuthorizationCredentials = Depends(_auth_scheme)):
+    # If ADMIN_TOKEN is unset, allow (useful from Render private shell/service).
+    if not ADMIN_TOKEN:
+        return True
+    if not creds or creds.credentials != ADMIN_TOKEN:
+        raise HTTPException(401, "Unauthorized")
+    return True
 
 # =========================================================
 # App Init
@@ -305,12 +318,6 @@ async def create_bet(body: NewBet):
     memo = f"BET:{bet_id}:{body.side}"
     return {"bet_id": bet_id, "server_seed_hash": server_seed_hash, "deposit": deposit, "memo": memo}
 
-@app.get(f"{API}/credits/{{wallet}}")
-async def get_credit(wallet: str):
-    val = await dbmod.kv_get(app.state.db, f"raffle_credit:{wallet}")
-    return {"wallet": wallet, "credit": int(val or 0)}  # base units
-
-
 # =========================================================
 # Endpoints — Rounds (current / recent)
 # =========================================================
@@ -486,6 +493,46 @@ async def get_config(include_balances: bool = False):
             "jackpot_vault_balance": jack_bal,            # null unless include_balances=true
         },
     }
+
+EXPLORER_BASE = "https://solscan.io/tx/"
+
+@app.get(f"{API}/tx/{{sig}}")
+def tx_link(sig: str):
+    return {"url": f"{EXPLORER_BASE}{sig}"}
+
+@app.get(f"{API}/health/full")
+async def health_full():
+    try:
+        slot = await _rpc_get_slot()
+        ok_rpc = True
+    except Exception:
+        slot = None
+        ok_rpc = False
+    return {
+        "ok": True,
+        "service": "$TREATZ",
+        "rpc_ok": ok_rpc,
+        "slot": slot,
+        "ts": time.time(),
+        "version": "0.1.0",
+    }
+
+# Raffle credit for a wallet (base units)
+@app.get(f"{API}/credits/{{wallet}}")
+async def get_credit(wallet: str):
+    val = await dbmod.kv_get(app.state.db, f"raffle_credit:{wallet}")
+    return {"wallet": wallet, "credit": int(val or 0)}
+
+# Entries for a round (paginated)
+@app.get(f"{API}/rounds/{{round_id}}/entries")
+async def list_round_entries(round_id: str, offset: int = 0, limit: int = 100):
+    async with app.state.db.execute(
+        "SELECT user, tickets, tx_sig, created_at FROM entries WHERE round_id=? ORDER BY id ASC LIMIT ? OFFSET ?",
+        (round_id, limit, offset),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [{"user": r[0], "tickets": int(r[1] or 0), "tx_sig": r[2], "created_at": r[3]} for r in rows]
+
 # =========================================================
 # Webhooks — Helius (MVP)
 # =========================================================
@@ -497,18 +544,33 @@ def _verify_helius_signature(request: Request, raw_body: bytes) -> bool:
     header_name = settings.HELIUS_SIGNATURE_HEADER or ""
     if not header_name:
         return True  # verification disabled
-
     sig = request.headers.get(header_name)
     if not sig:
         return False
-
     computed = hmac.new(settings.HMAC_SECRET.encode(), raw_body, hashlib.sha256).hexdigest()
     try:
-        # constant-time compare
         return hmac.compare_digest(computed, sig)
     except Exception:
         return False
 
+def _parse_token_transfer(ev: dict):
+    # Prefer tokenTransfers array (Helius), fallback to root fields
+    tts = ev.get("tokenTransfers") or ev.get("transfers") or []
+    for tt in tts:
+        mint = (tt.get("mint") or tt.get("tokenAddress") or "").lower()
+        if mint == (settings.TREATZ_MINT or "").lower():
+            return {
+                "amount": int(tt.get("tokenAmount", 0) or tt.get("amount", 0)),
+                "source": tt.get("fromUserAccount") or tt.get("from") or "",
+                "destination": tt.get("toUserAccount") or tt.get("to") or "",
+                "mint": mint,
+            }
+    return {
+        "amount": int(ev.get("amount", 0)),
+        "source": ev.get("source") or "",
+        "destination": ev.get("destination") or "",
+        "mint": (ev.get("mint") or "").lower(),
+    }
 
 @app.post(f"{API}/webhook/helius")
 async def helius_webhook(request: Request):
@@ -527,13 +589,22 @@ async def helius_webhook(request: Request):
     for ev in events:
         memo = ev.get("memo") or ev.get("description") or ""
         tx_sig = ev.get("signature") or ev.get("txHash") or ""
-        amt = int(ev.get("amount", 0))
 
-        # Preserve original base58 (case-sensitive); use lowercase only for equality checks
-        to_addr_raw = ev.get("destination") or ""
-        sender_raw = ev.get("source") or ""
+        parsed = _parse_token_transfer(ev)
+        amt = int(parsed.get("amount", 0))
+        to_addr_raw = parsed.get("destination") or ""
+        sender_raw = parsed.get("source") or ""
         to_addr = to_addr_raw.lower()
-        sender = sender_raw.lower()
+
+        # Mint guard: skip if not our token
+        if (ev.get("tokenTransfers") or ev.get("transfers")):
+            # already filtered by _parse_token_transfer
+            if parsed.get("mint") != (settings.TREATZ_MINT or "").lower():
+                continue
+        else:
+            ev_mint = (ev.get("mint") or "").lower()
+            if ev_mint and ev_mint != (settings.TREATZ_MINT or "").lower():
+                continue
 
         game_vault = (settings.GAME_VAULT or "").lower()
         jackpot_vault = (settings.JACKPOT_VAULT or "").lower()
@@ -630,11 +701,31 @@ async def helius_webhook(request: Request):
 
             await app.state.db.commit()
 
+
+def _parse_token_transfer(ev: dict):
+    # Prefer tokenTransfers array (Helius style); fallback to root fields if present
+    tts = ev.get("tokenTransfers") or ev.get("transfers") or []
+    for tt in tts:
+        mint = (tt.get("mint") or tt.get("tokenAddress") or "").lower()
+        if mint == (settings.TREATZ_MINT or "").lower():
+            return {
+                "amount": int(tt.get("tokenAmount", 0) or tt.get("amount", 0)),
+                "source": tt.get("fromUserAccount") or tt.get("from") or "",
+                "destination": tt.get("toUserAccount") or tt.get("to") or "",
+            }
+    # fallback (may be missing mint; we will reject later)
+    return {
+        "amount": int(ev.get("amount", 0)),
+        "source": ev.get("source") or "",
+        "destination": ev.get("destination") or "",
+        "mint": (ev.get("mint") or "").lower(),
+    }
+
 # =========================================================
 # Admin Helpers (simple, no auth — secure behind network!)
 # =========================================================
 @app.post(f"{API}/admin/round/close")
-async def admin_close_round():
+async def admin_close_round(auth: bool = Depends(admin_guard)):
     """Settle current round using commit-reveal + external entropy, split payouts, then open next round and auto-apply credits."""
     rid = await dbmod.kv_get(app.state.db, "current_round_id")
 
@@ -757,7 +848,7 @@ async def admin_close_round():
     }
 
 @app.post(f"{API}/admin/round/seed")
-async def admin_seed_rounds(n: int = 5):
+async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
     """Backfill recent, SETTLED rounds for UI testing."""
     now = datetime.utcnow()
     created = []
