@@ -63,7 +63,7 @@
     .stage{ position:fixed; inset:0; display:grid; place-items:center; pointer-events:none; }
     .cardy{
       pointer-events:auto;
-      max-width:860px; margin:6vh auto 10vh; padding:28px;
+      max-width:900px; margin:6vh auto 10vh; padding:34px;
       background:linear-gradient(180deg, rgba(13,13,13,.90), rgba(13,13,13,.62));
       border:1px solid var(--card-border); border-radius:18px; box-shadow:var(--shadow);
       text-align:center; position:relative; z-index:10;
@@ -88,11 +88,12 @@
 
     /* Punchier subline */
     .sub{
-      margin:12px auto 10px;
+      margin:14px auto 12px;
       font-family:"Luckiest Guy", cursive;
-      font-size:clamp(18px,3.2vw,32px);
-      letter-spacing:.5px;
+      font-size:clamp(20px,3.6vw,34px);
+      letter-spacing:.6px;
       color:#fff;
+      text-wrap: balance;
       text-shadow:
         0 0 14px rgba(0,255,163,.55),
         0 0 24px rgba(106,0,255,.35),
@@ -101,12 +102,16 @@
 
     /* Copy */
     .explain{
-      margin:14px auto 0; max-width:740px; text-align:left;
+      margin:14px auto 0; max-width:780px; text-align:left;
       opacity:0; transition:opacity 1.2s ease 250ms;
+      font-size: 1.125rem;         /* ~18px base */
+      line-height: 1.75;           /* comfy line height */
+      letter-spacing: .1px;
     }
     .explain.show{opacity:1;}
-    .explain ul{margin:.6rem 0 .2rem 1.1rem;}
-    .explain li{margin:.25rem 0;}
+    .explain p{ margin: .7rem 0 1rem; }
+    .explain ul{margin: .75rem 0 0 1.2rem;}
+    .explain li{margin:.45rem 0;}
     .explain em{color:#94DAFF; font-style:normal; font-weight:700}
 
     /* CTA Buttons */
@@ -133,7 +138,8 @@
     }
     .veil__btn{
       margin-top:14px; font-size:clamp(18px,2.6vw,24px);
-      padding:1rem 1.5rem; border-radius:18px;
+      font-size: clamp(20px, 3vw, 26px);
+      padding:1.05rem 1.6rem; border-radius:18px;
       background:linear-gradient(180deg,var(--orange),var(--orange-hi));
       color:#1a0b00; font-weight:900; border:none; cursor:pointer;
       box-shadow:0 10px 30px rgba(0,0,0,.45);
@@ -161,6 +167,11 @@
       100%{opacity:0; transform:scale(6) rotate(3deg); filter:blur(4px);}
     }
 
+    /* Lists read great with a tad bigger font on mobile */
+    @media (max-width: 480px){
+      .explain{ font-size: 1.2rem; line-height: 1.8; }
+    }
+    
     @media (prefers-reduced-motion: reduce){
       .flyer{animation:none; opacity:.85; transform:scale(1);}
     }
@@ -224,9 +235,9 @@
   <!-- D) VEIL (keeps page hidden + unlocks audio) -->
   <div class="veil" id="veil" role="dialog" aria-modal="true" aria-labelledby="veil-title">
     <div class="veil__card">
-      <h2 class="veil__title" id="veil-title">A Warning from the Puff</h2>
+      <h2 class="veil__title" id="veil-title">Warning!!</h2>
       <p>Only the brave may proceed.</p>
-      <button class="veil__btn" id="begin">Read the Whitepaper if you Dare</button>
+      <button class="veil__btn" id="begin">Unwrap your $TREATZ if you Dare</button>
     </div>
   </div>
 
