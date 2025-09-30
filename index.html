@@ -46,8 +46,8 @@
 
       <nav class="nav__links" aria-label="Primary">
         <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter</a>
-        <a href="#" id="link-telegram"  target="_blank" rel="noopener">Telegram</a>
-        <a href="#" id="link-discord"   target="_blank" rel="noopener">Discord</a>
+        <a href="#" id="link-telegram"  data-live="false" target="_blank" rel="noopener">Telegram</a>
+        <a href="#" id="link-discord"   data-live="false" target="_blank" rel="noopener">Discord</a>
         <a href="https://trickortreatsol.tech/whitepaper" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
       </nav>
     </div>
@@ -94,7 +94,7 @@
             </div>
 
             <button class="btn btn--primary" type="submit" id="cf-play">Flip that Coin</button>
-            <p class="help">House edge & on-chain fairness info will appear here.</p>
+            <p class="help" id="edge-line">House edge & on-chain fairness info will appear here.</p>
 
             <!-- Optional: app.js will populate these if present -->
             <div class="help" id="bet-instructions" style="margin-top:.5rem;">
@@ -149,6 +149,10 @@
           <div class="progress" aria-label="Time remaining">
             <div class="progress__bar" id="jp-progress" style="width:0%"></div>
           </div>
+          <div class="progress" aria-label="Time remaining">
+            <div class="progress__bar" id="jp-progress" style="width:0%"></div>
+          </div>
+          <p id="raffle-schedule" class="help" style="margin-top:.5rem;"></p>
         </div>
 
         <!-- Buy Tickets -->
@@ -170,10 +174,41 @@
             </div>
             <!-- app.js fills this list from /rounds/recent -->
             <ul class="mini-table__list recent-list" id="recent-rounds"></ul>
+          
+          <ul class="mini-table__list recent-list" id="recent-rounds"></ul>
+
+          <!-- Player stats (appears when wallet connected) -->
+          <div id="player-stats" class="card small" hidden style="margin-top:.75rem;">
+            <div><strong>Your tickets (current round):</strong> <span id="ps-tickets">0</span></div>
+            <div><strong>Ticket credit:</strong> <span id="ps-credit">0</span> $TREATZ</div>
+            <div><strong>Total spent:</strong> <span id="ps-spent">0</span> $TREATZ</div>
+            <div><strong>Total winnings:</strong> <span id="ps-won">0</span> $TREATZ</div>
           </div>
         </div>
       </div>
-    </section>
+</section>
+
+<!-- ============= RAFFLE HISTORY ============= -->
+<section class="section" id="raffle-history" aria-labelledby="raffle-history-title">
+  <h2 class="section__title" id="raffle-history-title">Raffle History</h2>
+  <div class="card">
+    <input id="history-search" type="text" placeholder="Search round (e.g., R1601)" />
+    <div class="table-wrap" style="margin-top:.5rem;">
+      <table id="history-table">
+        <thead>
+          <tr>
+            <th>Round</th>
+            <th>Pot</th>
+            <th>Winner</th>
+            <th>Payout Tx</th>
+            <th>Proof</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
 
     <!-- ============= ABOUT ============= -->
     <section class="section" id="about" aria-labelledby="about-title">
