@@ -351,6 +351,13 @@ body.flash {
 .fx-candy .c1   { fill: var(--witch); }
 .fx-candy .c2   { fill: var(--slime); }
 
+@media (max-width: 600px){
+  :root{
+    --countdown-h: 84px; /* mobile line wraps make the inner row taller */
+  }
+  .countdown__inner{ padding: 1.05rem 1rem; }
+}
+
 /* =========================================================
    Footer
    ========================================================= */
