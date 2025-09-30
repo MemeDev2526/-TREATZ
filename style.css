@@ -114,7 +114,7 @@ a, .btn--outline { color: var(--slime); }
   position:fixed; inset:0;
   background:
     linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.75)),
-    url('assets/background.png') center top / contain no-repeat fixed;
+    url('assets/background.png') center top / cover no-repeat fixed;
   z-index:-1;
   filter: saturate(105%);
 }
@@ -127,6 +127,8 @@ a, .btn--outline { color: var(--slime); }
 .nav__brand img{ height:44px; display:block }
 .nav__links a{ color:var(--white); text-decoration:none; margin-left:18px; font-weight:600; opacity:.9 }
 .nav__links a:hover{ opacity:1; text-shadow:0 0 12px rgba(255,255,255,.35) }
+/* Hide inactive socials marked with data-live="false" */
+.nav__links a[data-live="false"]{ display:none; }
 
 .tokenbar{
   max-width:1200px; margin:10px auto 16px; padding:8px 16px; 
@@ -298,6 +300,10 @@ body.flash {
 .muted { opacity:.75; }
 .small { font-size:.875rem; }
 .toast { transition: opacity .25s ease; }
+
+/* About readability */
+#about .card p{ font-size:1.05rem; line-height:1.8; }
+@media (max-width: 600px){ #about .card p{ font-size:1.12rem; line-height:1.85; } }
 
 /* =========================================================
    $TREATZ FX Layer (falling wrappers/candy/ghosts)
