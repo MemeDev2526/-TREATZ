@@ -101,5 +101,62 @@ input[type="number"], input[type="text"]{width:100%; padding:.75rem .9rem; borde
 .small { font-size:.875rem; }
 .toast { transition: opacity .25s ease; }
 
+/* ===== Brand Banner (top strip) ===== */
+.brand-banner{
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  height: 84px;               /* adjust to taste */
+  background: #0D0D0D url('assets/banner-top.png') center/contain no-repeat;
+  box-shadow: 0 2px 0 rgba(0,0,0,.35);
+}
+
+/* ===== Full-page BG using your spooky art ===== */
+.bg{
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.75)),
+    url('assets/background.png') center top / cover no-repeat fixed;
+  z-index: -1;
+  filter: saturate(105%);
+}
+
+/* ===== Countdown: make it more ominous ===== */
+.countdown{
+  position: sticky;
+  top: 84px; /* sits just under the brand banner */
+  backdrop-filter: blur(3px);
+  background: linear-gradient(90deg, rgba(76,0,92,.55), rgba(0,0,0,.55));
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  box-shadow: inset 0 -2px 0 rgba(0,255,163,.15), 0 6px 16px rgba(0,0,0,.25);
+}
+.countdown__inner{
+  display:flex; gap:12px; align-items:center; justify-content:center;
+  padding:.55rem .85rem;
+  font-family:"Rubik", system-ui, sans-serif;
+  color:#fff;
+  text-shadow: 0 0 8px rgba(0,255,102,.45);
+}
+.countdown__label{ opacity:.9; letter-spacing:.3px; }
+.countdown__timer{
+  font-weight:700;
+  border:1px solid rgba(0,255,163,.25);
+  padding:.2rem .5rem; border-radius:8px;
+  box-shadow: 0 0 12px rgba(0,255,163,.35);
+}
+.countdown__omen{
+  margin-left:8px; opacity:.9;
+  font-style: italic;
+}
+
+/* Optional: dripping aura under banner */
+.brand-banner::after{
+  content:"";
+  position:absolute; left:0; right:0; bottom:-6px; height:10px;
+  background: radial-gradient(closest-side, rgba(0,255,102,.5), transparent 70%);
+  filter: blur(6px); pointer-events:none;
+}
+
 /* Footer */
 .footer{opacity:.8; text-align:center; margin-top:28px}
