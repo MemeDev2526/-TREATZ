@@ -701,26 +701,6 @@ async def helius_webhook(request: Request):
 
             await app.state.db.commit()
 
-
-def _parse_token_transfer(ev: dict):
-    # Prefer tokenTransfers array (Helius style); fallback to root fields if present
-    tts = ev.get("tokenTransfers") or ev.get("transfers") or []
-    for tt in tts:
-        mint = (tt.get("mint") or tt.get("tokenAddress") or "").lower()
-        if mint == (settings.TREATZ_MINT or "").lower():
-            return {
-                "amount": int(tt.get("tokenAmount", 0) or tt.get("amount", 0)),
-                "source": tt.get("fromUserAccount") or tt.get("from") or "",
-                "destination": tt.get("toUserAccount") or tt.get("to") or "",
-            }
-    # fallback (may be missing mint; we will reject later)
-    return {
-        "amount": int(ev.get("amount", 0)),
-        "source": ev.get("source") or "",
-        "destination": ev.get("destination") or "",
-        "mint": (ev.get("mint") or "").lower(),
-    }
-
 # =========================================================
 # Admin Helpers (simple, no auth — secure behind network!)
 # =========================================================
