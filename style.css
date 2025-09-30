@@ -78,7 +78,7 @@ a, .btn--outline { color: var(--slime); }
   top: var(--banner-h);
   z-index: 1001;
   backdrop-filter: blur(3px);
-  background: linear-gradient(90deg, rgba(76,0,92,.55), rgba(0,0,0,.55));
+  background:#000;
   border-bottom: 1px solid rgba(255,255,255,.08);
   box-shadow: inset 0 -2px 0 rgba(0,255,163,.15), 0 6px 16px rgba(0,0,0,.25);
 }
