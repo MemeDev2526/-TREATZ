@@ -15,13 +15,35 @@
       text-align:center; max-width:600px;
     }
     .boo {
-      font-family:"Luckiest Guy",cursive;
-      font-size:3rem;
-      color:var(--orange);
-      text-shadow:0 0 25px var(--witch);
+      font-family:"Creepster","Luckiest Guy",cursive;
+      font-size:5rem;
+      color:#ff0000; /* blood red */
+      text-shadow:
+        0 0 30px #ff0000,
+        0 0 60px #ff3300,
+        0 0 90px black;
       display:none;
       margin-bottom:1rem;
+      animation: scream .25s steps(2) 6; /* jittering effect */
     }
+
+    @keyframes scream {
+      0% { transform:scale(1) rotate(0deg); }
+      25%{ transform:scale(1.2) rotate(-3deg); }
+      50%{ transform:scale(1.05) rotate(3deg); }
+      75%{ transform:scale(1.3) rotate(-2deg); }
+      100%{ transform:scale(1) rotate(0deg); }
+    }
+
+    body.flash {
+      background: #ff0000;
+      animation: flashbg 0.6s ease-in-out 2;
+    }
+    @keyframes flashbg {
+      0%,100% { background:#000; }
+      50% { background:#ff0000; }
+    }
+
     .explain {
       font-size:1.1rem; line-height:1.5;
       opacity:0; transition:opacity 2s ease;
@@ -44,12 +66,24 @@
     </div>
   </div>
   <script>
-    setTimeout(()=>{
-      document.getElementById('boo').style.display = 'block';
-      setTimeout(()=>{ 
-        document.getElementById('explain').style.opacity = 1;
-      }, 1000);
-    }, 800);
-  </script>
+  setTimeout(()=>{
+    // background flash
+    document.body.classList.add('flash');
+    // show BOO
+    const boo = document.getElementById('boo');
+    boo.style.display = 'block';
+
+    // loud audio sting (optional)
+    const audio = new Audio('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
+    audio.volume = 0.7;
+    audio.play().catch(()=>{});
+
+    // reveal explain after short delay
+    setTimeout(()=>{ 
+      document.getElementById('explain').style.opacity = 1;
+    }, 1200);
+  }, 800);
+</script>
+
 </body>
 </html>
