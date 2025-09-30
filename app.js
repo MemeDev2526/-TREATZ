@@ -374,6 +374,96 @@
     });
   }
 
+// ==== $TREATZ: Raffle timers & progress ====
+(async function initRaffleTimers() {
+  try {
+    const api = (window.TREATZ_CONFIG?.apiBase || "").replace(/\/+$/,"");
+
+    // 1) Fetch server config (timers, splits, limits) + balances
+    const cfgRes = await fetch(`${api}/config?include_balances=true`);
+    const cfg = await cfgRes.json();
+
+    // Merge key bits into runtime config (so the rest of the app can use them)
+    window.TREATZ_CONFIG = window.TREATZ_CONFIG || {};
+    window.TREATZ_CONFIG.token = Object.assign(
+      { symbol: "$TREATZ", decimals: 6 },
+      cfg.token || {}
+    );
+    const DECIMALS = Number(window.TREATZ_CONFIG.token.decimals || 6);
+    const TEN_POW = 10 ** DECIMALS;
+
+    // 2) Pull the active round (for current pot)
+    const roundRes = await fetch(`${api}/rounds/current`);
+    const round = await roundRes.json();
+
+    // --- DOM refs ---
+    const elPot      = document.getElementById("round-pot");
+    const elRoundId  = document.getElementById("round-id");
+    const elClose    = document.getElementById("round-countdown");
+    const elNext     = document.getElementById("round-next-countdown");
+    const elTicket   = document.getElementById("ticket-price");
+    const elProg     = document.getElementById("jp-progress");
+
+    // --- Populate static bits ---
+    if (elRoundId && round?.round_id) elRoundId.textContent = round.round_id;
+
+    // ticket price (human units)
+    const priceBase = Number(cfg?.token?.ticket_price || 0);
+    if (elTicket) elTicket.textContent = (priceBase / TEN_POW).toLocaleString(undefined, { maximumFractionDigits: DECIMALS });
+
+    // pot (human units)
+    if (elPot && typeof round?.pot === "number") {
+      elPot.textContent = (round.pot / TEN_POW).toLocaleString(undefined, { maximumFractionDigits: DECIMALS });
+    }
+
+    // time helpers
+    const opensAt  = new Date(round.opens_at);
+    const closesAt = new Date(round.closes_at);
+    const nextOpensAt = new Date(cfg?.timers?.next_opens_at || (closesAt.getTime() + (cfg?.raffle?.break_minutes||0)*60*1000));
+
+    function fmtDur(ms) {
+      if (ms < 0) ms = 0;
+      const s = Math.floor(ms / 1000);
+      const d = Math.floor(s / 86400);
+      const h = Math.floor((s % 86400) / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      return d > 0
+        ? `${d}d ${h}h ${m}m ${sec}s`
+        : `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}:${sec.toString().padStart(2,"0")}`;
+    }
+
+    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+    // --- live updater ---
+    function tick() {
+      const now = new Date();
+
+      // Close timer
+      const msToClose = closesAt - now;
+      if (elClose) elClose.textContent = fmtDur(msToClose);
+
+      // Next-open timer
+      const msToNext = nextOpensAt - now;
+      if (elNext) elNext.textContent = fmtDur(msToNext);
+
+      // Progress: 0 → 100% across [opensAt, closesAt]
+      if (elProg) {
+        const total = closesAt - opensAt;
+        const elapsed = now - opensAt;
+        const pct = clamp01(elapsed / (total || 1)) * 100;
+        elProg.style.width = `${pct}%`;
+      }
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  } catch (e) {
+    console.error("initRaffleTimers error", e);
+  }
+})();
+
+   
   /* =========================================================
      Init
      ========================================================= */
