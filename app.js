@@ -328,6 +328,7 @@ if (mascotImg && C.assets?.mascot) {
             elCountdown.textContent = "0:00";
             setTimeout(loadCurrentRound, 1500);
             setTimeout(loadRecentRounds, 1500);
+            setTimeout(announceLastWinner, 2000); // 👈 new line here
           }
         }, 250);
       }
@@ -349,10 +350,19 @@ if (mascotImg && C.assets?.mascot) {
         recentList.innerHTML = `<li class="muted">No rounds yet.</li>`;
         return;
       }
-      recentList.innerHTML = rows
-        .map(row => `<li><span>${row.id}</span><span>${fmtUnits(row.pot, TOKEN.decimals)} ${TOKEN.symbol}</span></li>`)
-        .join("");
-    } catch (e) {
+      recentList.innerHTML = await Promise.all(rows.map(async row=>{
+        let winner = "—";
+        try {
+          const w = await fetch(`${API}/rounds/${row.id}/winner`).then(r=>r.json());
+          if (w?.winner) winner = w.winner.slice(0,4)+"…"+w.winner.slice(-4);
+        } catch {}
+        return `<li>
+          <span>#${row.id}</span>
+          <span>${fmtUnits(row.pot, TOKEN.decimals)} ${TOKEN.symbol}</span>
+          <span class="small">${winner}</span>
+        </li>`;
+      })).then(list=>list.join(""));
+          } catch (e) {
       console.error(e);
       recentList.innerHTML = `<li class="muted">Failed to load.</li>`;
     }
@@ -364,24 +374,20 @@ if (mascotImg && C.assets?.mascot) {
   const coin    = $("#coin");
   const betForm = $("#bet-form");
 
-  // Single click handler: spin + candy FX + (optional) demo resolve
+  // Single click handler: smoother spin + FX
   $("#cf-play")?.addEventListener("click", () => {
     if (!coin) return;
 
-    // spin
-    const turns = 5 + Math.floor(Math.random() * 4);
-    coin.style.transition = "transform 1.2s cubic-bezier(.2,.8,.2,1)";
-    coin.style.transform  = `rotateY(${turns * 180}deg)`;
-    setTimeout(() => { coin.style.transition = ""; }, 1300);
+    coin.classList.remove("spin");
+    void coin.offsetWidth; // restart animation
+    coin.classList.add("spin");
 
-    // candy rain feedback
-    rainTreatz({ count: 18 });
+    rainTreatz({ count: 22 });
 
-    // demo visual result (replace with real webhook settlement when ready)
     setTimeout(() => {
       const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
       playResultFX(side);
-    }, 1300);
+    }, 1120);
   });
    
   /* =========================================================
@@ -452,22 +458,52 @@ async function disconnectWallet() {
   document.getElementById("btn-openwallet").textContent = "Open Wallet";
 }
 
+function setWalletLabels() {
+  const btnConnect = document.getElementById("btn-connect");
+  const btnOpen    = document.getElementById("btn-openwallet");
+  if (!btnConnect || !btnOpen) return;
+  if (PUBKEY) {
+    const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
+    btnConnect.textContent = "Disconnect";
+    btnOpen.textContent    = `Wallet (${short})`;
+  } else {
+    btnConnect.textContent = "Connect Wallet";
+    btnOpen.textContent    = "Open Wallet";
+  }
+}
+
 document.getElementById("btn-connect")?.addEventListener("click", async ()=>{
   try {
-    if (PUBKEY) return disconnectWallet();
-    await connectWallet();
-    alert("Wallet connected");
-  } catch (e) { console.error(e); alert(e.message || "Wallet connect failed"); }
+    if (PUBKEY) { await disconnectWallet(); setWalletLabels(); return; }
+    await connectWallet(); setWalletLabels();
+  } catch (e) {
+    console.error(e);
+    alert("Install Phantom to play — opening phantom.app");
+    window.open("https://phantom.app/", "_blank");
+  }
 });
 
-// "Open Wallet": if connected, show a mini panel; if not, prompt connect
 document.getElementById("btn-openwallet")?.addEventListener("click", async ()=>{
   try {
-    if (!PUBKEY) { await connectWallet(); return; }
+    if (!PUBKEY) { await connectWallet(); setWalletLabels(); return; }
     const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
     alert(`Connected: ${short}`);
   } catch (e) { console.error(e); }
 });
+
+setWalletLabels();
+
+const fakeWins = [
+  "0xA9b…3F just won 128,000 $TREATZ 🎉",
+  "0xF12…9d scooped 512,000 $TREATZ 💰",
+  "0x77C…4a hit TREAT twice! 26,000 $TREATZ",
+  "0x9E0…1c bought 10 tickets — bold 👀",
+];
+function startTicker(lines=fakeWins){
+  const el = document.getElementById("fomo-ticker"); if (!el) return;
+  el.innerHTML = `<div class="ticker__inner">${lines.join(" • ")} • </div>`;
+}
+startTicker();
 
 // ===========================
 // SPL helpers
@@ -686,6 +722,58 @@ document.getElementById("jp-buy")?.addEventListener("click", async ()=>{
   } catch (e) { console.error("initRaffleUI", e); }
 })();
 
+async function loadHistory(query=""){
+  const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
+  try {
+    const base = await fetch(`${API}/rounds/recent?limit=10`).then(r=>r.json());
+    const ids  = (query && /^R\d+$/i.test(query)) ? base.filter(x=>x.id===query) : base;
+    const rows = [];
+    for (const r of ids){
+      const w = await fetch(`${API}/rounds/${r.id}/winner`).then(x=>x.json()).catch(()=>null);
+      rows.push(`<tr>
+        <td>#${r.id}</td>
+        <td>${fmtUnits(r.pot, TOKEN.decimals)} ${TOKEN.symbol}</td>
+        <td>${w?.winner ? w.winner.slice(0,4)+"…"+w.winner.slice(-4) : "—"}</td>
+        <td>${w?.payout_sig||"—"}</td>
+        <td>${(w?.server_seed_hash||"-").slice(0,10)}…</td>
+      </tr>`);
+    }
+    tbody.innerHTML = rows.join("") || `<tr><td colspan="5">No history.</td></tr>`;
+  } catch(e){ console.error(e); }
+}
+document.getElementById("history-search")?.addEventListener("change",(e)=>loadHistory(e.target.value.trim()));
+loadHistory();
+
+// House edge display
+(async()=>{
+  await ensureConfig();
+  if (CONFIG?.raffle?.splits) {
+    const s = CONFIG.raffle.splits;
+    const bps = 10000 - (s.winner + s.dev + s.burn);
+    const el = document.getElementById("edge-line");
+    if (el) el.textContent = `House edge: ${(bps/100).toFixed(2)}%`;
+  }
+})();
+
+async function announceLastWinner(){
+  try {
+    const recent = await fetch(`${API}/rounds/recent?limit=1`).then(r=>r.json());
+    const rid = recent?.[0]?.id; if (!rid) return;
+    const w = await fetch(`${API}/rounds/${rid}/winner`).then(x=>x.json());
+    if (w?.winner){
+      toast(`Winner: ${w.winner.slice(0,4)}… — Pot ${fmtUnits(w.pot, TOKEN.decimals)} ${TOKEN.symbol}`);
+    }
+  } catch(e){ console.error(e); }
+}
+
+function armAmbient(){
+  const a = document.getElementById("bg-ambient"); if (!a) return;
+  const start = ()=>{ a.volume = 0.12; a.play().catch(()=>{}); document.removeEventListener("click", start, {once:true}); };
+  document.addEventListener("click", start, {once:true});
+}
+armAmbient();
+
 // ===========================
 // Mascot: float/bounce around screen
 // ===========================
@@ -704,4 +792,6 @@ document.getElementById("jp-buy")?.addEventListener("click", async ()=>{
   }
   step();
 })();
+
+
 
