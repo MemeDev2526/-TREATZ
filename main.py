@@ -211,9 +211,8 @@ async def health():
 # Models
 # =========================================================
 class NewBet(BaseModel):
-    amount: int = Field(ge=1, description="Amount in smallest units (e.g., lamports)")
+    amount: int = Field(ge=1, description="Amount in smallest units (e.g., token base units)")
     side: Literal["TRICK", "TREAT"]
-
 
 class BetResp(BaseModel):
     bet_id: str
@@ -221,8 +220,6 @@ class BetResp(BaseModel):
     deposit: str
     memo: str
 
-
-# NEW: full bet readout for transparency
 class BetFullResp(BaseModel):
     id: str
     user: Optional[str] = None
@@ -233,14 +230,12 @@ class BetFullResp(BaseModel):
     status: str
     server_seed_hash: str
     server_seed_reveal: Optional[str] = None
-    tx_sig: Optional[str] = None          # deposit tx
-    payout_sig: Optional[str] = None      # on-chain payout tx (from KV)
-    short_deposit: Optional[int] = None   # recorded if amt < wager
+    tx_sig: Optional[str] = None
+    payout_sig: Optional[str] = None
+    short_deposit: Optional[int] = None
     created_at: str
     settled_at: Optional[str] = None
 
-
-# NEW: winner readout for a round
 class RoundWinnerResp(BaseModel):
     round_id: str
     status: str
@@ -251,16 +246,19 @@ class RoundWinnerResp(BaseModel):
     payout_sig: Optional[str] = None
     entries: int
     total_tickets: int
+    # Fairness evidence (make them part of the model so they return!)
+    server_seed_hash: Optional[str] = None
+    server_seed_reveal: Optional[str] = None
+    finalize_slot: Optional[int] = None
+    entropy: Optional[str] = None
 
-    amount: int = Field(ge=1, description="Amount in smallest units (e.g., lamports)")
-    side: Literal["TRICK", "TREAT"]
+class ConfigResp(BaseModel):
+    token: dict
+    raffle: dict
+    vaults: dict
+    timers: dict
+    limits: dict
 
-
-class BetResp(BaseModel):
-    bet_id: str
-    server_seed_hash: str
-    deposit: str
-    memo: str
 
 # =========================================================
 # Endpoints — Bets
@@ -306,6 +304,12 @@ async def create_bet(body: NewBet):
     deposit = settings.GAME_VAULT
     memo = f"BET:{bet_id}:{body.side}"
     return {"bet_id": bet_id, "server_seed_hash": server_seed_hash, "deposit": deposit, "memo": memo}
+
+@app.get(f"{API}/credits/{{wallet}}")
+async def get_credit(wallet: str):
+    val = await dbmod.kv_get(app.state.db, f"raffle_credit:{wallet}")
+    return {"wallet": wallet, "credit": int(val or 0)}  # base units
+
 
 # =========================================================
 # Endpoints — Rounds (current / recent)
@@ -425,6 +429,63 @@ async def get_round_winner(round_id: str):
         "entropy": entropy,
     }
 
+@app.get(f"{API}/config", response_model=ConfigResp)
+async def get_config(include_balances: bool = False):
+    # Current round timing (for countdowns)
+    rid = await dbmod.kv_get(app.state.db, "current_round_id")
+    opens_at = closes_at = next_opens_at = None
+    if rid:
+        async with app.state.db.execute(
+            "SELECT opens_at, closes_at FROM rounds WHERE id=?", (rid,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row:
+            opens_at = row[0]
+            closes_at = row[1]
+            next_opens_at = (datetime.fromisoformat(closes_at) + timedelta(minutes=ROUND_BREAK)).isoformat()
+
+    # Vault balances / limits (optional — hits RPC)
+    game_vault_ata = getattr(settings, "GAME_VAULT_ATA", "")
+    jackpot_vault_ata = getattr(settings, "JACKPOT_VAULT_ATA", "")
+    game_bal = jack_bal = None
+    max_wager = None
+    if include_balances:
+        game_bal = await _rpc_get_token_balance(game_vault_ata)
+        jack_bal = await _rpc_get_token_balance(jackpot_vault_ata)
+        if game_bal is not None:
+            max_wager = game_bal // 2
+
+    return {
+        "token": {
+            "mint": settings.TREATZ_MINT,
+            "decimals": getattr(settings, "TOKEN_DECIMALS", 6),
+            "ticket_price": settings.TICKET_PRICE,  # base units
+        },
+        "raffle": {
+            "round_minutes": ROUND_MIN,
+            "break_minutes": ROUND_BREAK,
+            "splits": {"winner": SPLT_WIN, "dev": SPLT_DEV, "burn": SPLT_BURN},
+            "dev_wallet": DEV_WALLET or None,
+            "burn_address": BURN_ADDRESS or None,
+        },
+        "vaults": {
+            "game_vault": settings.GAME_VAULT,
+            "game_vault_ata": game_vault_ata or None,
+            "jackpot_vault": settings.JACKPOT_VAULT,
+            "jackpot_vault_ata": jackpot_vault_ata or None,
+        },
+        "timers": {
+            "current_round_id": rid,
+            "opens_at": opens_at,
+            "closes_at": closes_at,
+            "next_opens_at": next_opens_at,
+        },
+        "limits": {
+            "max_wager_base_units": max_wager,            # null unless include_balances=true
+            "game_vault_balance": game_bal,               # null unless include_balances=true
+            "jackpot_vault_balance": jack_bal,            # null unless include_balances=true
+        },
+    }
 # =========================================================
 # Webhooks — Helius (MVP)
 # =========================================================
@@ -486,8 +547,7 @@ async def helius_webhook(request: Request):
 
             # Fetch wager + status for idempotency
             async with app.state.db.execute(
-                "SELECT wager, status FROM bets WHERE id=?",
-                (bet_id,),
+                "SELECT wager, status FROM bets WHERE id=?", (bet_id,)
             ) as cur:
                 row = await cur.fetchone()
                 if not row:
@@ -496,35 +556,30 @@ async def helius_webhook(request: Request):
             wager = int(row[0] or 0)
             prev_status = (row[1] or "").upper()
 
-            # --- Idempotency: if already settled AND we already have a payout sig, skip
             existing_payout = await dbmod.kv_get(app.state.db, f"bet:{bet_id}:payout_sig")
             if prev_status == "SETTLED" and existing_payout:
                 continue
 
-            # --- Short deposit guard: don't settle/payout if amt < wager
-            # (Helius may deliver multiple events; only proceed if deposit covers the bet)
+            # Short-deposit guard
             if amt < wager:
                 await dbmod.kv_set(app.state.db, f"bet:{bet_id}:short_deposit", str(amt))
                 await app.state.db.commit()
                 continue
 
-            # Commit-reveal:
+            # Commit-reveal
             server_seed = await dbmod.kv_get(app.state.db, f"bet:{bet_id}:server_seed")
             if not server_seed:
-                # Safety: if missing, skip; do not settle blindly
                 await dbmod.kv_set(app.state.db, f"bet:{bet_id}:payout_error", "missing_server_seed")
                 await app.state.db.commit()
                 continue
 
-            # Need client_seed for fairness mix
             async with app.state.db.execute("SELECT client_seed FROM bets WHERE id=?", (bet_id,)) as c2:
                 r2 = await c2.fetchone()
             client_seed = r2[0] if r2 else ""
 
-            # Deterministic fair coin from HMAC(server_seed, tx_sig + client_seed)
             rng = int.from_bytes(_hmac(server_seed, tx_sig + client_seed), "big")
             result = "TREAT" if (rng % 2) else "TRICK"
-            server_seed_reveal = server_seed  # store reveal
+            server_seed_reveal = server_seed
 
             win = int(result == choice)
             status = "SETTLED"
@@ -533,10 +588,8 @@ async def helius_webhook(request: Request):
                 "UPDATE bets SET user=?, result=?, win=?, status=?, server_seed_reveal=?, tx_sig=?, settled_at=? WHERE id=?",
                 (sender_raw, result, win, status, server_seed_reveal, tx_sig, datetime.utcnow().isoformat(), bet_id),
             )
-
             await app.state.db.commit()
 
-            # Automatic payout on win (2x wager, in base units)
             if win and wager > 0 and not existing_payout:
                 try:
                     payout_amount = wager * 2
@@ -547,7 +600,7 @@ async def helius_webhook(request: Request):
                     await dbmod.kv_set(app.state.db, f"bet:{bet_id}:payout_error", str(e))
                     await app.state.db.commit()
 
-                # ---------------- Jackpot entries -------------------
+        # ---------------- Jackpot entries -------------------
         if memo.startswith("JP:") and to_addr == jackpot_vault and amt > 0:
             parts = memo.split(":")
             if len(parts) >= 2 and parts[1]:
@@ -555,7 +608,7 @@ async def helius_webhook(request: Request):
             else:
                 round_id = await dbmod.kv_get(app.state.db, "current_round_id")
 
-            # tickets from full ticket_price only; DO NOT force at least 1
+            # full tickets only
             tickets = amt // settings.TICKET_PRICE
             remainder = amt - (tickets * settings.TICKET_PRICE)
 
@@ -564,13 +617,11 @@ async def helius_webhook(request: Request):
                     "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
                     (round_id, sender_raw, tickets, tx_sig),
                 )
-                # pot increases by tickets * price (base units)
                 await app.state.db.execute(
                     "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
                     (tickets * settings.TICKET_PRICE, round_id),
                 )
 
-            # store remainder as credit for next round
             if remainder > 0:
                 key = f"raffle_credit:{sender_raw}"
                 existing = await dbmod.kv_get(app.state.db, key)
@@ -578,7 +629,6 @@ async def helius_webhook(request: Request):
                 await dbmod.kv_set(app.state.db, key, str(cur + remainder))
 
             await app.state.db.commit()
-
 
 # =========================================================
 # Admin Helpers (simple, no auth — secure behind network!)
