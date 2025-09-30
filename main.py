@@ -7,12 +7,13 @@ import hmac
 import hashlib
 import secrets
 import time
+import asyncio
 from datetime import datetime, timedelta
 from typing import Literal, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-
+from scheduler import raffle_loop
 from config import settings
 import db as dbmod  # aiosqlite helpers (connect, kv_get/kv_set)
 
@@ -189,6 +190,8 @@ async def on_startup():
     app.state.db = await dbmod.connect(settings.DB_PATH)
     await ensure_schema(app.state.db)
 
+    asyncio.create_task(raffle_loop())
+    
     # Ensure a current (OPEN) round exists
     current = await dbmod.kv_get(app.state.db, "current_round_id")
     if not current:
