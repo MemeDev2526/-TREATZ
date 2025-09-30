@@ -129,11 +129,13 @@ function hauntTrick({count=10, ghosts=true, skulls=true} = {}) {
 function playResultFX(result){
   if (String(result).toUpperCase() === "TRICK") {
     hauntTrick({count: 12});
+    document.body.classList.add('flash');
+    setTimeout(()=>document.body.classList.remove('flash'), 1200);
   } else {
-    // win candy blast
     rainTreatz({count: 28, minDur: 4.5, maxDur: 7});
   }
 }
+
 window.playResultFX = playResultFX; // handy for testing from console
   
 // ===== Halloween Countdown (ominous) =====
