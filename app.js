@@ -473,3 +473,310 @@
   setInterval(loadRecentRounds, 30000);
   initHalloweenCountdown();
 })();
+
+// ===========================
+// Wallet + On-chain helpers
+// ===========================
+const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+const CONNECTION = new solanaWeb3.Connection(
+  (window.TREATZ_CONFIG?.rpcUrl || "https://api.mainnet-beta.solana.com"),
+  "confirmed"
+);
+
+let WALLET = null; // Phantom provider
+let PUBKEY = null; // solanaWeb3.PublicKey
+let CONFIG = null; // /api/config payload
+let DECIMALS = 6;
+let TEN_POW = 10 ** 6;
+
+function toBaseUnits(human) {
+  return Math.floor(Number(human) * TEN_POW);
+}
+function fromBaseUnits(base) {
+  return Number(base) / TEN_POW;
+}
+
+function getProvider() {
+  const any = window.solana;
+  if (any?.isPhantom) return any;
+  return null;
+}
+
+async function ensureConfig() {
+  if (!CONFIG) {
+    const api = (window.TREATZ_CONFIG?.apiBase || "").replace(/\/+$/,"");
+    const r = await fetch(`${api}/config?include_balances=true`);
+    CONFIG = await r.json();
+    DECIMALS = Number(CONFIG?.token?.decimals || window.TREATZ_CONFIG?.token?.decimals || 6);
+    TEN_POW = 10 ** DECIMALS;
+  }
+  return CONFIG;
+}
+
+async function connectWallet() {
+  WALLET = getProvider();
+  if (!WALLET) {
+    window.open("https://phantom.app/", "_blank");
+    throw new Error("Phantom not found");
+  }
+  const res = await WALLET.connect();
+  PUBKEY = new solanaWeb3.PublicKey(res.publicKey.toString());
+  document.getElementById("btn-connect").textContent = "Disconnect";
+  document.getElementById("btn-openwallet").textContent = "Wallet…";
+  return PUBKEY;
+}
+async function disconnectWallet() {
+  try { await WALLET?.disconnect(); } catch {}
+  PUBKEY = null;
+  document.getElementById("btn-connect").textContent = "Connect Wallet";
+  document.getElementById("btn-openwallet").textContent = "Open Wallet";
+}
+
+document.getElementById("btn-connect")?.addEventListener("click", async ()=>{
+  try {
+    if (PUBKEY) return disconnectWallet();
+    await connectWallet();
+    alert("Wallet connected");
+  } catch (e) { console.error(e); alert(e.message || "Wallet connect failed"); }
+});
+
+// "Open Wallet": if connected, show a mini panel; if not, prompt connect
+document.getElementById("btn-openwallet")?.addEventListener("click", async ()=>{
+  try {
+    if (!PUBKEY) { await connectWallet(); return; }
+    const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
+    alert(`Connected: ${short}`);
+  } catch (e) { console.error(e); }
+});
+
+// ===========================
+// SPL helpers
+// ===========================
+async function getOrCreateATA(owner, mintPk, payer) {
+  const ata = await splToken.getAssociatedTokenAddress(mintPk, owner, false, splToken.TOKEN_PROGRAM_ID, splToken.ASSOCIATED_TOKEN_PROGRAM_ID);
+  const info = await CONNECTION.getAccountInfo(ata);
+  if (!info) {
+    return {
+      ata,
+      ix: splToken.createAssociatedTokenAccountInstruction(
+        payer, ata, owner, mintPk,
+        splToken.TOKEN_PROGRAM_ID, splToken.ASSOCIATED_TOKEN_PROGRAM_ID
+      )
+    };
+  }
+  return { ata, ix: null };
+}
+
+function memoIx(memoStr) {
+  const data = new TextEncoder().encode(memoStr);
+  return new solanaWeb3.TransactionInstruction({ programId: MEMO_PROGRAM_ID, keys: [], data });
+}
+
+// ===========================
+// COIN FLIP — place wager (SPL transfer + memo)
+// ===========================
+document.getElementById("bet-form")?.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  try {
+    await ensureConfig();
+    if (!PUBKEY) await connectWallet();
+
+    const amountHuman = Number(document.getElementById("bet-amount").value || "0");
+    const side = (new FormData(e.target).get("side") || "TRICK").toString();
+    if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
+
+    // 1) Create bet on backend — returns memo + deposit vault
+    const api = (window.TREATZ_CONFIG?.apiBase || "").replace(/\/+$/,"");
+    const createRes = await fetch(`${api}/bets`, {
+      method: "POST",
+      headers: { "content-type":"application/json" },
+      body: JSON.stringify({ amount: toBaseUnits(amountHuman), side })
+    });
+    if (!createRes.ok) throw new Error(`Bet create failed (${createRes.status})`);
+    const bet = await createRes.json();
+
+    // Show instructions
+    document.getElementById("bet-deposit").textContent = bet.deposit;
+    document.getElementById("bet-memo").textContent = bet.memo;
+
+    // 2) Build SPL transfer to GAME_VAULT_ATA with memo
+    const mintPk = new solanaWeb3.PublicKey(CONFIG.token.mint);
+    const destAta = new solanaWeb3.PublicKey(CONFIG.vaults.game_vault_ata);
+    const payer = PUBKEY;
+
+    const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
+    const ixs = [];
+
+    if (createSrc) ixs.push(createSrc);
+    ixs.push(
+      splToken.createTransferInstruction(
+        srcAta, destAta, payer, toBaseUnits(amountHuman),
+        [], splToken.TOKEN_PROGRAM_ID
+      ),
+      memoIx(bet.memo)
+    );
+
+    const { blockhash, lastValidBlockHeight } = await CONNECTION.getLatestBlockhash("finalized");
+    const tx = new solanaWeb3.Transaction({ feePayer: payer, blockhash, lastValidBlockHeight });
+    tx.add(...ixs);
+
+    const { signature } = await WALLET.signAndSendTransaction(tx);
+    document.getElementById("cf-status").textContent = `Sent: ${signature.slice(0,8)}… (await confirmation)`;
+  } catch (err) {
+    console.error(err);
+    document.getElementById("cf-status").textContent = `Error: ${err.message || err}`;
+  }
+});
+
+// ===========================
+// JACKPOT — buy tickets (SPL transfer + memo "JP:<round_id>")
+// ===========================
+document.getElementById("jp-buy")?.addEventListener("click", async ()=>{
+  try {
+    await ensureConfig();
+    if (!PUBKEY) await connectWallet();
+
+    const nTickets = Math.max(1, Number(document.getElementById("jp-amount").value || "1"));
+    const ticketPriceBase = Number(CONFIG?.token?.ticket_price || 0);
+    if (!ticketPriceBase) throw new Error("Ticket price unavailable.");
+    const amountBase = nTickets * ticketPriceBase;
+
+    // Current round id
+    const api = (window.TREATZ_CONFIG?.apiBase || "").replace(/\/+$/,"");
+    const r = await fetch(`${api}/rounds/current`);
+    const cur = await r.json();
+    const memoStr = `JP:${cur.round_id}`;
+
+    // Build transfer to JACKPOT_VAULT_ATA
+    const mintPk = new solanaWeb3.PublicKey(CONFIG.token.mint);
+    const destAta = new solanaWeb3.PublicKey(CONFIG.vaults.jackpot_vault_ata);
+    const payer = PUBKEY;
+
+    const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
+    const ixs = [];
+    if (createSrc) ixs.push(createSrc);
+    ixs.push(
+      splToken.createTransferInstruction(
+        srcAta, destAta, payer, amountBase,
+        [], splToken.TOKEN_PROGRAM_ID
+      ),
+      memoIx(memoStr)
+    );
+
+    const { blockhash, lastValidBlockHeight } = await CONNECTION.getLatestBlockhash("finalized");
+    const tx = new solanaWeb3.Transaction({ feePayer: payer, blockhash, lastValidBlockHeight });
+    tx.add(...ixs);
+
+    const { signature } = await WALLET.signAndSendTransaction(tx);
+    alert(`Tickets purchased! Tx: ${signature.slice(0,8)}…`);
+  } catch (e) {
+    console.error(e);
+    alert(e.message || "Ticket purchase failed.");
+  }
+});
+
+// ===========================
+// Raffle timers, progress, and recent rounds
+// ===========================
+(async function initRaffleUI(){
+  try {
+    const api = (window.TREATZ_CONFIG?.apiBase || "").replace(/\/+$/,"");
+    // Config + balances
+    const cfgRes = await fetch(`${api}/config?include_balances=true`);
+    const cfg = await cfgRes.json();
+    CONFIG = cfg; // cache
+    DECIMALS = Number(cfg?.token?.decimals || 6);
+    TEN_POW = 10 ** DECIMALS;
+
+    const priceBase = Number(cfg?.token?.ticket_price || 0);
+    const elTicket = document.getElementById("ticket-price");
+    if (elTicket) elTicket.textContent = (priceBase / TEN_POW).toLocaleString();
+
+    // Current round
+    const roundRes = await fetch(`${api}/rounds/current`);
+    const round = await roundRes.json();
+
+    const elPot = document.getElementById("round-pot");
+    const elRoundId = document.getElementById("round-id");
+    const elClose = document.getElementById("round-countdown");
+    const elNext = document.getElementById("round-next-countdown");
+    const elProg = document.getElementById("jp-progress");
+
+    if (elRoundId) elRoundId.textContent = round.round_id;
+    if (elPot) elPot.textContent = (round.pot / TEN_POW).toLocaleString();
+
+    const opensAt = new Date(round.opens_at);
+    const closesAt = new Date(round.closes_at);
+    const nextOpensAt = new Date(cfg?.timers?.next_opens_at || (closesAt.getTime() + (cfg?.raffle?.break_minutes||0)*60*1000));
+
+    function fmt(ms){ if (ms<0) ms=0; const s=Math.floor(ms/1000); const h=String(Math.floor((s%86400)/3600)).padStart(2,"0"); const m=String(Math.floor((s%3600)/60)).padStart(2,"0"); const sec=String(s%60).padStart(2,"0"); return `${h}:${m}:${sec}`; }
+    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+    function tick(){
+      const now = new Date();
+      if (elClose) elClose.textContent = fmt(closesAt - now);
+      if (elNext)  elNext.textContent  = fmt(nextOpensAt - now);
+
+      if (elProg) {
+        const total = closesAt - opensAt;
+        const pct = clamp01((now - opensAt) / (total || 1)) * 100;
+        elProg.style.width = `${pct}%`;
+      }
+    }
+    tick(); setInterval(tick, 1000);
+
+    // Recent rounds
+    const recentRes = await fetch(`${api}/rounds/recent?limit=10`);
+    const recent = await recentRes.json();
+    const list = document.getElementById("recent-rounds");
+    if (list) {
+      list.innerHTML = "";
+      recent.forEach(r=>{
+        const li = document.createElement("li");
+        li.className = "mini-table__row";
+        li.innerHTML = `
+          <span>#${r.id}</span>
+          <span>${(Number(r.pot||0)/TEN_POW).toLocaleString()}</span>
+          <button class="btn btn--ghost" data-r="${r.id}">Proof</button>
+        `;
+        list.appendChild(li);
+      });
+      list.addEventListener("click", async (ev)=>{
+        const target = ev.target.closest("button[data-r]");
+        if (!target) return;
+        const rid = target.getAttribute("data-r");
+        const proof = await fetch(`${api}/rounds/${rid}/winner`).then(r=>r.json());
+        const msg = [
+          `Round: ${proof.round_id}`,
+          `Winner: ${proof.winner || "TBD"}`,
+          `Pot: ${(Number(proof.pot||0)/TEN_POW).toLocaleString()} $TREATZ`,
+          `SeedHash: ${proof.server_seed_hash || "-"}`,
+          `Reveal: ${proof.server_seed_reveal ? proof.server_seed_reveal.slice(0,10)+"…" : "-"}`,
+          `Entropy: ${proof.entropy || "-"}`,
+          `Tx: ${proof.payout_sig || "-"}`,
+        ].join("\n");
+        alert(msg);
+      });
+    }
+  } catch (e) { console.error("initRaffleUI", e); }
+})();
+
+// ===========================
+// Mascot: float/bounce around screen
+// ===========================
+(function floatMascot(){
+  const el = document.getElementById("mascot-floater");
+  if (!el) return;
+  let x = 100, y = 100, vx = 1.2, vy = 1.0;
+  function step(){
+    const w = window.innerWidth, h = window.innerHeight;
+    const rect = el.getBoundingClientRect();
+    x += vx; y += vy;
+    if (x < 0 || x + rect.width  > w) vx = -vx;
+    if (y < 0 || y + rect.height > h) vy = -vy;
+    el.style.transform = `translate(${x}px, ${y}px)`;
+    requestAnimationFrame(step);
+  }
+  step();
+})();
+
