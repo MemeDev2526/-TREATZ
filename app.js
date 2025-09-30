@@ -205,6 +205,15 @@ function initHalloweenCountdown(){
   }
 
   // ------- place bet (coin flip MVP) -------
+  const coin = document.getElementById("coin");
+  document.getElementById("cf-play")?.addEventListener("click", ()=>{
+  if (!coin) return;
+  const turns = 5 + Math.floor(Math.random()*4);
+  coin.style.transition = "transform 1.2s cubic-bezier(.2,.8,.2,1)";
+  coin.style.transform = `rotateY(${turns*180}deg)`;
+  setTimeout(()=> { coin.style.transition=""; }, 1300);
+});
+
   const betForm = $("#bet-form");
   if (betForm) {
     betForm.addEventListener("submit", async (ev) => {
