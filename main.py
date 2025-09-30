@@ -9,7 +9,6 @@ import secrets
 import time
 from datetime import datetime, timedelta
 from typing import Literal, Optional
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -17,6 +16,8 @@ from pydantic import BaseModel, Field
 from config import settings
 import db as dbmod  # aiosqlite helpers (connect, kv_get/kv_set)
 
+# NEW: payout helpers (sign + send SPL from vaults)
+from payouts import pay_coinflip_winner, pay_jackpot_winner
 
 # =========================================================
 # App Init
@@ -156,6 +157,47 @@ class BetResp(BaseModel):
     memo: str
 
 
+# NEW: full bet readout for transparency
+class BetFullResp(BaseModel):
+    id: str
+    user: Optional[str] = None
+    side: Optional[str] = None
+    wager: int
+    result: Optional[str] = None
+    win: Optional[int] = None
+    status: str
+    server_seed_hash: str
+    server_seed_reveal: Optional[str] = None
+    tx_sig: Optional[str] = None          # deposit tx
+    payout_sig: Optional[str] = None      # on-chain payout tx (from KV)
+    short_deposit: Optional[int] = None   # recorded if amt < wager
+    created_at: str
+    settled_at: Optional[str] = None
+
+
+# NEW: winner readout for a round
+class RoundWinnerResp(BaseModel):
+    round_id: str
+    status: str
+    pot: int
+    opens_at: str
+    closes_at: str
+    winner: Optional[str] = None
+    payout_sig: Optional[str] = None
+    entries: int
+    total_tickets: int
+
+    amount: int = Field(ge=1, description="Amount in smallest units (e.g., lamports)")
+    side: Literal["TRICK", "TREAT"]
+
+
+class BetResp(BaseModel):
+    bet_id: str
+    server_seed_hash: str
+    deposit: str
+    memo: str
+
+
 # =========================================================
 # Endpoints — Bets
 # =========================================================
@@ -230,6 +272,77 @@ async def rounds_recent(limit: int = 10):
 
     return [{"id": r[0], "pot": r[1]} for r in rows]
 
+# =========================================================
+# Read Endpoints — Fairness & Transparency
+# =========================================================
+@app.get(f"{API}/bets/{{bet_id}}", response_model=BetFullResp)
+async def get_bet(bet_id: str):
+    async with app.state.db.execute(
+        "SELECT id,user,wager,side,result,win,status,server_seed_hash,server_seed_reveal,tx_sig,created_at,settled_at "
+        "FROM bets WHERE id=?",
+        (bet_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if not row:
+        raise HTTPException(404, "Bet not found")
+
+    # KV extras
+    payout_sig = await dbmod.kv_get(app.state.db, f"bet:{bet_id}:payout_sig")
+    short_amt = await dbmod.kv_get(app.state.db, f"bet:{bet_id}:short_deposit")
+
+    return {
+        "id": row[0],
+        "user": row[1],
+        "wager": int(row[2] or 0),
+        "side": row[3],
+        "result": row[4],
+        "win": int(row[5] or 0) if row[5] is not None else None,
+        "status": row[6],
+        "server_seed_hash": row[7],
+        "server_seed_reveal": row[8],
+        "tx_sig": row[9],
+        "created_at": row[10],
+        "settled_at": row[11],
+        "payout_sig": payout_sig,
+        "short_deposit": int(short_amt) if short_amt is not None else None,
+    }
+
+
+@app.get(f"{API}/rounds/{{round_id}}/winner", response_model=RoundWinnerResp)
+async def get_round_winner(round_id: str):
+    # Round basics
+    async with app.state.db.execute(
+        "SELECT id,status,opens_at,closes_at,pot FROM rounds WHERE id=?",
+        (round_id,),
+    ) as cur:
+        r = await cur.fetchone()
+    if not r:
+        raise HTTPException(404, "Round not found")
+
+    # Winner + payout (from KV, written during admin_close_round)
+    winner = await dbmod.kv_get(app.state.db, f"round:{round_id}:winner")
+    payout_sig = await dbmod.kv_get(app.state.db, f"round:{round_id}:payout_sig")
+
+    # Entry stats
+    async with app.state.db.execute(
+        "SELECT COUNT(1), COALESCE(SUM(tickets),0) FROM entries WHERE round_id=?",
+        (round_id,),
+    ) as cur:
+        stats = await cur.fetchone()
+    entries_count = int(stats[0] or 0)
+    total_tickets = int(stats[1] or 0)
+
+    return {
+        "round_id": r[0],
+        "status": r[1],
+        "opens_at": r[2],
+        "closes_at": r[3],
+        "pot": int(r[4] or 0),
+        "winner": winner,
+        "payout_sig": payout_sig,
+        "entries": entries_count,
+        "total_tickets": total_tickets,
+    }
 
 # =========================================================
 # Webhooks — Helius (MVP)
@@ -273,8 +386,12 @@ async def helius_webhook(request: Request):
         memo = ev.get("memo") or ev.get("description") or ""
         tx_sig = ev.get("signature") or ev.get("txHash") or ""
         amt = int(ev.get("amount", 0))
-        to_addr = (ev.get("destination") or "").lower()
-        sender = (ev.get("source") or "").lower()
+
+        # Preserve original base58 (case-sensitive); use lowercase only for equality checks
+        to_addr_raw = ev.get("destination") or ""
+        sender_raw = ev.get("source") or ""
+        to_addr = to_addr_raw.lower()
+        sender = sender_raw.lower()
 
         game_vault = (settings.GAME_VAULT or "").lower()
         jackpot_vault = (settings.JACKPOT_VAULT or "").lower()
@@ -286,13 +403,29 @@ async def helius_webhook(request: Request):
             except Exception:
                 continue
 
+            # Fetch wager + status for idempotency
             async with app.state.db.execute(
-                "SELECT server_seed_hash, wager FROM bets WHERE id=?",
+                "SELECT wager, status FROM bets WHERE id=?",
                 (bet_id,),
             ) as cur:
                 row = await cur.fetchone()
                 if not row:
                     continue
+
+            wager = int(row[0] or 0)
+            prev_status = (row[1] or "").upper()
+
+            # --- Idempotency: if already settled AND we already have a payout sig, skip
+            existing_payout = await dbmod.kv_get(app.state.db, f"bet:{bet_id}:payout_sig")
+            if prev_status == "SETTLED" and existing_payout:
+                continue
+
+            # --- Short deposit guard: don't settle/payout if amt < wager
+            # (Helius may deliver multiple events; only proceed if deposit covers the bet)
+            if amt < wager:
+                await dbmod.kv_set(app.state.db, f"bet:{bet_id}:short_deposit", str(amt))
+                await app.state.db.commit()
+                continue
 
             # MVP pseudo reveal; replace with real committed reveal later
             server_seed_reveal = "reveal_" + bet_id
@@ -302,33 +435,23 @@ async def helius_webhook(request: Request):
             status = "SETTLED"
 
             await app.state.db.execute(
-                "UPDATE bets SET result=?, win=?, status=?, server_seed_reveal=?, tx_sig=?, settled_at=? WHERE id=?",
-                (result, win, status, server_seed_reveal, tx_sig, datetime.utcnow().isoformat(), bet_id),
+                "UPDATE bets SET user=?, result=?, win=?, status=?, server_seed_reveal=?, tx_sig=?, settled_at=? WHERE id=?",
+                (sender_raw, result, win, status, server_seed_reveal, tx_sig, datetime.utcnow().isoformat(), bet_id),
             )
+
             await app.state.db.commit()
 
-        # ---------------- Jackpot entries -------------------
-        if memo.startswith("JP:") and to_addr == jackpot_vault and amt > 0:
-            parts = memo.split(":")
-            if len(parts) >= 2:
-                round_id = parts[1]
-            else:
-                round_id = await dbmod.kv_get(app.state.db, "current_round_id")
+            # Automatic payout on win (2x wager, in base units)
+            if win and wager > 0 and not existing_payout:
+                try:
+                    payout_amount = wager * 2
+                    payout_sig = await pay_coinflip_winner(sender_raw, payout_amount)
+                    await dbmod.kv_set(app.state.db, f"bet:{bet_id}:payout_sig", payout_sig)
+                    await app.state.db.commit()
+                except Exception as e:
+                    await dbmod.kv_set(app.state.db, f"bet:{bet_id}:payout_error", str(e))
+                    await app.state.db.commit()
 
-            tickets = max(1, amt // settings.TICKET_PRICE)
-
-            await app.state.db.execute(
-                "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
-                (round_id, sender, tickets, tx_sig),
-            )
-            # Keep pot in smallest units. Frontend converts (lamports → SOL).
-            await app.state.db.execute(
-                "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
-                (amt, round_id),
-            )
-            await app.state.db.commit()
-
-    return {"ok": True}
 
 
 # =========================================================
@@ -336,8 +459,41 @@ async def helius_webhook(request: Request):
 # =========================================================
 @app.post(f"{API}/admin/round/close")
 async def admin_close_round():
-    """Close the current round and open a fresh one (30 min)."""
+    """Settle current round (weighted pick by tickets + on-chain payout), then open a fresh one (30 min)."""
     rid = await dbmod.kv_get(app.state.db, "current_round_id")
+
+    # Load pot (base units)
+    async with app.state.db.execute("SELECT pot, opens_at, closes_at FROM rounds WHERE id=?", (rid,)) as cur:
+        r = await cur.fetchone()
+    pot = int(r[0] if r else 0)
+
+    # Gather entries
+    async with app.state.db.execute("SELECT user, tickets FROM entries WHERE round_id=?", (rid,)) as cur:
+        entries = await cur.fetchall()
+
+    winner_addr = None
+    payout_sig = None
+
+    # Weighted random (deterministic via HMAC on round id)
+    total_tix = sum(int(t or 0) for _u, t in entries)
+    if pot > 0 and total_tix > 0:
+        pick_space = int.from_bytes(_hmac(settings.HMAC_SECRET, rid), "big") % total_tix
+        acc = 0
+        for u, t in entries:
+            acc += int(t or 0)
+            if acc > pick_space:
+                winner_addr = u  # raw base58 stored earlier
+                break
+
+        # Pay jackpot from JACKPOT_VAULT
+        try:
+            payout_sig = await pay_jackpot_winner(winner_addr, pot)
+            await dbmod.kv_set(app.state.db, f"round:{rid}:winner", winner_addr)
+            await dbmod.kv_set(app.state.db, f"round:{rid}:payout_sig", payout_sig)
+        except Exception as e:
+            await dbmod.kv_set(app.state.db, f"round:{rid}:payout_error", str(e))
+
+    # Close current, open next
     new_id = f"R{secrets.randbelow(10_000):04d}"
     now = datetime.utcnow()
     closes = now + timedelta(minutes=30)
@@ -347,10 +503,10 @@ async def admin_close_round():
         "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,pot) VALUES(?,?,?,?,?,?,?)",
         (new_id, "OPEN", now.isoformat(), closes.isoformat(), _hash("seed:" + new_id), secrets.token_hex(8), 0),
     )
-    await app.state.db.commit()
     await dbmod.kv_set(app.state.db, "current_round_id", new_id)
+    await app.state.db.commit()
 
-    return {"ok": True, "new_round": new_id}
+    return {"ok": True, "settled_round": rid, "winner": winner_addr, "payout_sig": payout_sig, "new_round": new_id}
 
 
 @app.post(f"{API}/admin/round/seed")
