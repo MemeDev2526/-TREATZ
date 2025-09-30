@@ -56,8 +56,8 @@
       <div class="card grid-2">
         <div class="card__col">
           <div class="form">
-            <label class="label">Wager Amount (SOL)</label>
-            <input id="cf-amount" type="number" min="0" step="0.0001" placeholder="0.10" inputmode="decimal" />
+            <label class="label">Wager Amount ($TREATZ)</label>
+            <input id="cf-amount" type="number" min="0" step="1" placeholder="100" inputmode="numeric" />
             <label class="label">Pick a side</label>
             <div class="choices" role="radiogroup" aria-label="Coin side">
               <label class="choice"><input type="radio" name="cf-side" value="TRICK" checked /> TRICK 👻</label>
@@ -132,6 +132,7 @@
   <script>
     window.TREATZ_CONFIG = {
       apiBase: "https://YOUR-SERVICE.onrender.com/api",  // <- set to your Render URL
+      token: { symbol: "$TREATZ", decimals: 9 },  // SPL mint decimals
       links: {
         discord: "https://discord.gg/yourinvite",
         telegram: "https://t.me/yourgroup",
