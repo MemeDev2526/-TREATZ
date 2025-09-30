@@ -1,220 +1,169 @@
-/* ========== $TREATZ App Logic (ready-to-wire) ======= */
-(function(){
+/* ========== $TREATZ App Logic (refined) ======= */
+(function () {
   const C = window.TREATZ_CONFIG || {};
-  const API = (C.apiBase || '/api').replace(/\/$/, '');
+  const API = (C.apiBase || "/api").replace(/\/$/, "");
 
-  // Wire external links and token/buy
-  document.getElementById('link-discord').href   = C.links.discord || '#';
-  document.getElementById('link-telegram').href  = C.links.telegram || '#';
-  document.getElementById('link-twitter').href   = C.links.twitter || '#';
-  document.getElementById('link-whitepaper').href= C.links.whitepaper || '#';
-  document.getElementById('btn-buy').href        = C.buyUrl || '#';
-  document.getElementById('token-address').textContent = C.tokenAddress || '—';
+  // ------- helpers -------
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => [...document.querySelectorAll(s)];
+  const fmtSOL = (lamports) => {
+    if (lamports == null) return "—";
+    const sol = Number(lamports) / 1e9;
+    return sol >= 1 ? sol.toFixed(2) : sol.toFixed(4);
+  };
+  const toast = (msg) => {
+    console.log(msg);
+    // drop a tiny, non-intrusive toast:
+    let t = document.createElement("div");
+    t.className = "toast";
+    t.textContent = msg;
+    Object.assign(t.style, {
+      position: "fixed", right: "16px", bottom: "16px",
+      background: "rgba(0,0,0,.75)", color: "#fff",
+      padding: "10px 12px", borderRadius: "8px", zIndex: 9999,
+      fontFamily: "Rubik, system-ui, sans-serif", fontSize: "14px"
+    });
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2500);
+  };
 
-  // Copy token
-  document.getElementById('btn-copy').addEventListener('click', ()=>{
-    navigator.clipboard.writeText(C.tokenAddress || '').then(()=>{
-      toast('Token address copied');
-    }).catch(()=>toast('Copy failed'));
-  });
+  // ------- link wiring -------
+  const link = (id, href) => {
+    const el = document.getElementById(id);
+    if (el && href) el.href = href;
+  };
+  link("link-twitter", C.links?.twitter);
+  link("link-whitepaper", C.links?.whitepaper);
+  link("btn-buy", C.buyUrl);
 
-  // Wallet stubs (replace with real wallet adapter)
-  document.getElementById('btn-connect').addEventListener('click', ()=>{
-    window.dispatchEvent(new CustomEvent('treatz:wallet:connect'));
-    toast('Connecting wallet… (stub)');
-  });
-  document.getElementById('btn-openwallet').addEventListener('click', ()=>{
-    window.dispatchEvent(new CustomEvent('treatz:wallet:open'));
-    toast('Opening wallet… (stub)');
-  });
+  const tokenEl = document.getElementById("token-address");
+  if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
 
-  // Halloween countdown banner with playful omens
-  const target = new Date(C.halloweenISO || '2025-10-31T00:00:00-04:00');
-  const timerEl = document.getElementById('countdown-timer');
-  const omenEl  = document.getElementById('countdown-omen');
-  const omens = [
-    'Gremlin in the mempool spotted.',
-    'Witches brewing liquidity…',
-    'Ghosts front-running paper hands.',
-    'Pumpkins aligned. Candles lit.',
-    'Never fade the night shift.',
-    'Trick? Treat? Only the chain knows.',
-    'Beware the spooky slippage.'
-  ];
-  function tick(){
-    const now = new Date();
-    const diff = Math.max(0, target - now);
-    const s = Math.floor(diff/1000);
-    const d = Math.floor(s/86400);
-    const h = Math.floor((s%86400)/3600);
-    const m = Math.floor((s%3600)/60);
-    const sec = s%60;
-    timerEl.textContent = `${d}d ${h}h ${m}m ${sec}s`;
-    // fun mystery flicker 1% chance
-    if (Math.random() < 0.01) {
-      omenEl.textContent = '??? A strange puff passes by…';
-    } else if (sec % 10 === 0) {
-      omenEl.textContent = omens[Math.floor(Math.random()*omens.length)];
-    }
+  // ------- assets (logo + mascot) -------
+  const logoImg = document.getElementById("site-logo");
+  if (logoImg && C.assets?.logo) {
+    logoImg.src = C.assets.logo;
+    logoImg.alt = "$TREATZ";
   }
-  tick(); setInterval(tick, 1000);
 
-  // ---- LIVE JACKPOT DATA FROM BACKEND ----
-fetch(`${API}/rounds/current`)
-  .then(async r => {
-    if (!r.ok) throw new Error('bad status');
-    return r.json();
-  })
-  .then(d => {
-    if (d && d.round_id) {
-      const ct = Date.parse(d.closes_at || new Date().toISOString());
-      window.TREATZ.setJackpotRound({
-        id: d.round_id,
-        closeTs: ct,
-        pot: (d.pot || 0) / 1e9,
-        entries: 0,
-        // If backend returns opens_at later, use it; otherwise infer a 30 min window
-        totalMs: (d.opens_at ? (ct - Date.parse(d.opens_at)) : (1000*60*30))
-      });
-    }
-  })
-  .catch(()=>{/* keep mock defaults if API not ready */});
+  const mascotImg = document.getElementById("mascot-floater");
+  if (mascotImg && C.assets?.mascot) {
+    mascotImg.src = C.assets.mascot;
+    mascotImg.alt = "Treatz Mascot";
+    // gentle float
+    let t = 0;
+    setInterval(() => {
+      t += 0.02;
+      mascotImg.style.transform =
+        `translate(${Math.sin(t) * 6}px, ${Math.cos(t * 0.8) * 6}px) rotate(${Math.sin(t*0.6)*2}deg)`;
+    }, 16);
+  }
 
+  // ------- copy token -------
+  const copyBtn = document.getElementById("btn-copy");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(C.tokenAddress || "").then(
+        () => toast("Token address copied"),
+        () => toast("Copy failed")
+      );
+    });
+  }
 
-fetch(`${API}/rounds/recent`)
-  .then(async r => {
-    if (!r.ok) throw new Error('bad status');
-    return r.json();
-  })
-  .then(list => {
-    (list || []).forEach(it => window.TREATZ.addRecentRound({
-      id: it.id,
-      pot: (it.pot || 0) / 1e9
-    }));
-  })
-  .catch(()=>{});
+  // ------- jackpot: current round + countdown -------
+  const elRoundId = $("#round-id");
+  const elPot = $("#round-pot");
+  const elCountdown = $("#round-countdown");
 
+  let countdownTimer = null;
 
-  // Coin flip UI
-  const playBtn = document.getElementById('cf-play');
-  const coinEl  = document.getElementById('coin');
-  const statusEl= document.getElementById('cf-status');
-  playBtn.addEventListener('click', async ()=>{
-    const amt = parseFloat(document.getElementById('cf-amount').value || '0');
-    const side = (document.querySelector('input[name="cf-side"]:checked')||{}).value || 'TRICK';
-    if (!amt || amt <= 0){ return toast('Enter a wager amount'); }
-
-    const payload = { amount: amt, side, ts: Date.now() };
-    window.dispatchEvent(new CustomEvent('treatz:coinflip:submit', { detail: payload }));
-
-    // 1) Ask backend to create the bet
-    let bet;
+  async function loadCurrentRound() {
     try {
-      const body = { amount: Math.round(amt * 1e9), side }; // lamports; change if using SPL base units
-      const r = await fetch(`${API}/bets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!r.ok) throw new Error('server');
-      bet = await r.json(); // {bet_id, server_seed_hash, deposit, memo}
+      const r = await fetch(`${API}/rounds/current`, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      if (elRoundId) elRoundId.textContent = data.round_id || "—";
+      if (elPot) elPot.textContent = fmtSOL(data.pot);
+
+      // countdown sync
+      if (elCountdown && data.closes_at) {
+        const closesAt = new Date(data.closes_at).getTime();
+        if (countdownTimer) clearInterval(countdownTimer);
+        countdownTimer = setInterval(() => {
+          const diff = Math.max(0, closesAt - Date.now());
+          const s = Math.floor(diff / 1000);
+          const m = Math.floor(s / 60);
+          const ss = (s % 60).toString().padStart(2, "0");
+          elCountdown.textContent = `${m}:${ss}`;
+          if (diff <= 0) {
+            clearInterval(countdownTimer);
+            elCountdown.textContent = "0:00";
+            // after it hits 0, refresh current round shortly after
+            setTimeout(loadCurrentRound, 1500);
+            setTimeout(loadRecentRounds, 1500);
+          }
+        }, 250);
+      }
     } catch (e) {
-      return toast('Server unavailable. Try again shortly.');
-    }
-
-    // 2) Show deposit instructions (until wallet-send is wired)
-    alert(`Send your wager now:\n\nDeposit: ${bet.deposit}\nMemo: ${bet.memo}\n\nKeep this page open; result posts after confirmation.`);
-
-    // 3) UX: spin coin while we wait on webhook settlement
-    coinEl.classList.remove('spin'); void coinEl.offsetWidth; coinEl.classList.add('spin');
-    statusEl.textContent = 'Waiting for on-chain confirmation…';
-  });
-
-  // Jackpot UI (mock data + wire-ready events)
-  const jpPotEl = document.getElementById('jp-pot');
-  const jpEntriesEl = document.getElementById('jp-entries');
-  const jpCdEl = document.getElementById('jp-countdown');
-  const jpProgEl = document.getElementById('jp-progress');
-  const jpRecentEl= document.getElementById('jp-recent');
-
-  let round = {
-    id: 'R' + Math.floor(Math.random()*9999),
-    closeTs: Date.now() + 1000*60*37, // placeholder until API sets real closeTs
-    pot: 0, entries: 0,
-    totalMs: 1000*60*37 // initialize; replaced when API populates closeTs
-  };
-
-  function renderRound(){
-    // If totalMs not set, infer from first render (default 30 min)
-    if (!round.totalMs) {
-      const rem = Math.max(0, round.closeTs - Date.now());
-      round.totalMs = rem || (1000*60*30);
-    }
-    jpPotEl.textContent = `${round.pot.toFixed(2)} SOL`;
-    jpEntriesEl.textContent = `${round.entries}`;
-  }
-
-  function tickRound(){
-    const now = Date.now();
-    const rem = Math.max(0, round.closeTs - now);
-    const s = Math.floor(rem/1000);
-    const m = Math.floor((s%3600)/60);
-    const sec = s%60;
-    const h = Math.floor(s/3600);
-    jpCdEl.textContent = `${h}h ${m}m ${sec}s`;
-
-    const total = round.totalMs || (1000*60*30);
-    const pct = total ? (100 * (1 - rem/total)) : 0;
-    jpProgEl.style.width = Math.max(0, Math.min(100, pct)) + '%';
-
-    if (rem === 0){
-      window.dispatchEvent(new CustomEvent('treatz:jackpot:close', { detail: { id: round.id } }));
-      prependRecent(round);
-      round = { id: 'R' + Math.floor(Math.random()*9999), closeTs: Date.now() + 1000*60*60, pot: 0, entries: 0, totalMs: 1000*60*60 };
-      renderRound();
+      console.error(e);
+      toast("Failed to load current round");
     }
   }
-  setInterval(tickRound, 1000); renderRound();
 
-  document.getElementById('jp-buy').addEventListener('click', ()=>{
-    const qty = parseInt(document.getElementById('jp-amount').value||'0', 10);
-    if (!qty || qty < 1) return toast('Enter ticket amount');
-    const detail = { roundId: round.id, qty, ts: Date.now() };
-    window.dispatchEvent(new CustomEvent('treatz:jackpot:enter', { detail }));
-    round.entries += qty;
-    round.pot += qty * 0.05; // placeholder pricing
-    renderRound();
-    toast(`Entered ${qty} ticket(s) 🎟️`);
-  });
-
-  function prependRecent(r){
-    const li = document.createElement('li');
-    li.innerHTML = `<span>#${r.id}</span><span class="mini-round__pill">${r.pot.toFixed(2)} SOL</span>`;
-    jpRecentEl.prepend(li);
-  }
-
-  // Tiny toast helper
-  let tdiv;
-  function toast(msg){
-    clearTimeout(toast._t);
-    if (!tdiv){
-      tdiv = document.createElement('div');
-      tdiv.style.position='fixed'; tdiv.style.left='50%'; tdiv.style.bottom='26px'; tdiv.style.transform='translateX(-50%)';
-      tdiv.style.padding='10px 14px'; tdiv.style.background='rgba(0,0,0,.8)'; tdiv.style.border='1px solid rgba(255,255,255,.2)';
-      tdiv.style.borderRadius='10px'; tdiv.style.color='#fff'; tdiv.style.fontWeight='700'; tdiv.style.zIndex='2000';
-      document.body.appendChild(tdiv);
+  // ------- recent rounds -------
+  const recentList = $("#recent-rounds");
+  async function loadRecentRounds() {
+    if (!recentList) return;
+    recentList.innerHTML = `<li class="muted">Loading…</li>`;
+    try {
+      const r = await fetch(`${API}/rounds/recent?limit=10`, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const rows = await r.json();
+      if (!rows?.length) {
+        recentList.innerHTML = `<li class="muted">No rounds yet.</li>`;
+        return;
+      }
+      recentList.innerHTML = rows
+        .map(row => `<li><span>${row.id}</span><span>${fmtSOL(row.pot)} SOL</span></li>`)
+        .join("");
+    } catch (e) {
+      console.error(e);
+      recentList.innerHTML = `<li class="muted">Failed to load.</li>`;
     }
-    tdiv.textContent = msg;
-    tdiv.style.opacity='1';
-    toast._t = setTimeout(()=>{ tdiv.style.opacity='0'; }, 1800);
   }
 
-  // Expose a minimal API for your real integrations
-  window.TREATZ = {
-    setToken(addr){ C.tokenAddress = addr; document.getElementById('token-address').textContent = addr; },
-    setBuyUrl(url){ C.buyUrl = url; document.getElementById('btn-buy').href = url; },
-    setLinks(links){ Object.assign(C.links, links); ['discord','telegram','twitter','whitepaper'].forEach(k=>{ const el=document.getElementById('link-'+k); if (el && C.links[k]) el.href=C.links[k]; }); },
-    setJackpotRound(obj){ Object.assign(round, obj); renderRound(); },
-    addRecentRound(obj){ prependRecent(obj); },
-  };
+  // ------- place bet (coin flip MVP) -------
+  const betForm = $("#bet-form");
+  if (betForm) {
+    betForm.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(betForm);
+      const amount = Number(fd.get("amount") || 0);      // lamports expected (MVP)
+      const side = (fd.get("side") || "TRICK").toString();
+
+      try {
+        const r = await fetch(`${API}/bets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount, side })
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        toast("Bet created. Check your wallet for deposit.");
+        // You can display the deposit & memo for wallet/manual testing:
+        $("#bet-deposit") && ($("#bet-deposit").textContent = data.deposit || "—");
+        $("#bet-memo") && ($("#bet-memo").textContent = data.memo || "—");
+      } catch (e) {
+        console.error(e);
+        toast("Bet failed");
+      }
+    });
+  }
+
+  // initial load + polling
+  loadCurrentRound();
+  loadRecentRounds();
+  setInterval(loadCurrentRound, 15_000);
+  setInterval(loadRecentRounds, 30_000);
 })();
