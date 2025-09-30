@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>$TREATZ Whitepaper (or is it?)</title>
+  <link rel="stylesheet" href="style.css?v=13" />
+  <style>
+    body { 
+      display:flex; align-items:center; justify-content:center; height:100vh;
+      background:linear-gradient(180deg,var(--bg-a),var(--bg-b)); color:var(--white);
+      font-family:Rubik, system-ui;
+    }
+    .jumpscare {
+      text-align:center; max-width:600px;
+    }
+    .boo {
+      font-family:"Luckiest Guy",cursive;
+      font-size:3rem;
+      color:var(--orange);
+      text-shadow:0 0 25px var(--witch);
+      display:none;
+      margin-bottom:1rem;
+    }
+    .explain {
+      font-size:1.1rem; line-height:1.5;
+      opacity:0; transition:opacity 2s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="jumpscare">
+    <div class="boo" id="boo">👻 BOO! 👻</div>
+    <div class="explain" id="explain">
+      <p>You expected a whitepaper? Not this Halloween.</p>
+      <p>$TREATZ doesn’t need 20 pages of boring tokenomics — the rules are simple:</p>
+      <ul>
+        <li>🎃 Trick or Treat Coin Toss — wager, flip, win.</li>
+        <li>🕯️ Jackpot Raffle — 80% winner, 10% burn, 10% dev.</li>
+        <li>💀 Chaos, memes, and one glorious pump.</li>
+      </ul>
+      <p>The chain is the whitepaper. The code is the contract. The meme is the prophecy.</p>
+      <p><strong>Happy Halloween. Don’t fade the night shift.</strong></p>
+    </div>
+  </div>
+  <script>
+    setTimeout(()=>{
+      document.getElementById('boo').style.display = 'block';
+      setTimeout(()=>{ 
+        document.getElementById('explain').style.opacity = 1;
+      }, 1000);
+    }, 800);
+  </script>
+</body>
+</html>
