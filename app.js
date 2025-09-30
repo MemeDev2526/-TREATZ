@@ -32,6 +32,62 @@
   // Use for jackpot pot display (pot is stored in smallest units)
   const fmtPot = fmtToken;
 
+// ===== Halloween Countdown (ominous) =====
+function nextHalloween() {
+  const now = new Date();
+  const year = now.getMonth() > 9 || (now.getMonth() === 9 && now.getDate() > 31) ? now.getFullYear()+1 : now.getFullYear();
+  // Oct 31, 23:59:59 local time
+  return new Date(year, 9, 31, 23, 59, 59, 0);
+}
+
+function formatDHMS(ms){
+  let s = Math.max(0, Math.floor(ms/1000));
+  const d = Math.floor(s / 86400); s %= 86400;
+  const h = Math.floor(s / 3600);  s %= 3600;
+  const m = Math.floor(s / 60);    s %= 60;
+  return `${d}d ${String(h).padStart(2,"0")}h ${String(m).padStart(2,"0")}m ${String(s).padStart(2,"0")}s`;
+}
+
+function initHalloweenCountdown(){
+  const timerEl = document.getElementById("countdown-timer");
+  const omenEl  = document.getElementById("countdown-omen");
+  if (!timerEl) return;
+
+  const omens = [
+    "The wrappers rustle. Something’s awake.",
+    "Candy fog thickens… footsteps in the mist.",
+    "Lanterns flicker. The ritual nears.",
+    "Whispers from the vault… tickets scratch.",
+    "A second game stirs beneath the moon.",
+    "The cauldron hums. Keys turn in the dark.",
+    "Don’t blink. The jackpot watches back.",
+    "Another door may open before midnight…"
+  ];
+  let omenIdx = Math.floor(Math.random()*omens.length);
+
+  let target = nextHalloween();
+  function tick(){
+    const diff = target - Date.now();
+    if (diff <= 0) {
+      // roll to next Halloween once we pass midnight
+      target = nextHalloween();
+    }
+    timerEl.textContent = formatDHMS(target - Date.now());
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  // rotate spooky teasers every ~12s
+  function rotateOmen(){
+    omenIdx = (omenIdx + 1) % omens.length;
+    if (omenEl) {
+      omenEl.textContent = omens[omenIdx];
+    }
+  }
+  rotateOmen();
+  setInterval(rotateOmen, 12000);
+}
+
   // ------- link wiring -------
   const link = (id, href) => {
     const el = document.getElementById(id);
@@ -179,9 +235,12 @@
     });
   }
 
-  // initial load + polling
+    // initial load + polling
   loadCurrentRound();
   loadRecentRounds();
-  setInterval(loadCurrentRound, 15_000);
-  setInterval(loadRecentRounds, 30_000);
+  setInterval(loadCurrentRound, 15000);
+  setInterval(loadRecentRounds, 30000);
+
+  // start the spooky global countdown
+  initHalloweenCountdown();
 })();
