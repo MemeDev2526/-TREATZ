@@ -216,21 +216,12 @@
       }
     };
   </script>
+  <!-- Solana libs for browser (globals: solanaWeb3, splToken) -->
+<script src="https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js"></script>
+<script src="https://unpkg.com/@solana/spl-token@0.4.7/dist/index.iife.js"></script>
+
 
   <!-- ==========================
        APP LOGIC
        ========================== -->
-  <script src="app.js?v=16" defer></script>
-
-  <!-- ==========================
-       PHANTOM-ONLY WALLET GLUE
-       ========================== -->
-  <script type="module">
-    const hasPhantom = !!(window?.solana?.isPhantom);
-
-    document.getElementById('btn-connect')?.addEventListener('click', async ()=>{
-      if (!hasPhantom) { alert('Install Phantom to connect.'); return; }
-      try { await window.solana.connect(); alert('Wallet connected'); } catch(e){}
-    });
-
-    document.getElementById('btn-openwallet')?.addEventListener('click', ()=
+  <script src="app.js?v=17" defer></script>
