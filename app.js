@@ -134,32 +134,35 @@
   }
 
   // ------- place bet (coin flip MVP) -------
-  const betForm = $("#bet-form");
-  if (betForm) {
-    betForm.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const fd = new FormData(betForm);
-      const amount = Number(fd.get("amount") || 0);      // lamports expected (MVP)
-      const side = (fd.get("side") || "TRICK").toString();
+const betForm = $("#bet-form");
+if (betForm) {
+  betForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const fd = new FormData(betForm);
 
-      try {
-        const r = await fetch(`${API}/bets`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount, side })
-        });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const data = await r.json();
-        toast("Bet created. Check your wallet for deposit.");
-        // You can display the deposit & memo for wallet/manual testing:
-        $("#bet-deposit") && ($("#bet-deposit").textContent = data.deposit || "—");
-        $("#bet-memo") && ($("#bet-memo").textContent = data.memo || "—");
-      } catch (e) {
-        console.error(e);
-        toast("Bet failed");
-      }
-    });
-  }
+    // user types "100" meaning 100 TREATZ (whole tokens)
+    const tokens = Number(fd.get("amount") || 0);
+    const amountSmallest = Math.round(tokens * pow10(TOKEN.decimals));
+
+    const side = (fd.get("side") || "TRICK").toString();
+
+    try {
+      const r = await fetch(`${API}/bets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: amountSmallest, side })
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      toast(`Bet created. Send ${tokens} ${TOKEN.symbol} with memo below.`);
+      $("#bet-deposit") && ($("#bet-deposit").textContent = data.deposit || "—");
+      $("#bet-memo") && ($("#bet-memo").textContent = data.memo || "—");
+    } catch (e) {
+      console.error(e);
+      toast("Bet failed");
+    }
+  });
+}
 
   // initial load + polling
   loadCurrentRound();
