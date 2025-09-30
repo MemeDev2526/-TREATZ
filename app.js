@@ -223,20 +223,59 @@
     logoImg.alt = "$TREATZ";
   }
 
-  const mascotImg = $("#mascot-floater");
-  if (mascotImg && C.assets?.mascot) {
-    mascotImg.src = C.assets.mascot;
-    mascotImg.alt = "Treatz Mascot";
-    // gentle float via rAF
-    let t = 0;
-    const drift = () => {
-      t += 0.02;
-      mascotImg.style.transform =
-        `translate(${Math.sin(t) * 6}px, ${Math.cos(t * 0.8) * 6}px) rotate(${Math.sin(t*0.6)*2}deg)`;
-      requestAnimationFrame(drift);
-    };
-    requestAnimationFrame(drift);
+const mascotImg = $("#mascot-floater");
+if (mascotImg && C.assets?.mascot) {
+  mascotImg.src = C.assets.mascot;
+  mascotImg.alt = "Treatz Mascot";
+
+  // ensure not pinned to bottom-right anymore
+  mascotImg.style.right = "auto";
+  mascotImg.style.bottom = "auto";
+  mascotImg.style.willChange = "transform";
+
+  const MARGIN = 24;
+  // starting position (somewhere on screen)
+  let x = 120, y = 120;
+  let tx = x,  ty = y; // target
+
+  function pickTarget(){
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const rect = mascotImg.getBoundingClientRect();
+    const elW = rect.width || 96;
+    const elH = rect.height || 96;
+    tx = MARGIN + Math.random() * Math.max(1, w - elW - MARGIN*2);
+    ty = MARGIN + Math.random() * Math.max(1, h - elH - MARGIN*2);
   }
+
+  pickTarget();
+  let t = 0;
+  const SPEED = 0.008; // smaller = slower, smoother
+
+  function step(){
+    t += 1;
+
+    // ease towards target
+    x += (tx - x) * SPEED;
+    y += (ty - y) * SPEED;
+
+    // when close, choose a new destination
+    if (Math.hypot(tx - x, ty - y) < 4) pickTarget();
+
+    // subtle bob + rotate for life
+    const bobX = Math.sin(t * 0.05) * 10;
+    const bobY = Math.cos(t * 0.04) * 8;
+    const rot  = Math.sin(t * 0.03) * 4;
+
+    mascotImg.style.transform = `translate(${x + bobX}px, ${y + bobY}px) rotate(${rot}deg)`;
+
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+
+  // keep targets valid on resize
+  window.addEventListener("resize", pickTarget);
+}
 
   // Copy token
   $("#btn-copy")?.addEventListener("click", () => {
