@@ -23,6 +23,8 @@
 
   /* Layout metrics */
   --banner-h: 90px;                      /* match banner art height */
+  --countdown-scale: 1.25;               /* keep your scale */
+  --countdown-h: 64px;                   /* visual height of inner row (approx) */
 }
 
 /* =========================================================
@@ -75,10 +77,11 @@ a, .btn--outline { color: var(--slime); }
 /* Countdown sits under the banner and never hides it */
 .countdown{
   position: sticky;
-  top: var(--banner-h);
+  /* push it just a bit further down to compensate for scale */
+  top: calc(var(--banner-h) + (var(--countdown-scale) - 1) * var(--countdown-h));
   z-index: 1001;
-  transform: scale(1.25);            /* ~1.5x container */
-  transform-origin: top center;
+  transform: scale(var(--countdown-scale));  /* keep your scale */
+  transform-origin: top center;              /* growth only downward */
   backdrop-filter: blur(4px);
   background:#000;
   border-bottom: 1px solid rgba(255,255,255,.08);
@@ -87,8 +90,9 @@ a, .btn--outline { color: var(--slime); }
 .countdown__inner{
   max-width:1200px; 
   margin:0 auto; 
-  font-size: clamp(1.1rem, 2.2vw, 2rem);  /* ~1.5x typical text size */
+  font-size: clamp(1.1rem, 2.2vw, 2rem);
   padding: 0.9rem 1.2rem; 
+  min-height: var(--countdown-h);  /* pairs with the computed top */
   display:flex; gap:.75rem; 
   align-items:center; justify-content:center; 
   flex-wrap:wrap;
