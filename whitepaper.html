@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <!--
-  $TREATZ — “Whitepaper” Jump Scare
-  --------------------------------------------------------
-  QUICK CONFIG (edit values here; no code hunting needed)
-    - data-halloween-iso: Countdown target (local TZ-aware ISO)
-    - data-cta-coinflip:  Where "Play Trick or Treat" goes
-    - data-cta-jackpot:   Where "Enter the Jackpot" goes
-    - data-scream-src:    Path to your scream SFX
-    - data-use-emojis:    "true" to use emoji flyers, "false" to use PNG/SVGs
-  To use custom images for flyers, see JS section "FLYER ART".
+  $TREATZ — “Whitepaper” Jump Scare (v2: ambient loop + per-flyer SFX + random spawns)
+
+  QUICK CONFIG (edit on <body>):
+    data-halloween-iso  - Countdown target (local TZ-aware ISO)
+    data-cta-coinflip   - Where the primary CTA points
+    data-cta-jackpot    - Where the secondary CTA points
+    data-scream-src     - Path to jump-scare scream SFX
+    data-ambient-src    - Path to eerie background loop (will fade in after scream)
+    data-use-emojis     - "true" to use emoji flyers, "false" for PNG/SVGs
+    data-sfx-ghost/bat/ghoul/zombie - Paths for per-flyer SFX
 -->
 <head>
   <!-- ========== META / TITLE ========== -->
@@ -26,19 +27,14 @@
     /* -------------------------
        1) BASE LAYOUT
     --------------------------*/
-    :root{
-      /* Tokens already in style.css:
-         --orange --orange-hi --witch --slime --jet --white --gray
-         --bg-a   --bg-b      --card --card-border --shadow
-      */
-    }
     body{
-      margin:0; color:var(--white); background:linear-gradient(180deg,var(--bg-a),var(--bg-b));
+      margin:0; color:var(--white);
+      background:linear-gradient(180deg,var(--bg-a),var(--bg-b));
       font-family:Rubik,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
       overflow:hidden;
     }
 
-    /* Countdown (copied from site; keep visual parity) */
+    /* Countdown (parity with homepage) */
     .countdown{position:sticky; top:0; z-index:1000; background:linear-gradient(90deg, rgba(255,107,0,.92), rgba(106,0,255,.92)); border-bottom:1px solid rgba(255,255,255,.2)}
     .countdown__inner{max-width:1200px; margin:0 auto; padding:.55rem .9rem; display:flex; gap:.75rem; align-items:center; justify-content:center; flex-wrap:wrap}
     .countdown__label{font-weight:700; letter-spacing:.3px}
@@ -114,7 +110,8 @@
 
     /* Flyers (ghosts, bats, ghouls, zombies) */
     .flyer{
-      position:fixed; left:50%; top:55%; transform:translate(-50%,-50%) scale(.2);
+      position:fixed;
+      transform:scale(.2);
       filter:drop-shadow(0 8px 24px rgba(0,0,0,.55));
       opacity:0; pointer-events:none; z-index:5;
       will-change:transform, opacity, filter;
@@ -126,15 +123,15 @@
     .flyer--zomb { font-size:84px; text-shadow:0 0 18px rgba(0,255,163,.35); color:#b6ffd9; }
 
     @keyframes swoop{
-      0%{opacity:0; transform:translate(-50%,-50%) scale(.2) rotate(0deg);}
+      0%{opacity:0; transform:scale(.2) rotate(0deg);}
       5%{opacity:1;}
       80%{opacity:1; filter:blur(0px);}
-      100%{opacity:0; transform:translate(-50%,-50%) scale(6) rotate(3deg); filter:blur(4px);}
+      100%{opacity:0; transform:scale(6) rotate(3deg); filter:blur(4px);}
     }
 
     /* Motion safety */
     @media (prefers-reduced-motion: reduce){
-      .flyer{animation:none; opacity:.85; transform:translate(-50%,-50%) scale(1);}
+      .flyer{animation:none; opacity:.85; transform:scale(1);}
     }
   </style>
 </head>
@@ -145,7 +142,12 @@
   data-cta-coinflip="index.html#coin-flip"
   data-cta-jackpot="index.html#jackpot"
   data-scream-src="assets/scream.mp3"
+  data-ambient-src="assets/ambient_loop.mp3"
   data-use-emojis="true"
+  data-sfx-ghost="assets/sfx_ghost.mp3"
+  data-sfx-bat="assets/sfx_bat.mp3"
+  data-sfx-ghoul="assets/sfx_ghoul.mp3"
+  data-sfx-zombie="assets/sfx_zombie.mp3"
 >
   <!-- =========================================================
        A) COUNTDOWN (same IDs as index so behaviour matches)
@@ -204,9 +206,8 @@
   <!-- =========================================================
        E) AUDIO
   ========================================================== -->
-  <audio id="scream" preload="auto">
-    <!-- src set via data-scream-src for easy swapping -->
-  </audio>
+  <audio id="scream" preload="auto"></audio>
+  <audio id="ambient" preload="auto" loop></audio>
 
   <!-- ========== SCRIPTS ========== -->
   <script>
@@ -221,7 +222,14 @@
       ctaCoinflip : pageEl.dataset.ctaCoinflip  || 'index.html#coin-flip',
       ctaJackpot  : pageEl.dataset.ctaJackpot   || 'index.html#jackpot',
       screamSrc   : pageEl.dataset.screamSrc    || 'assets/scream.mp3',
-      useEmojis   : (pageEl.dataset.useEmojis || 'true').toLowerCase() === 'true'
+      ambientSrc  : pageEl.dataset.ambientSrc   || 'assets/ambient_loop.mp3',
+      useEmojis   : (pageEl.dataset.useEmojis || 'true').toLowerCase() === 'true',
+      sfx: {
+        ghost : pageEl.dataset.sfxGhost  || 'assets/sfx_ghost.mp3',
+        bat   : pageEl.dataset.sfxBat    || 'assets/sfx_bat.mp3',
+        ghoul : pageEl.dataset.sfxGhoul  || 'assets/sfx_ghoul.mp3',
+        zombie: pageEl.dataset.sfxZombie || 'assets/sfx_zombie.mp3',
+      }
     };
 
     /* -------------------------------------------------------
@@ -262,50 +270,92 @@
     $('#cta-jackpot').href  = CFG.ctaJackpot;
 
     /* -------------------------------------------------------
-       4) AUDIO INIT
+       4) AUDIO INIT (scream -> ambient fade-in)
     --------------------------------------------------------*/
-    const scream = $('#scream');
-    scream.src = CFG.screamSrc;
+    const scream  = $('#scream');  scream.src  = CFG.screamSrc;
+    const ambient = $('#ambient'); ambient.src = CFG.ambientSrc; ambient.volume = 0; // fade in later
+
+    function fadeInAmbient(durationMs=1800, targetVol=0.18){
+      const steps = 18, step = targetVol/steps, dt = Math.max(50, Math.floor(durationMs/steps));
+      let v = 0;
+      const t = setInterval(()=>{
+        v = Math.min(targetVol, v + step);
+        ambient.volume = v;
+        if (v >= targetVol) clearInterval(t);
+      }, dt);
+    }
 
     /* -------------------------------------------------------
-       5) FLYER ART
-         - Default uses emojis (👻🦇🧟…). To use images:
-           * set data-use-emojis="false"
-           * define IMGS below with your asset paths
+       5) FLYER ART + UNIQUE SFX + RANDOM SPAWN
     --------------------------------------------------------*/
+    // Emoji fallbacks (edit IMGS to use your PNG/SVGs and set data-use-emojis="false")
     const EMOJIS = ['👻','🦇','🧟','🧟‍♀️','🧟‍♂️','🧌'];
     const IMGS   = [
-      // { src: 'assets/ghost.png', cls: 'flyer flyer--ghost', size: 96 },
-      // { src: 'assets/bat.png',   cls: 'flyer flyer--bat',   size: 72 },
-      // { src: 'assets/ghoul.png', cls: 'flyer flyer--ghoul', size: 104 },
-      // { src: 'assets/zombie.png',cls: 'flyer flyer--zomb',  size: 104 },
+      // { src: 'assets/ghost.png', cls: 'flyer flyer--ghost', size: 96, type:'ghost' },
+      // { src: 'assets/bat.png',   cls: 'flyer flyer--bat',   size: 72, type:'bat'   },
+      // { src: 'assets/ghoul.png', cls: 'flyer flyer--ghoul', size:104, type:'ghoul' },
+      // { src: 'assets/zombie.png',cls: 'flyer flyer--zomb',  size:104, type:'zombie'},
     ];
 
+    // Preload SFX (we clone on play so overlapping is fine)
+    const SFX = {
+      ghost : CFG.sfx.ghost,
+      bat   : CFG.sfx.bat,
+      ghoul : CFG.sfx.ghoul,
+      zombie: CFG.sfx.zombie
+    };
+
+    function playSfx(kind){
+      const src = SFX[kind];
+      if (!src) return;
+      try {
+        const a = new Audio(src);
+        a.volume = 0.55;
+        a.play().catch(()=>{});
+      } catch(e){}
+    }
+
+    // Spawn anywhere on screen with a bit of margin
+    function randomPos(){
+      const w = window.innerWidth, h = window.innerHeight;
+      const marginX = Math.max(24, w * 0.06);
+      const marginY = Math.max(24, h * 0.06);
+      const x = Math.random() * (w - marginX*2) + marginX;
+      const y = Math.random() * (h - marginY*2) + marginY;
+      return { x, y };
+    }
+
     function spawnFlyer(){
-      let el;
+      let el, type = 'ghoul';
+
       if (CFG.useEmojis){
         el = document.createElement('div');
         el.className = 'flyer';
         const pick = EMOJIS[Math.floor(Math.random()*EMOJIS.length)];
         el.textContent = pick;
-        if (pick === '👻') el.classList.add('flyer--ghost');
-        else if (pick === '🦇') el.classList.add('flyer--bat');
-        else if (pick.startsWith('🧟')) el.classList.add('flyer--zomb');
-        else el.classList.add('flyer--ghoul');
+        if (pick === '👻'){ el.classList.add('flyer--ghost'); type='ghost'; }
+        else if (pick === '🦇'){ el.classList.add('flyer--bat'); type='bat'; }
+        else if (pick.startsWith('🧟')){ el.classList.add('flyer--zomb'); type='zombie'; }
+        else { el.classList.add('flyer--ghoul'); type='ghoul'; }
       } else {
         const pick = IMGS[Math.floor(Math.random()*IMGS.length)];
         el = document.createElement('img');
         el.src = pick.src; el.alt = 'spook';
         el.className = pick.cls || 'flyer';
         el.style.width = (pick.size || 96) + 'px';
+        type = pick.type || 'ghoul';
       }
-      const jitterX = (Math.random()*60-30);
-      const jitterY = (Math.random()*30-15);
-      el.style.left = `calc(50% + ${jitterX}px)`;
-      el.style.top  = `calc(55% + ${jitterY}px)`;
+
+      const {x,y} = randomPos();
+      el.style.left = x + 'px';
+      el.style.top  = y + 'px';
+
       document.body.appendChild(el);
+      playSfx(type);
+
       el.addEventListener('animationend', ()=> el.remove());
     }
+
     function burst(count=10, spreadMs=420){
       let i = 0;
       const t = setInterval(()=>{
@@ -323,12 +373,26 @@
     const txtEl = $('#explain');
 
     async function startShow(){
+      // Start scream immediately
       try { scream.currentTime = 0; await scream.play(); } catch(e){}
+
+      // Reveal headline + flyer burst
       requestAnimationFrame(()=> booEl.classList.add('show'));
       burst(18, 560);
       setTimeout(()=> txtEl.classList.add('show'), 800);
-      // ambient loop/small bursts: uncomment to add ongoing vibes
-      // setInterval(()=> burst(3, 180), 1600);
+
+      // Fade in ambient loop after scream ends (or after 1.2s fallback)
+      const startAmbient = async()=>{
+        try { await ambient.play(); fadeInAmbient(2000, 0.18); } catch(e){}
+      };
+      if ('onended' in scream){
+        scream.onended = startAmbient;
+      } else {
+        setTimeout(startAmbient, 1200);
+      }
+
+      // Keep subtle life in the scene
+      setInterval(()=> burst(3, 220), 1600);
     }
 
     begin.addEventListener('click', ()=>{
