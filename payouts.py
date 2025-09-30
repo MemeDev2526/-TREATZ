@@ -129,7 +129,7 @@ async def pay_coinflip_winner(winner_pubkey_str: str, amount_base_units: int) ->
             client=client,
             vault_owner_kp=kp,
             vault_wallet=GAME_VAULT,
-            winner_wallet=PublicKey(winner_pubkey_str),
+            winner_wallet=to_public_key(winner_pubkey_str),
             amount_base_units=amount_base_units,
         )
         return sig
