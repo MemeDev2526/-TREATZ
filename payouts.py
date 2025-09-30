@@ -8,6 +8,8 @@ from typing import Optional, Tuple
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solana.transaction import Transaction
+from solders.pubkey import Pubkey as PublicKey
+from solders.keypair import Keypair
 from spl.token.instructions import transfer_checked, get_associated_token_address, create_associated_token_account
 from solana.rpc.types import TxOpts
 
@@ -17,6 +19,10 @@ from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
 RPC_URL = os.getenv("RPC_URL", "https://api.mainnet-beta.solana.com")
 SOLANA_CLUSTER = os.getenv("SOLANA_CLUSTER", "mainnet-beta")
 
+# --- helper must be defined before constants use it ---
+def to_public_key(addr: str | PublicKey) -> PublicKey:
+    return PublicKey.from_string(addr) if isinstance(addr, str) else addr
+    
 # Mints & vaults
 MINT = to_public_key(os.getenv("TREATZ_MINT", "11111111111111111111111111111111"))
 TOKEN_DECIMALS = int(os.getenv("TOKEN_DECIMALS", "9"))
@@ -40,8 +46,7 @@ def _kp_from_base58(b58: str) -> Keypair:
         return Keypair.from_bytes(raw)
     raise ValueError("Invalid secret key bytes. Provide a base58-encoded 64-byte secret key.")
 
-def to_public_key(addr: str | PublicKey) -> PublicKey:
-    return PublicKey.from_string(addr) if isinstance(addr, str) else addr
+
 
 
 # ---------------------------------------------------------------------
