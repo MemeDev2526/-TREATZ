@@ -129,13 +129,19 @@
     </footer>
   </main>
 
-  <script>
+<script>
   window.TREATZ_CONFIG = {
-    tokenAddress: "So11111111111111111111111111111111111111112",
-    halloweenISO: "2025-10-31T00:00:00-04:00",
-    links: { discord: "#", telegram: "#", twitter: "#", whitepaper: "#" },
+    apiBase: "https://YOUR-SERVICE.onrender.com/api",  // <- set to your Render URL
+    links: {
+      twitter: "https://x.com/trickortreatsol?s=21",
+      whitepaper: "#"
+    },
     buyUrl: "#",
-    apiBase: "https://treatz-de1d.onrender.com/api"
+    tokenAddress: "$TREATZ_TOKEN_ADDRESS",
+    assets: {
+      logo: "assets/logo.png",     // you said: assets/logo.png
+      mascot: "assets/mascot.png"  // you said: assets/mascot.png
+    }
   };
 </script>
 
