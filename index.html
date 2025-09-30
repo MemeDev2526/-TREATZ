@@ -22,6 +22,10 @@
 
   <!-- Top Navigation -->
   <header class="nav">
+    <header>
+      <img id="site-logo" alt="$TREATZ" style="height:48px;">
+  <!-- your nav links already here -->
+</header>
     <div class="nav__wrap">
       <a href="#" class="nav__brand">
         <img src="assets/logo.svg" alt="$TREATZ"
@@ -111,6 +115,35 @@
             </div>
             <ul class="mini-table__list" id="jp-recent"></ul>
           </div>
+          <main>
+  <section class="jackpot">
+    <div>Round: <strong id="round-id">—</strong></div>
+    <div>Pot: <strong id="round-pot">—</strong> SOL</div>
+    <div>Closes in: <strong id="round-countdown">—</strong></div>
+  </section>
+
+  <section>
+    <h2>Recent Rounds</h2>
+    <ul id="recent-rounds" class="recent-list"></ul>
+  </section>
+
+  <section>
+    <h2>Place a Bet</h2>
+    <form id="bet-form" class="bet">
+      <label>Amount (lamports): <input name="amount" type="number" min="1" required></label>
+      <label>Side:
+        <select name="side">
+          <option>TRICK</option>
+          <option>TREAT</option>
+        </select>
+      </label>
+      <button type="submit">Create Bet</button>
+    </form>
+    <div class="muted small">
+      Deposit: <code id="bet-deposit">—</code> | Memo: <code id="bet-memo">—</code>
+    </div>
+  </section>
+</main>
         </div>
       </div>
     </section>
@@ -159,5 +192,6 @@
     window.solana?.connect?.();
   });
 </script>
+<img id="mascot-floater" alt="Mascot" style="position:fixed; right:24px; bottom:24px; width:96px; pointer-events:none; opacity:.9;">
 </body>
 </html>
