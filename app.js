@@ -11,7 +11,7 @@
   const API = (C.apiBase || "/api").replace(/\/$/, "");
 
   const TOKEN = C.token || { symbol: "$TREATZ", decimals: 9 }; // SPL token (bets)
-  const SOL_DECIMALS = 9;                                      // for lamports → SOL formatting
+  const SOL_DECIMALS = TOKEN.decimals;                                      // for lamports → SOL formatting
 
   /* =========================
      Tiny Helpers
@@ -263,7 +263,7 @@
       const data = await r.json();
 
       elRoundId && (elRoundId.textContent = data.round_id || "—");
-      elPot     && (elPot.textContent     = fmtUnits(data.pot, SOL_DECIMALS));
+      elPot     && (elPot.textContent     = fmtUnits(data.pot, TOKEN.decimals));
 
       // countdown sync
       if (elCountdown && data.closes_at) {
@@ -311,7 +311,7 @@
         return;
       }
       recentList.innerHTML = rows
-        .map(row => `<li><span>${row.id}</span><span>${fmtUnits(row.pot, SOL_DECIMALS)} SOL</span></li>`)
+        .map(row => `<li><span>${row.id}</span><span>${fmtUnits(row.pot, TOKEN.decimals)} ${TOKEN.symbol}</span></li>`)
         .join("");
     } catch (e) {
       console.error(e);
@@ -344,125 +344,6 @@
       playResultFX(side);
     }, 1300);
   });
-
-  // Create bet → shows deposit & memo
-  if (betForm) {
-    betForm.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const fd = new FormData(betForm);
-
-      const tokens = Number(fd.get("amount") || 0);                 // user types whole tokens
-      const amountSmallest = Math.round(tokens * pow10(TOKEN.decimals));
-      const side = (fd.get("side") || "TRICK").toString();
-
-      try {
-        const r = await fetch(`${API}/bets`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: amountSmallest, side })
-        });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const data = await r.json();
-
-        toast(`Bet created. Send ${tokens} ${TOKEN.symbol} with the memo below.`);
-        $("#bet-deposit") && ($("#bet-deposit").textContent = data.deposit || "—");
-        $("#bet-memo")    && ($("#bet-memo").textContent    = data.memo || "—");
-      } catch (e) {
-        console.error(e);
-        toast("Bet failed");
-      }
-    });
-  }
-
-// ==== $TREATZ: Raffle timers & progress ====
-(async function initRaffleTimers() {
-  try {
-    const api = (window.TREATZ_CONFIG?.apiBase || "").replace(/\/+$/,"");
-
-    // 1) Fetch server config (timers, splits, limits) + balances
-    const cfgRes = await fetch(`${api}/config?include_balances=true`);
-    const cfg = await cfgRes.json();
-
-    // Merge key bits into runtime config (so the rest of the app can use them)
-    window.TREATZ_CONFIG = window.TREATZ_CONFIG || {};
-    window.TREATZ_CONFIG.token = Object.assign(
-      { symbol: "$TREATZ", decimals: 6 },
-      cfg.token || {}
-    );
-    const DECIMALS = Number(window.TREATZ_CONFIG.token.decimals || 6);
-    const TEN_POW = 10 ** DECIMALS;
-
-    // 2) Pull the active round (for current pot)
-    const roundRes = await fetch(`${api}/rounds/current`);
-    const round = await roundRes.json();
-
-    // --- DOM refs ---
-    const elPot      = document.getElementById("round-pot");
-    const elRoundId  = document.getElementById("round-id");
-    const elClose    = document.getElementById("round-countdown");
-    const elNext     = document.getElementById("round-next-countdown");
-    const elTicket   = document.getElementById("ticket-price");
-    const elProg     = document.getElementById("jp-progress");
-
-    // --- Populate static bits ---
-    if (elRoundId && round?.round_id) elRoundId.textContent = round.round_id;
-
-    // ticket price (human units)
-    const priceBase = Number(cfg?.token?.ticket_price || 0);
-    if (elTicket) elTicket.textContent = (priceBase / TEN_POW).toLocaleString(undefined, { maximumFractionDigits: DECIMALS });
-
-    // pot (human units)
-    if (elPot && typeof round?.pot === "number") {
-      elPot.textContent = (round.pot / TEN_POW).toLocaleString(undefined, { maximumFractionDigits: DECIMALS });
-    }
-
-    // time helpers
-    const opensAt  = new Date(round.opens_at);
-    const closesAt = new Date(round.closes_at);
-    const nextOpensAt = new Date(cfg?.timers?.next_opens_at || (closesAt.getTime() + (cfg?.raffle?.break_minutes||0)*60*1000));
-
-    function fmtDur(ms) {
-      if (ms < 0) ms = 0;
-      const s = Math.floor(ms / 1000);
-      const d = Math.floor(s / 86400);
-      const h = Math.floor((s % 86400) / 3600);
-      const m = Math.floor((s % 3600) / 60);
-      const sec = s % 60;
-      return d > 0
-        ? `${d}d ${h}h ${m}m ${sec}s`
-        : `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}:${sec.toString().padStart(2,"0")}`;
-    }
-
-    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
-
-    // --- live updater ---
-    function tick() {
-      const now = new Date();
-
-      // Close timer
-      const msToClose = closesAt - now;
-      if (elClose) elClose.textContent = fmtDur(msToClose);
-
-      // Next-open timer
-      const msToNext = nextOpensAt - now;
-      if (elNext) elNext.textContent = fmtDur(msToNext);
-
-      // Progress: 0 → 100% across [opensAt, closesAt]
-      if (elProg) {
-        const total = closesAt - opensAt;
-        const elapsed = now - opensAt;
-        const pct = clamp01(elapsed / (total || 1)) * 100;
-        elProg.style.width = `${pct}%`;
-      }
-    }
-
-    tick();
-    setInterval(tick, 1000);
-  } catch (e) {
-    console.error("initRaffleTimers error", e);
-  }
-})();
-
    
   /* =========================================================
      Init
@@ -601,7 +482,10 @@ document.getElementById("bet-form")?.addEventListener("submit", async (e)=>{
 
     // 2) Build SPL transfer to GAME_VAULT_ATA with memo
     const mintPk = new solanaWeb3.PublicKey(CONFIG.token.mint);
-    const destAta = new solanaWeb3.PublicKey(CONFIG.vaults.game_vault_ata);
+    const gameAtaStr = CONFIG?.vaults?.game_vault_ata;
+    if (!gameAtaStr) throw new Error("Game vault ATA not configured on the server.");
+    const destAta = new solanaWeb3.PublicKey(gameAtaStr);
+
     const payer = PUBKEY;
 
     const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
@@ -649,7 +533,9 @@ document.getElementById("jp-buy")?.addEventListener("click", async ()=>{
 
     // Build transfer to JACKPOT_VAULT_ATA
     const mintPk = new solanaWeb3.PublicKey(CONFIG.token.mint);
-    const destAta = new solanaWeb3.PublicKey(CONFIG.vaults.jackpot_vault_ata);
+    const jackAtaStr = CONFIG?.vaults?.jackpot_vault_ata;
+    if (!jackAtaStr) throw new Error("Jackpot vault ATA not configured on the server.");
+    const destAta = new solanaWeb3.PublicKey(jackAtaStr);
     const payer = PUBKEY;
 
     const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
