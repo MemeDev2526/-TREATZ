@@ -58,17 +58,17 @@
       <h2 class="section__title">🎃 Trick or Treat — Coin Toss</h2>
       <div class="card grid-2">
         <div class="card__col">
-          <div class="form">
+          <form class="form" id="bet-form">
             <label class="label">Wager Amount ($TREATZ)</label>
-            <input id="cf-amount" type="number" min="0" step="1" placeholder="100" inputmode="numeric" />
+            <input name="amount" type="number" min="0" step="1" placeholder="100" inputmode="numeric" />
             <label class="label">Pick a side</label>
             <div class="choices" role="radiogroup" aria-label="Coin side">
-              <label class="choice"><input type="radio" name="cf-side" value="TRICK" checked /> TRICK 👻</label>
-              <label class="choice"><input type="radio" name="cf-side" value="TREAT" /> TREAT 🍬</label>
+              <label class="choice"><input type="radio" name="side" value="TRICK" checked /> TRICK 👻</label>
+              <label class="choice"><input type="radio" name="side" value="TREAT" /> TREAT 🍬</label>
             </div>
-            <button class="btn btn--primary" id="cf-play">Flip that Coin</button>
+            <button class="btn btn--primary" type="submit" id="cf-play">Flip that Coin</button>
             <p class="help">House edge & on-chain fairness info will appear here.</p>
-          </div>
+          </form>
         </div>
         <div class="card__col">
           <div class="cf-display" id="cf-display" aria-live="polite">
