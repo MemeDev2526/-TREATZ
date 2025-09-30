@@ -262,5 +262,56 @@ input[type="number"], input[type="text"]{width:100%; padding:.75rem .9rem; borde
   filter: blur(6px); pointer-events:none;
 }
 
+/* ===== $TREATZ FX ===== */
+#fx-layer{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1200; /* above content, below banner (banner ~1002) */
+}
+
+/* Base piece */
+.fx-piece{
+  position: absolute;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,.5));
+  opacity: .95;
+}
+
+/* Fall + sway */
+@keyframes treatz-fall {
+  0%   { transform: translate(var(--x,0px), -10%) rotate(var(--r0,0deg)); opacity: 0; }
+  8%   { opacity: .95; }
+  100% { transform: translate(var(--x,0px), 110vh) rotate(var(--r1,360deg)); opacity: .98; }
+}
+@keyframes treatz-sway {
+  0%   { margin-left: -10px; }
+  50%  { margin-left: 10px; }
+  100% { margin-left: -10px; }
+}
+
+/* Ghost & skull tint */
+.fx-ghost svg path,
+.fx-skull svg path { filter: drop-shadow(0 0 12px rgba(57,255,20,.35)); }
+
+/* Wrapper / candy colors (brand) */
+:root{
+  --pumpkin:#FF6B00; --witch:#3A0C55; --slime:#39FF14; --white:#fff;
+}
+.fx-wrapper .w1 { fill: var(--witch); }
+.fx-wrapper .w2 { fill: var(--pumpkin); }
+.fx-wrapper .w3 { fill: var(--white); opacity:.9; }
+.fx-candy .c1   { fill: var(--witch); }
+.fx-candy .c2   { fill: var(--slime); }
+
+/* Timing helpers */
+.fx-piece{
+  animation:
+    treatz-fall var(--dur,6s) linear forwards,
+    treatz-sway 2.6s ease-in-out infinite;
+}
+
+
 /* Footer */
 .footer{opacity:.8; text-align:center; margin-top:28px}
