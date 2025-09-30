@@ -2,7 +2,7 @@
 $TREATZ — Config
 Centralized environment + constants, powered by pydantic-settings.
 """
-
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
