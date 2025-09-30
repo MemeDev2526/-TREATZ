@@ -6,7 +6,7 @@ Lightweight aiosqlite helpers + canonical schema (kept in sync with main.py/init
 from __future__ import annotations
 
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import aiosqlite
 
 
@@ -98,3 +98,18 @@ async def kv_get(conn: aiosqlite.Connection, k: str) -> Optional[str]:
     async with conn.execute("SELECT v FROM kv WHERE k=?", (k,)) as cur:
         row = await cur.fetchone()
         return row[0] if row else None
+        
+def create_round(conn, opens_at: datetime, closes_at: datetime):
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO rounds (opens_at, closes_at, pot, status) VALUES (?, ?, ?, ?)",
+        (opens_at.isoformat(), closes_at.isoformat(), 0, "OPEN"),
+    )
+    conn.commit()
+    rid = cur.lastrowid
+    return f"R{rid}"
+
+def mark_round_closed(conn, round_id: str):
+    cur = conn.cursor()
+    cur.execute("UPDATE rounds SET status = ? WHERE id = ?", ("CLOSED", round_id.lstrip("R")))
+    conn.commit()
