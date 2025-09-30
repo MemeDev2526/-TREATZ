@@ -6,14 +6,8 @@
   // ------- helpers -------
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
-  const fmtSOL = (lamports) => {
-    if (lamports == null) return "—";
-    const sol = Number(lamports) / 1e9;
-    return sol >= 1 ? sol.toFixed(2) : sol.toFixed(4);
-  };
   const toast = (msg) => {
     console.log(msg);
-    // drop a tiny, non-intrusive toast:
     let t = document.createElement("div");
     t.className = "toast";
     t.textContent = msg;
@@ -27,11 +21,24 @@
     setTimeout(() => t.remove(), 2500);
   };
 
+  // --- formats & unit helpers (SPL token) ---
+  const TOKEN = C.token || { symbol: "$TREATZ", decimals: 9 };
+  const pow10 = (n) => Math.pow(10, n);
+  const fmtToken = (units) => {
+    if (units == null) return "—";
+    const t = Number(units) / pow10(TOKEN.decimals);
+    return t >= 1 ? t.toFixed(2) : t.toFixed(4);
+  };
+  // Use for jackpot pot display (pot is stored in smallest units)
+  const fmtPot = fmtToken;
+
   // ------- link wiring -------
   const link = (id, href) => {
     const el = document.getElementById(id);
     if (el && href) el.href = href;
   };
+  link("link-discord", C.links?.discord);
+  link("link-telegram", C.links?.telegram);
   link("link-twitter", C.links?.twitter);
   link("link-whitepaper", C.links?.whitepaper);
   link("btn-buy", C.buyUrl);
@@ -74,6 +81,7 @@
   const elRoundId = $("#round-id");
   const elPot = $("#round-pot");
   const elCountdown = $("#round-countdown");
+  const elProgress = $("#jp-progress"); // optional progress bar
 
   let countdownTimer = null;
 
@@ -84,7 +92,7 @@
       const data = await r.json();
 
       if (elRoundId) elRoundId.textContent = data.round_id || "—";
-      if (elPot) elPot.textContent = fmtSOL(data.pot);
+      if (elPot) elPot.textContent = fmtPot(data.pot);
 
       // countdown sync
       if (elCountdown && data.closes_at) {
@@ -96,10 +104,17 @@
           const m = Math.floor(s / 60);
           const ss = (s % 60).toString().padStart(2, "0");
           elCountdown.textContent = `${m}:${ss}`;
+
+          if (elProgress && data.opens_at) {
+            const opensAt = new Date(data.opens_at).getTime();
+            const total = Math.max(1, (closesAt - opensAt));
+            const pct = Math.min(100, Math.max(0, ((Date.now() - opensAt) / total) * 100));
+            elProgress.style.width = `${pct}%`;
+          }
+
           if (diff <= 0) {
             clearInterval(countdownTimer);
             elCountdown.textContent = "0:00";
-            // after it hits 0, refresh current round shortly after
             setTimeout(loadCurrentRound, 1500);
             setTimeout(loadRecentRounds, 1500);
           }
@@ -125,7 +140,7 @@
         return;
       }
       recentList.innerHTML = rows
-        .map(row => `<li><span>${row.id}</span><span>${fmtSOL(row.pot)} SOL</span></li>`)
+        .map(row => `<li><span>${row.id}</span><span>${fmtToken(row.pot)} ${TOKEN.symbol}</span></li>`)
         .join("");
     } catch (e) {
       console.error(e);
@@ -134,35 +149,35 @@
   }
 
   // ------- place bet (coin flip MVP) -------
-const betForm = $("#bet-form");
-if (betForm) {
-  betForm.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const fd = new FormData(betForm);
+  const betForm = $("#bet-form");
+  if (betForm) {
+    betForm.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(betForm);
 
-    // user types "100" meaning 100 TREATZ (whole tokens)
-    const tokens = Number(fd.get("amount") || 0);
-    const amountSmallest = Math.round(tokens * pow10(TOKEN.decimals));
+      // user types whole tokens (e.g. 100)
+      const tokens = Number(fd.get("amount") || 0);
+      const amountSmallest = Math.round(tokens * pow10(TOKEN.decimals));
 
-    const side = (fd.get("side") || "TRICK").toString();
+      const side = (fd.get("side") || "TRICK").toString();
 
-    try {
-      const r = await fetch(`${API}/bets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: amountSmallest, side })
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      toast(`Bet created. Send ${tokens} ${TOKEN.symbol} with memo below.`);
-      $("#bet-deposit") && ($("#bet-deposit").textContent = data.deposit || "—");
-      $("#bet-memo") && ($("#bet-memo").textContent = data.memo || "—");
-    } catch (e) {
-      console.error(e);
-      toast("Bet failed");
-    }
-  });
-}
+      try {
+        const r = await fetch(`${API}/bets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: amountSmallest, side })
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        toast(`Bet created. Send ${tokens} ${TOKEN.symbol} with memo below.`);
+        $("#bet-deposit") && ($("#bet-deposit").textContent = data.deposit || "—");
+        $("#bet-memo") && ($("#bet-memo").textContent = data.memo || "—");
+      } catch (e) {
+        console.error(e);
+        toast("Bet failed");
+      }
+    });
+  }
 
   // initial load + polling
   loadCurrentRound();
