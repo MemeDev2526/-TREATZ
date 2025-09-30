@@ -1,8 +1,7 @@
 /* ========= $TREATZ Styles ======== */
 :root{
   --orange:#FF6B00; --orange-hi:#FF9500;
-  --witch:#6A00FF; --slime:#00FFA3;
-  --slime:#39FF14;               /* slime green glow */
+  --witch:#6A00FF; --slime:#00FFA3; /* slime green glow */
   --jet:#0D0D0D; --white:#FFFFFF; --gray:#AAAAAA;
   --bg-a:#2C0A44; --bg-b:#4D0D57;
   --card:rgba(13,13,13,.72); --card-border:rgba(255,255,255,.12);
