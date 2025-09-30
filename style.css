@@ -107,7 +107,7 @@ input[type="number"], input[type="text"]{width:100%; padding:.75rem .9rem; borde
   top: 0;
   z-index: 1000;
   height: 84px;               /* adjust to taste */
-  background: #0D0D0D url('assets/banner-top.png') center/contain no-repeat;
+  background: #0D0D0D url('assets/Banner_Top.png') center/contain no-repeat;
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
 }
 
@@ -117,7 +117,7 @@ input[type="number"], input[type="text"]{width:100%; padding:.75rem .9rem; borde
   inset: 0;
   background:
     linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.75)),
-    url('assets/background.png') center top / cover no-repeat fixed;
+    url('assets/background.png') center top / contain no-repeat fixed;
   z-index: -1;
   filter: saturate(105%);
 }
