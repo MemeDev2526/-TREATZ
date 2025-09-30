@@ -17,7 +17,21 @@ from config import settings
 import db as dbmod  # aiosqlite helpers (connect, kv_get/kv_set)
 
 # NEW: payout helpers (sign + send SPL from vaults)
-from payouts import pay_coinflip_winner, pay_jackpot_winner
+from payouts import pay_coinflip_winner, pay_jackpot_winner, pay_jackpot_split
+
+# NEW: RPC helpers for balances/entropy
+from solana.rpc.async_api import AsyncClient
+
+RPC_URL = getattr(settings, "RPC_URL", "https://api.mainnet-beta.solana.com")
+ROUND_MIN = int(getattr(settings, "ROUND_MIN", 30))
+ROUND_BREAK = int(getattr(settings, "ROUND_BREAK", 0))
+SPLT_WIN = int(getattr(settings, "SPLT_WINNER", 80))
+SPLT_DEV = int(getattr(settings, "SPLT_DEV", 10))
+SPLT_BURN = int(getattr(settings, "SPLT_BURN", 10))
+DEV_WALLET = getattr(settings, "DEV_WALLET", "")
+BURN_ADDRESS = getattr(settings, "BURN_ADDRESS", "")
+SLOTS_PER_MIN = 150  # approx. Solana slots per minute; good enough for 2–30m rounds
+
 
 # =========================================================
 # App Init
@@ -98,6 +112,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_txsig ON entries(tx_sig);
 
 async def ensure_schema(db):
     await db.executescript(SCHEMA_SQL)
+    # --- lightweight migrations (ignore if already added) ---
+    try:
+        await db.execute("ALTER TABLE rounds ADD COLUMN server_seed_reveal TEXT")
+    except Exception:
+        pass
+    try:
+        await db.execute("ALTER TABLE rounds ADD COLUMN finalize_slot INTEGER")
+    except Exception:
+        pass
 
 
 # =========================================================
@@ -109,6 +132,39 @@ def _hash(s: str) -> str:
 
 def _hmac(secret: str, msg: str) -> bytes:
     return hmac.new(secret.encode(), msg.encode(), hashlib.sha256).digest()
+
+
+# =========================================================
+# RPC Helpers
+# =========================================================
+async def _rpc_get_token_balance(ata: str) -> int:
+    """Return token balance (base units) for a token account address."""
+    if not ata:
+        return 0
+    async with AsyncClient(RPC_URL) as c:
+        r = await c.get_token_account_balance(ata)
+        # solana-py typed response
+        val = getattr(r, "value", None)
+        if val and hasattr(val, "amount"):
+            return int(val.amount)
+        # fallback for raw style
+        return int(r["result"]["value"]["amount"])
+
+async def _rpc_get_slot() -> int:
+    async with AsyncClient(RPC_URL) as c:
+        s = await c.get_slot()
+        return getattr(s, "value", s["result"])
+
+async def _rpc_get_blockhash(slot: int) -> Optional[str]:
+    """Fetch blockhash at a specific slot; None if unavailable."""
+    async with AsyncClient(RPC_URL) as c:
+        b = await c.get_block(slot, max_supported_transaction_version=0)
+        val = getattr(b, "value", None)
+        if val and hasattr(val, "blockhash"):
+            return val.blockhash
+        if isinstance(b, dict) and b.get("result") and b["result"].get("blockhash"):
+            return b["result"]["blockhash"]
+        return None
 
 
 # =========================================================
@@ -125,14 +181,23 @@ async def on_startup():
     if not current:
         rid = f"R{secrets.randbelow(10_000):04d}"
         now = datetime.utcnow()
-        closes = now + timedelta(minutes=30)
+        closes = now + timedelta(minutes=ROUND_MIN)
+
+        # Commit round server seed
+        round_srv = secrets.token_hex(32)
+        await dbmod.kv_set(app.state.db, f"round:{rid}:server_seed", round_srv)
+        srv_hash = _hash(round_srv)
+
+        # Predetermine finalize slot
+        curr_slot = await _rpc_get_slot()
+        finalize_slot = curr_slot + (ROUND_MIN * SLOTS_PER_MIN)
+
         await app.state.db.execute(
-            "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,pot) VALUES(?,?,?,?,?,?,?)",
-            (rid, "OPEN", now.isoformat(), closes.isoformat(), _hash("seed:" + rid), secrets.token_hex(8), 0),
+            "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) VALUES(?,?,?,?,?,?,?,?)",
+            (rid, "OPEN", now.isoformat(), closes.isoformat(), srv_hash, secrets.token_hex(8), finalize_slot, 0),
         )
         await dbmod.kv_set(app.state.db, "current_round_id", rid)
         await app.state.db.commit()
-
 
 # =========================================================
 # Health
@@ -197,21 +262,29 @@ class BetResp(BaseModel):
     deposit: str
     memo: str
 
-
 # =========================================================
 # Endpoints — Bets
 # =========================================================
 @app.post(f"{API}/bets", response_model=BetResp)
 async def create_bet(body: NewBet):
     """
-    Create a coin-flip bet record and return the deposit address + memo.
-    Settlement occurs later via webhook (Helius).
+    Create a coin-flip bet. Commits server_seed_hash (reveal later) and enforces wager cap:
+      wager <= (GAME_VAULT balance / 2)
     """
+    # Enforce max wager based on current vault balance (base units)
+    vault_bal = await _rpc_get_token_balance(getattr(settings, "GAME_VAULT_ATA", ""))
+    max_wager = vault_bal // 2
+    if body.amount > max_wager:
+        raise HTTPException(400, f"Max wager is {max_wager} base units right now.")
+
     bet_id = secrets.token_hex(6)
 
-    # For MVP we commit the *hash* (not the reveal) to DB
+    # Commit-reveal seed
     server_seed = secrets.token_hex(32)
     server_seed_hash = _hash(server_seed)
+    await dbmod.kv_set(app.state.db, f"bet:{bet_id}:server_seed", server_seed)
+
+    client_seed = secrets.token_hex(8)
 
     await app.state.db.execute(
         "INSERT INTO bets(id, user, client_seed, server_seed_hash, server_seed_reveal, wager, side, status, created_at) "
@@ -219,9 +292,9 @@ async def create_bet(body: NewBet):
         (
             bet_id,
             "",
-            secrets.token_hex(8),
+            client_seed,
             server_seed_hash,
-            None,
+            None,                    # reveal later at settlement
             body.amount,
             body.side,
             "PENDING",
@@ -230,11 +303,9 @@ async def create_bet(body: NewBet):
     )
     await app.state.db.commit()
 
-    deposit = settings.GAME_VAULT  # where user will send funds
+    deposit = settings.GAME_VAULT
     memo = f"BET:{bet_id}:{body.side}"
-
     return {"bet_id": bet_id, "server_seed_hash": server_seed_hash, "deposit": deposit, "memo": memo}
-
 
 # =========================================================
 # Endpoints — Rounds (current / recent)
@@ -249,14 +320,17 @@ async def rounds_current():
         row = await cur.fetchone()
         if not row:
             raise HTTPException(404, "No current round")
+        next_open = (datetime.fromisoformat(row[3]) + timedelta(minutes=ROUND_BREAK)).isoformat()
         return {
             "round_id": row[0],
             "status": row[1],
             "opens_at": row[2],
             "closes_at": row[3],
-            "pot": row[4],  # integer smallest units (lamports if SOL)
+            "pot": row[4],
+            "next_opens_at": next_open,
+            "round_minutes": ROUND_MIN,
+            "break_minutes": ROUND_BREAK,
         }
-
 
 @app.get(f"{API}/rounds/recent")
 async def rounds_recent(limit: int = 10):
@@ -312,7 +386,7 @@ async def get_bet(bet_id: str):
 async def get_round_winner(round_id: str):
     # Round basics
     async with app.state.db.execute(
-        "SELECT id,status,opens_at,closes_at,pot FROM rounds WHERE id=?",
+        "SELECT id,status,opens_at,closes_at,pot,server_seed_hash,server_seed_reveal,finalize_slot FROM rounds WHERE id=?",
         (round_id,),
     ) as cur:
         r = await cur.fetchone()
@@ -332,6 +406,9 @@ async def get_round_winner(round_id: str):
     entries_count = int(stats[0] or 0)
     total_tickets = int(stats[1] or 0)
 
+    # KV fairness bits
+    entropy = await dbmod.kv_get(app.state.db, f"round:{round_id}:entropy")
+
     return {
         "round_id": r[0],
         "status": r[1],
@@ -342,6 +419,10 @@ async def get_round_winner(round_id: str):
         "payout_sig": payout_sig,
         "entries": entries_count,
         "total_tickets": total_tickets,
+        "server_seed_hash": r[5],
+        "server_seed_reveal": r[6],
+        "finalize_slot": r[7],                 
+        "entropy": entropy,
     }
 
 # =========================================================
@@ -427,10 +508,24 @@ async def helius_webhook(request: Request):
                 await app.state.db.commit()
                 continue
 
-            # MVP pseudo reveal; replace with real committed reveal later
-            server_seed_reveal = "reveal_" + bet_id
-            # Deterministic fair coin from HMAC(secret, reveal + tx_sig)
-            result = "TREAT" if (int.from_bytes(_hmac(settings.HMAC_SECRET, server_seed_reveal + tx_sig), "big") % 2) else "TRICK"
+            # Commit-reveal:
+            server_seed = await dbmod.kv_get(app.state.db, f"bet:{bet_id}:server_seed")
+            if not server_seed:
+                # Safety: if missing, skip; do not settle blindly
+                await dbmod.kv_set(app.state.db, f"bet:{bet_id}:payout_error", "missing_server_seed")
+                await app.state.db.commit()
+                continue
+
+            # Need client_seed for fairness mix
+            async with app.state.db.execute("SELECT client_seed FROM bets WHERE id=?", (bet_id,)) as c2:
+                r2 = await c2.fetchone()
+            client_seed = r2[0] if r2 else ""
+
+            # Deterministic fair coin from HMAC(server_seed, tx_sig + client_seed)
+            rng = int.from_bytes(_hmac(server_seed, tx_sig + client_seed), "big")
+            result = "TREAT" if (rng % 2) else "TRICK"
+            server_seed_reveal = server_seed  # store reveal
+
             win = int(result == choice)
             status = "SETTLED"
 
@@ -452,6 +547,37 @@ async def helius_webhook(request: Request):
                     await dbmod.kv_set(app.state.db, f"bet:{bet_id}:payout_error", str(e))
                     await app.state.db.commit()
 
+                # ---------------- Jackpot entries -------------------
+        if memo.startswith("JP:") and to_addr == jackpot_vault and amt > 0:
+            parts = memo.split(":")
+            if len(parts) >= 2 and parts[1]:
+                round_id = parts[1]
+            else:
+                round_id = await dbmod.kv_get(app.state.db, "current_round_id")
+
+            # tickets from full ticket_price only; DO NOT force at least 1
+            tickets = amt // settings.TICKET_PRICE
+            remainder = amt - (tickets * settings.TICKET_PRICE)
+
+            if tickets > 0:
+                await app.state.db.execute(
+                    "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
+                    (round_id, sender_raw, tickets, tx_sig),
+                )
+                # pot increases by tickets * price (base units)
+                await app.state.db.execute(
+                    "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
+                    (tickets * settings.TICKET_PRICE, round_id),
+                )
+
+            # store remainder as credit for next round
+            if remainder > 0:
+                key = f"raffle_credit:{sender_raw}"
+                existing = await dbmod.kv_get(app.state.db, key)
+                cur = int(existing or 0)
+                await dbmod.kv_set(app.state.db, key, str(cur + remainder))
+
+            await app.state.db.commit()
 
 
 # =========================================================
@@ -459,13 +585,14 @@ async def helius_webhook(request: Request):
 # =========================================================
 @app.post(f"{API}/admin/round/close")
 async def admin_close_round():
-    """Settle current round (weighted pick by tickets + on-chain payout), then open a fresh one (30 min)."""
+    """Settle current round using commit-reveal + external entropy, split payouts, then open next round and auto-apply credits."""
     rid = await dbmod.kv_get(app.state.db, "current_round_id")
 
-    # Load pot (base units)
-    async with app.state.db.execute("SELECT pot, opens_at, closes_at FROM rounds WHERE id=?", (rid,)) as cur:
+    # Load round basics
+    async with app.state.db.execute("SELECT pot, opens_at, closes_at, server_seed_hash, server_seed_reveal, finalize_slot FROM rounds WHERE id=?", (rid,)) as cur:
         r = await cur.fetchone()
     pot = int(r[0] if r else 0)
+    finalize_slot = int(r[5] or 0) if r else 0
 
     # Gather entries
     async with app.state.db.execute("SELECT user, tickets FROM entries WHERE round_id=?", (rid,)) as cur:
@@ -474,40 +601,110 @@ async def admin_close_round():
     winner_addr = None
     payout_sig = None
 
-    # Weighted random (deterministic via HMAC on round id)
+    # --- Commit-reveal for round ---
+    round_server_seed = await dbmod.kv_get(app.state.db, f"round:{rid}:server_seed")
+    if not round_server_seed:
+        # backstop; generate one to avoid blocking (won't match hash though)
+        round_server_seed = secrets.token_hex(32)
+        await dbmod.kv_set(app.state.db, f"round:{rid}:server_seed", round_server_seed)
+
+    # External entropy = blockhash at finalize_slot; fallback to last entry tx
+    entropy = await _rpc_get_blockhash(finalize_slot) if finalize_slot else None
+    if not entropy:
+        async with app.state.db.execute("SELECT tx_sig FROM entries WHERE round_id=? ORDER BY id DESC LIMIT 1", (rid,)) as cur:
+            last = await cur.fetchone()
+        entropy = last[0] if last and last[0] else secrets.token_hex(16)
+
+    # Weighted draw
     total_tix = sum(int(t or 0) for _u, t in entries)
     if pot > 0 and total_tix > 0:
-        pick_space = int.from_bytes(_hmac(settings.HMAC_SECRET, rid), "big") % total_tix
+        pick_space = int.from_bytes(_hmac(round_server_seed, (entropy + rid)), "big") % total_tix
         acc = 0
         for u, t in entries:
             acc += int(t or 0)
             if acc > pick_space:
-                winner_addr = u  # raw base58 stored earlier
+                winner_addr = u
                 break
 
-        # Pay jackpot from JACKPOT_VAULT
+        # Store reveal & entropy on round
+        await app.state.db.execute(
+            "UPDATE rounds SET server_seed_reveal=? WHERE id=?",
+            (round_server_seed, rid),
+        )
+        await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy)
+
+        # Split pot
+        total_pct = max(1, SPLT_WIN + SPLT_DEV + SPLT_BURN)
+        win_amt  = pot * SPLT_WIN  // total_pct
+        dev_amt  = pot * SPLT_DEV  // total_pct if DEV_WALLET else 0
+        burn_amt = pot * SPLT_BURN // total_pct if BURN_ADDRESS else 0
+        # adjust rounding remainder to winner
+        remainder = pot - (win_amt + dev_amt + burn_amt)
+        win_amt += remainder
+
         try:
-            payout_sig = await pay_jackpot_winner(winner_addr, pot)
+            payout_sig = await pay_jackpot_split(
+                winner_addr, win_amt,
+                DEV_WALLET, dev_amt,
+                BURN_ADDRESS, burn_amt,
+            )
             await dbmod.kv_set(app.state.db, f"round:{rid}:winner", winner_addr)
             await dbmod.kv_set(app.state.db, f"round:{rid}:payout_sig", payout_sig)
+            await dbmod.kv_set(app.state.db, f"round:{rid}:split",
+                               f"win:{win_amt},dev:{dev_amt},burn:{burn_amt}")
         except Exception as e:
             await dbmod.kv_set(app.state.db, f"round:{rid}:payout_error", str(e))
 
-    # Close current, open next
-    new_id = f"R{secrets.randbelow(10_000):04d}"
-    now = datetime.utcnow()
-    closes = now + timedelta(minutes=30)
-
+    # Close current
     await app.state.db.execute("UPDATE rounds SET status='SETTLED' WHERE id=?", (rid,))
+
+    # Open next round (timed with ROUND_MIN & finalize_slot)
+    new_id = f"R{secrets.randbelow(10_000):04d}"
+    now = datetime.utcnow() + timedelta(minutes=ROUND_BREAK)
+    closes = now + timedelta(minutes=ROUND_MIN)
+
+    new_round_srv = secrets.token_hex(32)
+    await dbmod.kv_set(app.state.db, f"round:{new_id}:server_seed", new_round_srv)
+    srv_hash = _hash(new_round_srv)
+
+    curr_slot = await _rpc_get_slot()
+    finalize_slot = curr_slot + (ROUND_MIN * SLOTS_PER_MIN)
+
     await app.state.db.execute(
-        "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,pot) VALUES(?,?,?,?,?,?,?)",
-        (new_id, "OPEN", now.isoformat(), closes.isoformat(), _hash("seed:" + new_id), secrets.token_hex(8), 0),
+        "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) VALUES(?,?,?,?,?,?,?,?)",
+        (new_id, "OPEN", now.isoformat(), closes.isoformat(), srv_hash, secrets.token_hex(8), finalize_slot, 0),
     )
     await dbmod.kv_set(app.state.db, "current_round_id", new_id)
     await app.state.db.commit()
 
-    return {"ok": True, "settled_round": rid, "winner": winner_addr, "payout_sig": payout_sig, "new_round": new_id}
+    # Auto-apply credits to NEW round
+    async with app.state.db.execute("SELECT k, v FROM kv WHERE k LIKE 'raffle_credit:%'") as cur:
+        credit_rows = await cur.fetchall()
+    for k, v in credit_rows:
+        owner = k.split("raffle_credit:", 1)[1]
+        credit = int(v or 0)
+        if credit >= settings.TICKET_PRICE:
+            extra_tix = credit // settings.TICKET_PRICE
+            rem = credit % settings.TICKET_PRICE
+            await app.state.db.execute(
+                "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
+                (new_id, owner, extra_tix, f"auto_credit_{new_id}_{owner[:6]}"),
+            )
+            # note: pot increases only by tickets*price
+            await app.state.db.execute(
+                "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
+                (extra_tix * settings.TICKET_PRICE, new_id),
+            )
+            await dbmod.kv_set(app.state.db, k, str(rem))
+    await app.state.db.commit()
 
+    return {
+        "ok": True,
+        "settled_round": rid,
+        "winner": winner_addr,
+        "payout_sig": payout_sig,
+        "new_round": new_id
+    }
 
 @app.post(f"{API}/admin/round/seed")
 async def admin_seed_rounds(n: int = 5):
