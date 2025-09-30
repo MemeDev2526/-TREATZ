@@ -476,6 +476,7 @@ document.getElementById("btn-connect")?.addEventListener("click", async ()=>{
   try {
     if (PUBKEY) { await disconnectWallet(); setWalletLabels(); return; }
     await connectWallet(); setWalletLabels();
+    setTimeout(loadPlayerStats, 500);
   } catch (e) {
     console.error(e);
     alert("Install Phantom to play — opening phantom.app");
@@ -504,6 +505,42 @@ function startTicker(lines=fakeWins){
   el.innerHTML = `<div class="ticker__inner">${lines.join(" • ")} • </div>`;
 }
 startTicker();
+// Player stats (only shown when wallet connected)
+async function loadPlayerStats(){
+  const panel = document.getElementById("player-stats");
+  if (!panel) return;
+  if (!PUBKEY) { panel.hidden = true; return; }
+
+  try{
+    await ensureConfig();
+    const api = (window.TREATZ_CONFIG?.apiBase || "").replace(/\/+$/,"");
+
+    // Current round → entries
+    const cur = await fetch(`${api}/rounds/current`, {cache:"no-store"}).then(r=>r.json());
+    const entries = await fetch(`${api}/rounds/${cur.round_id}/entries`, {cache:"no-store"})
+      .then(r=>r.json()).catch(()=>[]);
+
+    const you = (entries || []).filter(e=> String(e.user).toLowerCase() === String(PUBKEY.toBase58()).toLowerCase());
+    const yourTickets = you.reduce((s,e)=> s + Number(e.tickets||0), 0);
+
+    // Optional endpoints (safe to fail silently)
+    let credit = 0, spent = 0, won = 0;
+    try { credit = await fetch(`${api}/players/${PUBKEY.toBase58()}/credit`).then(r=>r.json()).then(j=>Number(j?.credit||0)); } catch{}
+    try {
+      const sum = await fetch(`${api}/players/${PUBKEY.toBase58()}/summary`).then(r=>r.json());
+      spent = Number(sum?.spent || 0); won = Number(sum?.won || 0);
+    } catch {}
+
+    // Write UI
+    document.getElementById("ps-tickets")?.replaceChildren(document.createTextNode(yourTickets.toLocaleString()));
+    document.getElementById("ps-credit") ?.replaceChildren(document.createTextNode((credit / TEN_POW).toLocaleString()));
+    document.getElementById("ps-spent")  ?.replaceChildren(document.createTextNode((spent  / TEN_POW).toLocaleString()));
+    document.getElementById("ps-won")    ?.replaceChildren(document.createTextNode((won    / TEN_POW).toLocaleString()));
+
+    panel.hidden = false;
+  }catch(e){ console.error("loadPlayerStats", e); }
+}
+setInterval(loadPlayerStats, 15000);
 
 // ===========================
 // SPL helpers
@@ -773,6 +810,28 @@ function armAmbient(){
   document.addEventListener("click", start, {once:true});
 }
 armAmbient();
+
+// House edge display
+(async()=>{
+  await ensureConfig();
+  if (CONFIG?.raffle?.splits) {
+    const s = CONFIG.raffle.splits;
+    const bps = 10000 - (s.winner + s.dev + s.burn);
+    const el = document.getElementById("edge-line");
+    if (el) el.textContent = `House edge: ${(bps/100).toFixed(2)}%`;
+  }
+})();
+
+// Raffle schedule display (surface cadence so it feels "scheduled")
+(async()=>{
+  await ensureConfig();
+  const roundM = Number(CONFIG?.raffle?.round_minutes || 0);
+  const breakM = Number(CONFIG?.raffle?.break_minutes || 0);
+  const el = document.getElementById("raffle-schedule");
+  if (el && (roundM || breakM)) {
+    el.textContent = `Draws every ${roundM} min${breakM?`, ${breakM} min break between rounds`:""}.`;
+  }
+})();
 
 // ===========================
 // Mascot: float/bounce around screen
