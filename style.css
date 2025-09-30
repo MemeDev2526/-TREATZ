@@ -77,6 +77,8 @@ a, .btn--outline { color: var(--slime); }
   position: sticky;
   top: var(--banner-h);
   z-index: 1001;
+  transform: scale(1.15);            /* ~1.15x container */
+  transform-origin: top center;
   backdrop-filter: blur(3px);
   background:#000;
   border-bottom: 1px solid rgba(255,255,255,.08);
@@ -85,7 +87,8 @@ a, .btn--outline { color: var(--slime); }
 .countdown__inner{
   max-width:1200px; 
   margin:0 auto; 
-  padding:.55rem .9rem; 
+  font-size: clamp(1.1rem, 2.2vw, 2rem);  /* ~1.5x typical text size */
+  padding: 0.9rem 1.2rem; 
   display:flex; gap:.75rem; 
   align-items:center; justify-content:center; 
   flex-wrap:wrap;
