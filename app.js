@@ -32,6 +32,110 @@
   // Use for jackpot pot display (pot is stored in smallest units)
   const fmtPot = fmtToken;
 
+// ===== $TREATZ FX =====
+const fxRoot = (() => {
+  let n = document.getElementById("fx-layer");
+  if (!n) { n = document.createElement("div"); n.id = "fx-layer"; document.body.appendChild(n); }
+  return n;
+})();
+
+function rand(min, max){ return Math.random()*(max-min)+min; }
+
+// --- SVG factories (inline, no assets needed) ---
+function svgWrapper() {
+  return `
+<svg width="84" height="40" viewBox="0 0 84 40" xmlns="http://www.w3.org/2000/svg">
+  <path class="w1" d="M8 14 L0 8 L8 10 L6 2 L14 12 Z"/>
+  <rect class="w2" x="14" y="6" rx="6" ry="6" width="56" height="28"/>
+  <path class="w1" d="M76 26 L84 32 L76 30 L78 38 L70 28 Z"/>
+  <text x="42" y="26" text-anchor="middle" font-family="Luckiest Guy, Creepster, sans-serif" font-size="16" fill="#fff" class="w3">$TREATZ</text>
+</svg>`;
+}
+
+function svgCandy() {
+  return `
+<svg width="42" height="32" viewBox="0 0 42 32" xmlns="http://www.w3.org/2000/svg">
+  <path class="c1" d="M4 16 L0 10 L6 12 L6 4 L12 10"/>
+  <rect class="c2" x="8" y="6" rx="6" ry="6" width="26" height="20"/>
+  <path class="c1" d="M38 16 L42 22 L36 20 L36 28 L30 22"/>
+  <rect x="16" y="10" width="10" height="12" rx="3" fill="#0D0D0D" />
+</svg>`;
+}
+
+function svgGhost() {
+  return `
+<svg width="44" height="56" viewBox="0 0 44 56" xmlns="http://www.w3.org/2000/svg">
+  <path d="M22 2c11 0 20 9 20 20v28c-4-2-8-2-12 0-4-2-8-2-12 0-4-2-8-2-12 0V22C6 11 11 2 22 2z" fill="rgba(200,200,255,.9)"/>
+  <circle cx="16" cy="22" r="4" fill="#0D0D0D"/>
+  <circle cx="28" cy="22" r="4" fill="#0D0D0D"/>
+</svg>`;
+}
+
+function svgSkull() {
+  return `
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <path d="M24 4c11 0 20 8 20 18 0 10-9 14-9 18H13c0-4-9-8-9-18C4 12 13 4 24 4z" fill="#f1f1f1"/>
+  <circle cx="17" cy="22" r="5" fill="#0D0D0D"/>
+  <circle cx="31" cy="22" r="5" fill="#0D0D0D"/>
+  <rect x="21" y="30" width="6" height="8" rx="2" fill="#0D0D0D"/>
+</svg>`;
+}
+
+// --- spawners ---
+function spawnPiece(kind, xvw, sizeScale, duration) {
+  const el = document.createElement("div");
+  el.className = `fx-piece ${kind}`;
+  el.style.setProperty("--x", `${xvw}vw`);
+  el.style.setProperty("--dur", `${duration}s`);
+  el.style.left = `calc(${xvw}vw - 24px)`;
+  el.style.top = `-60px`;
+  el.style.transform = `translate(${xvw}vw, -10%) rotate(${Math.floor(rand(-30,30))}deg)`;
+  el.style.setProperty("--r0", `${Math.floor(rand(-90,90))}deg`);
+  el.style.setProperty("--r1", `${Math.floor(rand(240,720))}deg`);
+  el.style.scale = String(sizeScale);
+
+  const svg =
+    kind === "fx-wrapper" ? svgWrapper() :
+    kind === "fx-candy"   ? svgCandy()   :
+    kind === "fx-ghost"   ? svgGhost()   :
+    svgSkull();
+
+  el.innerHTML = svg;
+  fxRoot.appendChild(el);
+  setTimeout(() => el.remove(), duration * 1000 + 200);
+}
+
+function rainTreatz({count=24, wrappers=true, candies=true, minDur=5, maxDur=8} = {}) {
+  for (let i=0; i<count; i++){
+    const x = rand(0, 100);
+    const scale = rand(0.8, 1.25);
+    const dur = rand(minDur, maxDur);
+    if (wrappers) spawnPiece("fx-wrapper", x, scale, dur);
+    if (candies)  spawnPiece("fx-candy",   x+rand(-4,4), rand(.7,1.1), dur+rand(-.5,.5));
+  }
+}
+
+function hauntTrick({count=10, ghosts=true, skulls=true} = {}) {
+  for (let i=0; i<count; i++){
+    const x = rand(5, 95);
+    const scale = rand(0.8, 1.3);
+    const dur = rand(6, 9);
+    if (ghosts) spawnPiece("fx-ghost", x, scale, dur);
+    if (skulls) spawnPiece("fx-skull", x+rand(-6,6), rand(.9,1.2), dur+rand(-.7,.7));
+  }
+}
+
+// Public hook you can call when you know the result:
+function playResultFX(result){
+  if (String(result).toUpperCase() === "TRICK") {
+    hauntTrick({count: 12});
+  } else {
+    // win candy blast
+    rainTreatz({count: 28, minDur: 4.5, maxDur: 7});
+  }
+}
+window.playResultFX = playResultFX; // handy for testing from console
+  
 // ===== Halloween Countdown (ominous) =====
 function nextHalloween() {
   const now = new Date();
@@ -214,6 +318,19 @@ function initHalloweenCountdown(){
   setTimeout(()=> { coin.style.transition=""; }, 1300);
 });
 
+  document.getElementById("cf-play")?.addEventListener("click", ()=>{
+  // Candy rain on flip start (fun feedback)
+  rainTreatz({count: 18});
+
+  // OPTIONAL: if you want a visual result right away (before webhook),
+  // you can "fake-resolve" after the coin spin ends:
+  setTimeout(()=>{
+    // pick based on selected side just for demo vibe:
+    const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
+    playResultFX(side); // or call with the *real* result when you have it
+  }, 1300);
+});
+  
   const betForm = $("#bet-form");
   if (betForm) {
     betForm.addEventListener("submit", async (ev) => {
