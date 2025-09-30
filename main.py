@@ -169,6 +169,10 @@ async def rounds_recent(limit: int = 10):
         "SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT ?", (limit,)
     ) as cur:
         rows = await cur.fetchall()
+        if not rows:
+            rid = await dbmod.kv_get(app.state.db, "current_round_id")
+            if rid:
+                return [{"id": rid, "pot": 0}]
         return [{"id": r[0], "pot": r[1]} for r in rows]
 
 # ----------------------- Helius Webhook (MVP) -------------------------
@@ -256,3 +260,21 @@ async def admin_close_round():
     await dbmod.kv_set(app.state.db, "current_round_id", new_id)
 
     return {"ok": True, "new_round": new_id}
+    
+@app.post(f"{API}/admin/round/seed")
+async def admin_seed_rounds(n: int = 5):
+    now = datetime.utcnow()
+    created = []
+    for i in range(n):
+        rid = f"R{secrets.randbelow(10_000):04d}"
+        opens = (now - timedelta(minutes=(n - i) * 45)).isoformat()
+        closes = (now - timedelta(minutes=(n - i) * 45 - 30)).isoformat()
+        pot = secrets.randbelow(4_000_000_000)  # up to ~4 SOL in lamports
+        await app.state.db.execute(
+            "INSERT OR REPLACE INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,pot) VALUES(?,?,?,?,?,?,?)",
+            (rid, "SETTLED", opens, closes, _hash('seed:'+rid), secrets.token_hex(8), pot)
+        )
+        created.append(rid)
+    await app.state.db.commit()
+    return {"ok": True, "created": created}
+    
