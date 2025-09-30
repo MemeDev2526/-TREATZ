@@ -12,7 +12,6 @@ from solders.pubkey import Pubkey as PublicKey
 from solders.keypair import Keypair
 from spl.token.instructions import transfer_checked, get_associated_token_address, create_associated_token_account
 from solana.rpc.types import TxOpts
-
 from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
 
 
