@@ -1,160 +1,219 @@
-/* ========= $TREATZ Styles ======== */
+/* =========================================================
+   $TREATZ — Global Theme Tokens
+   ========================================================= */
 :root{
-  --orange:#FF6B00; --orange-hi:#FF9500;
-  --witch:#6A00FF; --slime:#00FFA3; /* slime green glow */
-  --jet:#0D0D0D; --white:#FFFFFF; --gray:#AAAAAA;
-  --bg-a:#2C0A44; --bg-b:#4D0D57;
-  --card:rgba(13,13,13,.72); --card-border:rgba(255,255,255,.12);
+  /* Brand palette */
+  --orange:#FF6B00; 
+  --orange-hi:#FF9500;
+  --pumpkin: var(--orange);              /* alias for legacy refs */
+  --witch:#6A00FF;
+  --slime:#39FF14;                       /* neon slime green */
+  --jet:#0D0D0D; 
+  --white:#FFFFFF; 
+  --gray:#AAAAAA;
+
+  /* Background gradient stops */
+  --bg-a:#2C0A44; 
+  --bg-b:#4D0D57;
+
+  /* Surfaces / shadows */
+  --card:rgba(13,13,13,.72); 
+  --card-border:rgba(255,255,255,.12);
   --shadow:0 10px 30px rgba(0,0,0,.45);
-  --banner-h: 90px;              /* adjust to match your banner art height */
+
+  /* Layout metrics */
+  --banner-h: 90px;                      /* match banner art height */
 }
 
-/* Typography */
-body { font-family: "Rubik", system-ui, sans-serif; color: var(--white); }
-.section__title, .nav__brand, h1, h2.display {
-  font-family: "Creepster", "Luckiest Guy", cursive;
-  letter-spacing: .5px;
-  color: var(--pumpkin);
-  text-shadow: 0 0 12px rgba(57,255,20,.25), 0 2px 0 rgba(0,0,0,.6);
-}
-.btn--primary, .btn--buy { font-family: "Luckiest Guy", cursive; }
+/* =========================================================
+   Base, Typography & Utilities
+   ========================================================= */
+*{ box-sizing:border-box }
+html,body{ height:100% }
 
-/* Brand color pass */
-a, .btn--outline { color: var(--slime); }
-.btn--primary {
-  background: linear-gradient(180deg, var(--pumpkin), #ff9500);
-  border: 1px solid rgba(255,255,255,.12);
-  box-shadow: 0 0 18px rgba(57,255,20,.25), inset 0 -2px 0 rgba(0,0,0,.35);
-}
-.btn--primary:hover { filter: brightness(1.05); }
-.card {
-  background: rgba(13,13,13,.72);
-  border: 1px solid rgba(255,255,255,.08);
-  box-shadow: 0 10px 24px rgba(0,0,0,.35), 0 0 24px rgba(57,255,20,.08);
-}
-
-*{box-sizing:border-box}
-html,body{height:100%}
 body{
-  margin:0; color:var(--white); font-family:Rubik, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  margin:0; 
+  color:var(--white); 
+  font-family:"Rubik", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
   background: linear-gradient(180deg,var(--bg-a),var(--bg-b));
   overflow-x:hidden;
 }
 
-/* Top banner always above the countdown */
+.section__title, .nav__brand, h1, h2.display {
+  font-family: "Creepster", "Luckiest Guy", cursive;
+  letter-spacing:.5px;
+  color: var(--pumpkin);
+  text-shadow: 0 0 12px rgba(57,255,20,.25), 0 2px 0 rgba(0,0,0,.6);
+}
+
+.btn--primary, .btn--buy { 
+  font-family: "Luckiest Guy", cursive; 
+}
+
+a, .btn--outline { color: var(--slime); }
+
+.card {
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 10px 24px rgba(0,0,0,.35), 0 0 24px rgba(57,255,20,.08);
+  border-radius:16px; 
+  padding:16px;
+}
+
+/* =========================================================
+   Top Banner & Global Countdown
+   ========================================================= */
 .brand-banner{
   position: sticky;
   top: 0;
-  z-index: 1002;                 /* higher than countdown */
+  z-index: 1002;                          /* above countdown */
   height: var(--banner-h);
   background: #0D0D0D url('assets/banner-treatz.png') center/contain no-repeat;
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
 }
 
-/* Countdown sits *under* the banner and never hides it */
+/* Countdown sits under the banner and never hides it */
 .countdown{
   position: sticky;
-  top: var(--banner-h);          /* offset by banner height */
+  top: var(--banner-h);
   z-index: 1001;
   backdrop-filter: blur(3px);
   background: linear-gradient(90deg, rgba(76,0,92,.55), rgba(0,0,0,.55));
   border-bottom: 1px solid rgba(255,255,255,.08);
   box-shadow: inset 0 -2px 0 rgba(0,255,163,.15), 0 6px 16px rgba(0,0,0,.25);
 }
+.countdown__inner{
+  max-width:1200px; 
+  margin:0 auto; 
+  padding:.55rem .9rem; 
+  display:flex; gap:.75rem; 
+  align-items:center; justify-content:center; 
+  flex-wrap:wrap;
+  color:#fff;
+  text-shadow: 0 0 8px rgba(0,255,102,.45);
+}
+.countdown__label{ font-weight:700; letter-spacing:.3px }
+.countdown__timer{ font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem; color:var(--slime); border:1px solid rgba(57,255,20,.25); border-radius:8px; box-shadow: 0 0 12px rgba(57,255,20,.35) }
+.countdown__omen{ font-size:.95rem; opacity:.9; margin-left:8px; color:#d8c2ff; font-style: italic }
 
-/* Full viewport background (no broken path) */
+/* Optional glow under banner */
+.brand-banner::after{
+  content:"";
+  position:absolute; left:0; right:0; bottom:-6px; height:10px;
+  background: radial-gradient(closest-side, rgba(0,255,102,.5), transparent 70%);
+  filter: blur(6px); pointer-events:none;
+}
+
+/* =========================================================
+   Background Art Layer
+   ========================================================= */
 .bg{
   position:fixed; inset:0;
   background:
-    radial-gradient(1200px 600px at 20% 10%, rgba(106,0,255,.25), transparent 60%),
-    radial-gradient(900px 500px at 80% 70%, rgba(0,255,163,.18), transparent 55%),
-    linear-gradient(180deg, var(--bg-a), var(--bg-b));
-  background-size:cover; background-position:center; background-repeat:no-repeat;
-  filter: saturate(1.05) brightness(.9);
-  z-index:-2;
+    linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.75)),
+    url('assets/background.png') center top / contain no-repeat fixed;
+  z-index:-1;
+  filter: saturate(105%);
 }
 
-/* Sticky Countdown */
-.countdown{position:sticky; top:0; z-index:1000; background:linear-gradient(90deg, rgba(255,107,0,.92), rgba(106,0,255,.92)); backdrop-filter: blur(8px); border-bottom:1px solid rgba(255,255,255,.2)}
-.countdown__inner{max-width:1200px; margin:0 auto; padding:.55rem .9rem; display:flex; gap:.75rem; align-items:center; justify-content:center; flex-wrap:wrap}
-.countdown__label{font-weight:700; letter-spacing:.3px}
-.countdown__timer{font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem}
-.countdown__omen{font-size:.95rem; opacity:.9}
+/* =========================================================
+   Navigation & Token Action Bar
+   ========================================================= */
+.nav{ position:relative; z-index:5; }
+.nav__wrap{ max-width:1200px; margin:12px auto 0; padding:0 16px; display:flex; align-items:center; justify-content:space-between }
+.nav__brand img{ height:44px; display:block }
+.nav__links a{ color:var(--white); text-decoration:none; margin-left:18px; font-weight:600; opacity:.9 }
+.nav__links a:hover{ opacity:1; text-shadow:0 0 12px rgba(255,255,255,.35) }
 
-/* Nav */
-.nav{position:relative; z-index:5;}
-.nav__wrap{max-width:1200px; margin:12px auto 0; padding:0 16px; display:flex; align-items:center; justify-content:space-between}
-.nav__brand img{height:44px; display:block}
-.nav__links a{color:var(--white); text-decoration:none; margin-left:18px; font-weight:600; opacity:.9}
-.nav__links a:hover{opacity:1; text-shadow:0 0 12px rgba(255,255,255,.35)}
+.tokenbar{
+  max-width:1200px; margin:10px auto 16px; padding:8px 16px; 
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; 
+  background:linear-gradient(180deg, rgba(13,13,13,.85), rgba(13,13,13,.6)); 
+  border:1px solid var(--card-border); border-radius:14px; 
+  box-shadow:var(--shadow)
+}
+.tokenbar__label{ opacity:.85; margin-right:6px }
+.tokenbar__address code{ font-size:.95rem; user-select:all }
+.tokenbar__actions{ display:flex; gap:10px; flex-wrap:wrap }
 
-.tokenbar{max-width:1200px; margin:10px auto 16px; padding:8px 16px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; background:linear-gradient(180deg, rgba(13,13,13,.85), rgba(13,13,13,.6)); border:1px solid var(--card-border); border-radius:14px; box-shadow:var(--shadow)}
-.tokenbar__label{opacity:.85; margin-right:6px}
-.tokenbar__address code{font-size:.95rem; user-select:all}
-.tokenbar__actions{display:flex; gap:10px; flex-wrap:wrap}
+/* =========================================================
+   Buttons
+   ========================================================= */
+.btn{ cursor:pointer; border:none; padding:.7rem 1rem; border-radius:12px; font-weight:800 }
+.btn--primary{ background:linear-gradient(180deg,var(--orange),var(--orange-hi)); color:#1a0b00 }
+.btn--buy{ background:linear-gradient(90deg,var(--slime),#94DAFF); color:#032316; font-weight:900 }
+.btn--outline{ background:transparent; color:var(--white); border:1px solid var(--white) }
+.btn--ghost{ background:transparent; color:var(--white); opacity:.9 }
+.btn:disabled{ opacity:.6; cursor:not-allowed }
 
-/* Buttons */
-.btn{cursor:pointer; border:none; padding:.7rem 1rem; border-radius:12px; font-weight:800}
-.btn--primary{background:linear-gradient(180deg,var(--orange),var(--orange-hi)); color:#1a0b00}
-.btn--buy{background:linear-gradient(90deg,var(--slime),#94DAFF); color:#032316; font-weight:900}
-.btn--outline{background:transparent; color:var(--white); border:1px solid var(--white)}
-.btn--ghost{background:transparent; color:var(--white); opacity:.9}
-.btn:disabled{opacity:.6; cursor:not-allowed}
+/* =========================================================
+   Layout & Cards
+   ========================================================= */
+.main{ max-width:1200px; margin:0 auto; padding:24px 16px 80px }
+.section{ margin:28px 0 }
+.section__title{ font-family:"Luckiest Guy", cursive; letter-spacing:.5px; font-size:2rem; margin:0 0 12px; text-shadow:0 2px 18px rgba(0,0,0,.35) }
 
-/* Layout */
-.main{max-width:1200px; margin:0 auto; padding:24px 16px 80px}
-.section{margin:28px 0}
-.section__title{font-family:"Luckiest Guy", cursive; letter-spacing:.5px; font-size:2rem; margin:0 0 12px; text-shadow:0 2px 18px rgba(0,0,0,.35)}
-.card{background:var(--card); border:1px solid var(--card-border); border-radius:16px; padding:16px; box-shadow:var(--shadow)}
-.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
-.grid-3{display:grid; grid-template-columns:2fr 1fr 1.2fr; gap:16px}
-@media (max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr}}
+.grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:16px }
+.grid-3{ display:grid; grid-template-columns:2fr 1fr 1.2fr; gap:16px }
+@media (max-width:900px){ .grid-2,.grid-3{ grid-template-columns:1fr } }
 
-.label{display:block; margin:.3rem 0 .35rem; font-weight:700}
-input[type="number"], input[type="text"]{width:100%; padding:.75rem .9rem; border-radius:12px; border:1px solid var(--card-border); background:#0f0f10; color:var(--white)}
-.help{opacity:.8; font-size:.9rem}
+.label{ display:block; margin:.3rem 0 .35rem; font-weight:700 }
+input[type="number"], input[type="text"]{ width:100%; padding:.75rem .9rem; border-radius:12px; border:1px solid var(--card-border); background:#0f0f10; color:var(--white) }
+.help{ opacity:.8; font-size:.9rem }
 
-/* Radio choices */
-.choices{display:flex; gap:12px; margin:.25rem 0 1rem}
-.choice{display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.06); padding:.5rem .75rem; border-radius:12px; border:1px solid var(--card-border)}
+/* =========================================================
+   Radio Choices
+   ========================================================= */
+.choices{ display:flex; gap:12px; margin:.25rem 0 1rem }
+.choice{ display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.06); padding:.5rem .75rem; border-radius:12px; border:1px solid var(--card-border) }
 
-/* Coin flip visual */
-.cf-display{display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:220px}
-.coin{position:relative; width:140px; height:140px; perspective:800px}
-.coin__face{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; border-radius:50%; font-weight:900; letter-spacing:.5px; border:3px solid rgba(255,255,255,.25); background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%), linear-gradient(180deg, rgba(255,107,0,.8), rgba(255,149,0,.8)); backface-visibility:hidden}
-.coin__face--back{transform:rotateY(180deg); background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%), linear-gradient(180deg, rgba(0,255,163,.8), rgba(148,218,255,.8))}
-.coin.spin{animation:spin 1.2s cubic-bezier(.2,.6,.2,1) 1}
-@keyframes spin{0%{transform:rotateY(0)} 100%{transform:rotateY(720deg)}}
-.cf-status{margin-top:12px; font-weight:700}
+/* =========================================================
+   Coin Flip — Visual
+   ========================================================= */
+.cf-display{ display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:220px; position:relative }
+.coin{ position:relative; width:140px; height:140px; perspective:800px }
+.coin__face{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center; 
+  border-radius:50%; font-weight:900; letter-spacing:.5px; 
+  border:3px solid rgba(255,255,255,.25); 
+  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%), 
+             linear-gradient(180deg, rgba(255,107,0,.8), rgba(255,149,0,.8)); 
+  backface-visibility:hidden;
+}
+.coin__face--back{
+  transform:rotateY(180deg); 
+  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%), 
+             linear-gradient(180deg, rgba(0,255,163,.8), rgba(148,218,255,.8))
+}
+.coin.spin{ animation:spin 1.2s cubic-bezier(.2,.6,.2,1) 1 }
+@keyframes spin{ 0%{ transform:rotateY(0) } 100%{ transform:rotateY(720deg) } }
+.cf-status{ margin-top:12px; font-weight:700 }
 
-/* Coin Toss Halloween styling */
-.cf-display { display:grid; place-items:center; padding:1rem; }
+/* Halloween variant styling */
 .coin{
-  width: 140px; height: 140px; border-radius: 50%;
-  position: relative; transform-style: preserve-3d;
+  border-radius:50%;
+  transform-style: preserve-3d;
   box-shadow: 0 0 28px rgba(57,255,20,.25), inset 0 0 18px rgba(255,165,0,.35);
   background: radial-gradient(circle at 50% 40%, #1a0828 0%, #0d0d0d 60%, #000 100%);
 }
 .coin__face{
-  position:absolute; inset:0; border-radius:50%;
   display:grid; place-items:center; font-weight:800;
   font-family:"Creepster", cursive; letter-spacing:.6px;
   color: var(--pumpkin); text-shadow: 0 0 8px rgba(57,255,20,.35);
-  backface-visibility: hidden;
   border: 2px solid rgba(255,255,255,.08);
 }
-.coin__face--front::after, .coin__face--back::after{
+.coin__face--front::after, 
+.coin__face--back::after{
   content:""; position:absolute; inset:-12px;
   border-radius:50%;
   background: conic-gradient(from 0deg, rgba(57,255,20,.12), transparent 40%, rgba(255,165,0,.12) 70%, transparent 100%);
   filter: blur(6px);
 }
 .coin__face--back{
-  transform: rotateY(180deg);
   color: var(--slime); text-shadow: 0 0 10px rgba(57,255,20,.6);
 }
 
-/* subtle slime ring */
+/* subtle slime ring behind coin */
 .cf-display::before{
   content:""; width:200px; height:200px; border-radius:50%;
   background: radial-gradient(circle, rgba(57,255,20,.25), transparent 60%);
@@ -162,21 +221,22 @@ input[type="number"], input[type="text"]{width:100%; padding:.75rem .9rem; borde
   position:absolute; z-index:-1;
 }
 
+/* =========================================================
+   Jackpot — Stats & Progress
+   ========================================================= */
+.stats{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:10px }
+.stat__label{ display:block; opacity:.85; font-size:.9rem }
+.stat__value{ display:block; font-family:"Luckiest Guy"; font-size:1.35rem }
+.progress{ height:10px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; border:1px solid var(--card-border) }
+.progress__bar{ height:100%; background:linear-gradient(90deg, var(--witch), var(--slime)) }
 
-/* Jackpot */
-.stats{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:10px}
-.stat__label{display:block; opacity:.85; font-size:.9rem}
-.stat__value{display:block; font-family:"Luckiest Guy"; font-size:1.35rem}
-.progress{height:10px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; border:1px solid var(--card-border)}
-.progress__bar{height:100%; background:linear-gradient(90deg, var(--witch), var(--slime))}
-
-/* Slime progress */
+/* Slime progress (enhanced glow) */
 .progress{
-  height: 10px; background: rgba(255,255,255,.06);
-  border-radius: 10px; overflow:hidden; position:relative;
+  height:10px; background: rgba(255,255,255,.06);
+  border-radius:10px; overflow:hidden; position:relative;
 }
 .progress__bar{
-  height: 100%;
+  height:100%;
   background: linear-gradient(90deg, #2aff6b, #9bff2a);
   box-shadow: 0 0 18px rgba(57,255,20,.45);
 }
@@ -185,15 +245,16 @@ input[type="number"], input[type="text"]{width:100%; padding:.75rem .9rem; borde
   background: radial-gradient(circle, rgba(57,255,20,.9), rgba(57,255,20,.2) 60%, transparent 70%);
   border-radius:50%; filter: blur(3px);
 }
-.stats .stat__label{ color: #c8c8c8; }
-.stats .stat__value{ color: var(--slime); font-weight:700; }
+.stats .stat__label{ color:#c8c8c8 }
+.stats .stat__value{ color:var(--slime); font-weight:700 }
 
-
-/* Mini table */
-.mini-table__head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px}
-.mini-table__list{list-style:none; margin:0; padding:0; max-height:220px; overflow:auto}
-.mini-table__list li{display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-bottom:1px dashed rgba(255,255,255,.12)}
-.mini-round__pill{padding:.25rem .5rem; border:1px solid var(--card-border); border-radius:999px; font-size:.85rem; opacity:.9}
+/* =========================================================
+   Mini Table (Recent Rounds)
+   ========================================================= */
+.mini-table__head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px }
+.mini-table__list{ list-style:none; margin:0; padding:0; max-height:220px; overflow:auto }
+.mini-table__list li{ display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-bottom:1px dashed rgba(255,255,255,.12) }
+.mini-round__pill{ padding:.25rem .5rem; border:1px solid var(--card-border); border-radius:999px; font-size:.85rem; opacity:.9 }
 
 .recent-list { list-style:none; padding:0; margin:0; }
 .recent-list li { display:flex; justify-content:space-between; padding:.5rem .75rem; border-bottom:1px solid rgba(255,255,255,.08); }
@@ -202,83 +263,27 @@ input[type="number"], input[type="text"]{width:100%; padding:.75rem .9rem; borde
 .small { font-size:.875rem; }
 .toast { transition: opacity .25s ease; }
 
-/* ===== Brand Banner (top strip) ===== */
-.brand-banner{
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  height: 84px;               /* adjust to taste */
-  background: #0D0D0D url('assets/Banner_Top.png') center/contain no-repeat;
-  box-shadow: 0 2px 0 rgba(0,0,0,.35);
-}
-
-/* ===== Full-page BG using your spooky art ===== */
-.bg{
-  position: fixed;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.75)),
-    url('assets/background.png') center top / contain no-repeat fixed;
-  z-index: -1;
-  filter: saturate(105%);
-}
-
-/* ===== Countdown: make it more ominous ===== */
-.countdown{
-  position: sticky;
-  top: 84px; /* sits just under the brand banner */
-  backdrop-filter: blur(3px);
-  background: linear-gradient(90deg, rgba(76,0,92,.55), rgba(0,0,0,.55));
-  border-bottom: 1px solid rgba(255,255,255,.08);
-  box-shadow: inset 0 -2px 0 rgba(0,255,163,.15), 0 6px 16px rgba(0,0,0,.25);
-}
-.countdown__inner{
-  display:flex; gap:12px; align-items:center; justify-content:center;
-  padding:.55rem .85rem;
-  font-family:"Rubik", system-ui, sans-serif;
-  color:#fff;
-  text-shadow: 0 0 8px rgba(0,255,102,.45);
-}
-.countdown__label{ opacity:.9; letter-spacing:.3px; }
-.countdown__timer{
-  font-weight:700;
-  color: var(--slime);
-  border:1px solid rgba(57,255,20,.25);
-  padding:.2rem .5rem; border-radius:8px;
-  box-shadow: 0 0 12px rgba(57,255,20,.35);
-}
-.countdown__omen{
-  margin-left:8px; opacity:.9;
-  color:#d8c2ff;
-  font-style: italic;
-}
-
-/* Optional: dripping aura under banner */
-.brand-banner::after{
-  content:"";
-  position:absolute; left:0; right:0; bottom:-6px; height:10px;
-  background: radial-gradient(closest-side, rgba(0,255,102,.5), transparent 70%);
-  filter: blur(6px); pointer-events:none;
-}
-
-/* ===== $TREATZ FX ===== */
+/* =========================================================
+   $TREATZ FX Layer (falling wrappers/candy/ghosts)
+   ========================================================= */
 #fx-layer{
   position: fixed;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
-  z-index: 1200; /* above content, below banner (banner ~1002) */
+  z-index: 1200; /* above content, below banner (~1002) */
 }
 
-/* Base piece */
 .fx-piece{
   position: absolute;
   will-change: transform, opacity;
   filter: drop-shadow(0 4px 10px rgba(0,0,0,.5));
   opacity: .95;
+  animation:
+    treatz-fall var(--dur,6s) linear forwards,
+    treatz-sway 2.6s ease-in-out infinite;
 }
 
-/* Fall + sway */
 @keyframes treatz-fall {
   0%   { transform: translate(var(--x,0px), -10%) rotate(var(--r0,0deg)); opacity: 0; }
   8%   { opacity: .95; }
@@ -290,27 +295,17 @@ input[type="number"], input[type="text"]{width:100%; padding:.75rem .9rem; borde
   100% { margin-left: -10px; }
 }
 
-/* Ghost & skull tint */
+/* Brand fills for inline SVG pieces */
 .fx-ghost svg path,
 .fx-skull svg path { filter: drop-shadow(0 0 12px rgba(57,255,20,.35)); }
 
-/* Wrapper / candy colors (brand) */
-:root{
-  --pumpkin:#FF6B00; --witch:#3A0C55; --slime:#39FF14; --white:#fff;
-}
 .fx-wrapper .w1 { fill: var(--witch); }
 .fx-wrapper .w2 { fill: var(--pumpkin); }
 .fx-wrapper .w3 { fill: var(--white); opacity:.9; }
 .fx-candy .c1   { fill: var(--witch); }
 .fx-candy .c2   { fill: var(--slime); }
 
-/* Timing helpers */
-.fx-piece{
-  animation:
-    treatz-fall var(--dur,6s) linear forwards,
-    treatz-sway 2.6s ease-in-out infinite;
-}
-
-
-/* Footer */
-.footer{opacity:.8; text-align:center; margin-top:28px}
+/* =========================================================
+   Footer
+   ========================================================= */
+.footer{ opacity:.8; text-align:center; margin-top:28px }
