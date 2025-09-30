@@ -9,26 +9,24 @@ from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solana.transaction import Transaction
 from spl.token.instructions import transfer_checked, get_associated_token_address, create_associated_token_account
-from solana.publickey import PublicKey
-from solana.keypair import Keypair
 from solana.rpc.types import TxOpts
 
 from spl.token.constants import TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
-from spl.token.instructions import transfer_checked, get_associated_token_address, create_associated_token_account
+
 
 RPC_URL = os.getenv("RPC_URL", "https://api.mainnet-beta.solana.com")
 SOLANA_CLUSTER = os.getenv("SOLANA_CLUSTER", "mainnet-beta")
 
 # Mints & vaults
-MINT = PublicKey(os.getenv("TREATZ_MINT", "11111111111111111111111111111111"))
+MINT = to_public_key(os.getenv("TREATZ_MINT", "11111111111111111111111111111111"))
 TOKEN_DECIMALS = int(os.getenv("TOKEN_DECIMALS", "9"))
 
 # Game (coin flip) vaults
-GAME_VAULT = PublicKey(os.getenv("GAME_VAULT", "11111111111111111111111111111111"))
+GAME_VAULT = to_public_key(os.getenv("GAME_VAULT", "11111111111111111111111111111111"))
 GAME_VAULT_PK_B58 = os.getenv("GAME_VAULT_PK", "")
 
 # Jackpot (raffle) vaults
-JACKPOT_VAULT = PublicKey(os.getenv("JACKPOT_VAULT", "11111111111111111111111111111111"))
+JACKPOT_VAULT = to_public_key(os.getenv("JACKPOT_VAULT", "11111111111111111111111111111111"))
 JACKPOT_VAULT_PK_B58 = os.getenv("JACKPOT_VAULT_PK", "")
 
 # ---------------------------------------------------------------------
@@ -37,12 +35,14 @@ JACKPOT_VAULT_PK_B58 = os.getenv("JACKPOT_VAULT_PK", "")
 # ---------------------------------------------------------------------
 def _kp_from_base58(b58: str) -> Keypair:
     raw = base58.b58decode(b58)
+    # For solders.Keypair, pass the full 64-byte secret key (private + public)
     if len(raw) == 64:
-        return Keypair.from_secret_key(raw)
-    if len(raw) == 32:
-        # seed -> derive keypair (not recommended, but handle gracefully)
-        return Keypair.from_seed(raw)
-    raise ValueError("Invalid secret key length. Expected 64 or 32 bytes after base58 decoding.")
+        return Keypair.from_bytes(raw)
+    raise ValueError("Invalid secret key bytes. Provide a base58-encoded 64-byte secret key.")
+
+def to_public_key(addr: str | PublicKey) -> PublicKey:
+    return PublicKey.from_string(addr) if isinstance(addr, str) else addr
+
 
 # ---------------------------------------------------------------------
 # Ensure recipient ATA exists; if missing, create it in the same tx
@@ -139,7 +139,7 @@ async def pay_jackpot_winner(winner_pubkey_str: str, amount_base_units: int) -> 
             client=client,
             vault_owner_kp=kp,
             vault_wallet=JACKPOT_VAULT,
-            winner_wallet=PublicKey(winner_pubkey_str),
+            winner_wallet=to_public_key(winner_pubkey_str),
             amount_base_units=amount_base_units,
         )
         return sig
@@ -154,9 +154,9 @@ async def pay_jackpot_split(
         raise RuntimeError("JACKPOT_VAULT_PK not set.")
     kp = _kp_from_base58(JACKPOT_VAULT_PK_B58)
 
-    w_pub = PublicKey(winner_pubkey_str) if winner_amount > 0 else None
-    d_pub = PublicKey(dev_pubkey_str) if dev_amount > 0 and dev_pubkey_str else None
-    b_pub = PublicKey(burn_pubkey_str) if burn_amount > 0 and burn_pubkey_str else None
+    w_pub = to_public_key(winner_pubkey_str) if winner_amount > 0 else None
+    d_pub = to_public_key(dev_pubkey_str) if dev_amount > 0 and dev_pubkey_str else None
+    b_pub = to_public_key(burn_pubkey_str) if burn_amount > 0 and burn_pubkey_str else None
 
     async with AsyncClient(RPC_URL, commitment=Confirmed) as client:
         tx = Transaction()
