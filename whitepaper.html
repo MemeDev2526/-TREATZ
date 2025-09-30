@@ -1,16 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <!--
-  $TREATZ — “Whitepaper” Jump Scare (v2: ambient loop + per-flyer SFX + random spawns)
+  $TREATZ — “Whitepaper” Jump Scare (v3 tweaks)
 
   QUICK CONFIG (edit on <body>):
-    data-halloween-iso  - Countdown target (local TZ-aware ISO)
-    data-cta-coinflip   - Where the primary CTA points
-    data-cta-jackpot    - Where the secondary CTA points
-    data-scream-src     - Path to jump-scare scream SFX
-    data-ambient-src    - Path to eerie background loop (will fade in after scream)
-    data-use-emojis     - "true" to use emoji flyers, "false" for PNG/SVGs
-    data-sfx-ghost/bat/ghoul/zombie - Paths for per-flyer SFX
+    data-halloween-iso   - Countdown target
+    data-cta-coinflip    - CTA link to coin flip
+    data-cta-jackpot     - CTA link to jackpot
+    data-bg-src          - Background image path (e.g., assets/bg_spooky.jpg)
+    data-scream-src      - Jump-scare scream SFX
+    data-ambient-src     - Eerie background loop
+    data-use-emojis      - "true" emojis | "false" PNG/SVGs
+    data-sfx-ghost/bat/ghoul/zombie - Per-flyer SFX
+    data-run-seconds     - How long flyers+SFX run before stopping (default 5s)
 -->
 <head>
   <!-- ========== META / TITLE ========== -->
@@ -18,9 +20,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>$TREATZ — “Whitepaper”</title>
 
-  <!-- ========== FONTS & BASE STYLES (reuse brand tokens) ========== -->
+  <!-- ========== FONTS & BASE STYLES ========== -->
   <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=14" />
+  <link rel="stylesheet" href="style.css?v=15" />
 
   <!-- ========== PAGE-SPECIFIC STYLES ========== -->
   <style>
@@ -34,48 +36,67 @@
       overflow:hidden;
     }
 
-    /* Countdown (parity with homepage) */
+    /* Background image layer */
+    .bgimg{
+      position:fixed; inset:0; z-index:-2;
+      background:#000 center/cover no-repeat;
+      filter: saturate(1.05) brightness(.9);
+      opacity:.85;
+    }
+    /* Brand fog overlay */
+    .bgfx{
+      position:fixed; inset:-10%; z-index:-1;
+      background:
+        radial-gradient(1200px 600px at 20% 10%, rgba(106,0,255,.22), transparent 60%),
+        radial-gradient(900px 500px at 80% 70%, rgba(0,255,163,.16), transparent 55%);
+      pointer-events:none;
+    }
+
+    /* Countdown */
     .countdown{position:sticky; top:0; z-index:1000; background:linear-gradient(90deg, rgba(255,107,0,.92), rgba(106,0,255,.92)); border-bottom:1px solid rgba(255,255,255,.2)}
     .countdown__inner{max-width:1200px; margin:0 auto; padding:.55rem .9rem; display:flex; gap:.75rem; align-items:center; justify-content:center; flex-wrap:wrap}
     .countdown__label{font-weight:700; letter-spacing:.3px}
     .countdown__timer{font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem}
     .countdown__omen{font-size:.95rem; opacity:.9}
 
-    /* Background FX (cosmic brand fog) */
-    .bgfx{
-      position:fixed; inset:-10%; z-index:-1;
-      background:
-        radial-gradient(1200px 600px at 20% 10%, rgba(106,0,255,.25), transparent 60%),
-        radial-gradient(900px 500px at 80% 70%, rgba(0,255,163,.18), transparent 55%),
-        linear-gradient(180deg, var(--bg-a), var(--bg-b));
-      filter:saturate(1.05) brightness(.9);
-    }
-
-    /* Stage + Card */
+    /* Stage + Card (hidden until start) */
     .stage{ position:fixed; inset:0; display:grid; place-items:center; pointer-events:none; }
     .cardy{
       pointer-events:auto;
       max-width:860px; margin:6vh auto 10vh; padding:28px;
-      background:linear-gradient(180deg, rgba(13,13,13,.86), rgba(13,13,13,.6));
+      background:linear-gradient(180deg, rgba(13,13,13,.90), rgba(13,13,13,.62));
       border:1px solid var(--card-border); border-radius:18px; box-shadow:var(--shadow);
       text-align:center; position:relative; z-index:10;
+      opacity:0; transform:translateY(12px); transition:opacity .5s ease, transform .5s ease;
     }
+    .cardy.show{ opacity:1; transform:translateY(0); }
 
-    /* Headline + Sub */
+    /* Headline */
     .boo{
       font-family:"Luckiest Guy",cursive;
-      font-size:clamp(40px,10vw,120px); line-height:.9;
+      font-size:clamp(42px,10vw,128px); line-height:.9;
       color:var(--orange);
-      text-shadow:0 0 24px rgba(255,149,0,.45), 0 0 36px rgba(106,0,255,.45);
+      text-shadow:
+        0 0 6px rgba(255,149,0,.45),
+        0 0 16px rgba(106,0,255,.45),
+        0 4px 0 rgba(0,0,0,.45);
       transform:scale(.98); opacity:0;
       transition:opacity .9s ease, transform .9s cubic-bezier(.2,.7,.2,1);
       user-select:none;
     }
     .boo.show{ opacity:1; transform:scale(1); }
 
+    /* Punchier subline */
     .sub{
-      margin:12px auto 2px; font-weight:700; letter-spacing:.3px; opacity:.92;
-      color:var(--slime); text-shadow:0 0 10px rgba(0,255,163,.35);
+      margin:12px auto 10px;
+      font-family:"Luckiest Guy", cursive;
+      font-size:clamp(18px,3.2vw,32px);
+      letter-spacing:.5px;
+      color:#fff;
+      text-shadow:
+        0 0 14px rgba(0,255,163,.55),
+        0 0 24px rgba(106,0,255,.35),
+        0 2px 0 rgba(0,0,0,.65);
     }
 
     /* Copy */
@@ -88,27 +109,38 @@
     .explain li{margin:.25rem 0;}
     .explain em{color:#94DAFF; font-style:normal; font-weight:700}
 
-    /* CTA Buttons (reuse site button styles) */
+    /* CTA Buttons */
     .cta{ margin-top:18px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
-    .btn{cursor:pointer; border:none; padding:.8rem 1.1rem; border-radius:14px; font-weight:900;}
+    .btn{cursor:pointer; border:none; padding:.9rem 1.25rem; border-radius:16px; font-weight:900;}
     .btn--primary{background:linear-gradient(180deg,var(--orange),var(--orange-hi)); color:#1a0b00}
     .btn--outline{background:transparent; color:var(--white); border:1px solid var(--white); opacity:.95}
-    .muted{opacity:.8; font-size:.9rem; margin-top:8px; text-align:center;}
+    .muted{opacity:.85; font-size:.9rem; margin-top:8px; text-align:center;}
 
-    /* Veil (unmutes audio on user gesture) */
+    /* Veil (keep page hidden until click) */
     .veil{
       position:fixed; inset:0; display:grid; place-items:center; z-index:20;
-      background:rgba(13,13,13,.65); backdrop-filter:blur(6px);
+      background:rgba(9,9,9,.72); backdrop-filter:blur(6px);
     }
     .veil__card{
-      background:linear-gradient(180deg, rgba(13,13,13,.92), rgba(13,13,13,.75));
-      border:1px solid var(--card-border); padding:18px 22px; border-radius:16px; text-align:center;
-      box-shadow:var(--shadow);
+      background:linear-gradient(180deg, rgba(13,13,13,.95), rgba(13,13,13,.78));
+      border:1px solid var(--card-border); padding:22px 26px; border-radius:18px; text-align:center;
+      box-shadow:var(--shadow); max-width:520px;
     }
-    .veil__title{font-family:"Luckiest Guy"; font-size:1.75rem; margin:0 0 6px; color:var(--orange)}
-    .veil__btn{margin-top:10px}
+    .veil__title{
+      font-family:"Luckiest Guy"; font-size:clamp(20px,3.4vw,34px);
+      margin:0 0 10px; color:var(--orange);
+      text-shadow:0 0 14px rgba(255,149,0,.4), 0 0 22px rgba(106,0,255,.4);
+    }
+    .veil__btn{
+      margin-top:14px; font-size:clamp(18px,2.6vw,24px);
+      padding:1rem 1.5rem; border-radius:18px;
+      background:linear-gradient(180deg,var(--orange),var(--orange-hi));
+      color:#1a0b00; font-weight:900; border:none; cursor:pointer;
+      box-shadow:0 10px 30px rgba(0,0,0,.45);
+    }
+    .veil__btn:hover{ transform:translateY(-1px); }
 
-    /* Flyers (ghosts, bats, ghouls, zombies) */
+    /* Flyers */
     .flyer{
       position:fixed;
       transform:scale(.2);
@@ -129,7 +161,6 @@
       100%{opacity:0; transform:scale(6) rotate(3deg); filter:blur(4px);}
     }
 
-    /* Motion safety */
     @media (prefers-reduced-motion: reduce){
       .flyer{animation:none; opacity:.85; transform:scale(1);}
     }
@@ -141,6 +172,7 @@
   data-halloween-iso="2025-10-31T00:00:00-04:00"
   data-cta-coinflip="index.html#coin-flip"
   data-cta-jackpot="index.html#jackpot"
+  data-bg-src="assets/background2.png"
   data-scream-src="assets/scream.mp3"
   data-ambient-src="assets/ambient_loop.mp3"
   data-use-emojis="true"
@@ -148,10 +180,9 @@
   data-sfx-bat="assets/sfx_bat.mp3"
   data-sfx-ghoul="assets/sfx_ghoul.mp3"
   data-sfx-zombie="assets/sfx_zombie.mp3"
+  data-run-seconds="5"
 >
-  <!-- =========================================================
-       A) COUNTDOWN (same IDs as index so behaviour matches)
-  ========================================================== -->
+  <!-- A) COUNTDOWN -->
   <header class="countdown" id="countdown" role="banner" aria-label="Halloween Countdown">
     <div class="countdown__inner">
       <span class="countdown__label">⏳ Countdown to Halloween:</span>
@@ -160,28 +191,26 @@
     </div>
   </header>
 
-  <!-- =========================================================
-       B) BACKGROUND FX
-  ========================================================== -->
-  <div class="bgfx" aria-hidden="true"></div>
+  <!-- B) BACKGROUND LAYERS -->
+  <div class="bgimg" id="bgimg" aria-hidden="true"></div>
+  <div class="bgfx"  aria-hidden="true"></div>
 
-  <!-- =========================================================
-       C) MAIN CONTENT
-  ========================================================== -->
+  <!-- C) MAIN CONTENT (hidden until click) -->
   <main class="stage" role="main">
-    <section class="cardy" aria-live="polite">
+    <section class="cardy" id="cardy" aria-live="polite">
       <h1 class="boo" id="boo" aria-label="Boo! Jump Scare">👻 BOO! 👻</h1>
+
       <p class="sub">You expected a whitepaper. You got a fright-paper.</p>
 
       <div class="explain" id="explain">
         <h2 style="margin:.2rem 0 .4rem">Why no “whitepaper”?</h2>
-        <p><strong>Because it’s Halloween</strong>—and because <strong>$TREATZ</strong> is simple, on-chain, and meme-propelled:</p>
+        <p><strong>Because it’s Halloween</strong>—and because <strong>$TREATZ</strong> is simple, on-chain, and player-driven:</p>
         <ul>
           <li>🎃 <em>Trick or Treat Coin Toss</em> — Pick TRICK or TREAT, send your wager, find your fate.</li>
           <li>🕯️ <em>Jackpot Raffle</em> — 80% winner • 10% burned • 10% dev. Pots glow, chains know.</li>
-          <li>💨 <em>The Meme is the Prophecy</em> — Chaos, candy, and one glorious pump.</li>
+          <li>💨 <strong>Grab a bag and play now</strong> — fill it with candy… and wins.</li>
         </ul>
-        <p><strong>The chain is the whitepaper.</strong> The code is the contract. The community is the roadmap.</p>
+        <p><strong>The chain is the proof.</strong> The code is the contract. The community lights the lanterns.</p>
 
         <div class="cta" id="cta">
           <a class="btn btn--primary" id="cta-coinflip" href="#">Play Trick or Treat</a>
@@ -192,35 +221,29 @@
     </section>
   </main>
 
-  <!-- =========================================================
-       D) VEIL (required to unlock audio on most browsers)
-  ========================================================== -->
+  <!-- D) VEIL (keeps page hidden + unlocks audio) -->
   <div class="veil" id="veil" role="dialog" aria-modal="true" aria-labelledby="veil-title">
     <div class="veil__card">
-      <h2 class="veil__title" id="veil-title">Ready for a Fright?</h2>
-      <p>Tap to unveil the “whitepaper.” Sound on 🔊</p>
-      <button class="btn btn--primary veil__btn" id="begin">Unveil the Truth</button>
+      <h2 class="veil__title" id="veil-title">A Warning from the Puff</h2>
+      <p>Only the brave may proceed.</p>
+      <button class="veil__btn" id="begin">Read the Whitepaper if you Dare</button>
     </div>
   </div>
 
-  <!-- =========================================================
-       E) AUDIO
-  ========================================================== -->
+  <!-- E) AUDIO -->
   <audio id="scream" preload="auto"></audio>
   <audio id="ambient" preload="auto" loop></audio>
 
   <!-- ========== SCRIPTS ========== -->
   <script>
-    /* -------------------------------------------------------
-       1) UTILS & CONFIG
-    --------------------------------------------------------*/
+    /* 1) UTILS & CONFIG */
     const $      = (sel, ctx=document) => ctx.querySelector(sel);
     const pageEl = $('#page');
-
     const CFG = {
       halloweenISO: pageEl.dataset.halloweenIso || '2025-10-31T00:00:00-04:00',
       ctaCoinflip : pageEl.dataset.ctaCoinflip  || 'index.html#coin-flip',
       ctaJackpot  : pageEl.dataset.ctaJackpot   || 'index.html#jackpot',
+      bgSrc       : pageEl.dataset.bgSrc        || '',
       screamSrc   : pageEl.dataset.screamSrc    || 'assets/scream.mp3',
       ambientSrc  : pageEl.dataset.ambientSrc   || 'assets/ambient_loop.mp3',
       useEmojis   : (pageEl.dataset.useEmojis || 'true').toLowerCase() === 'true',
@@ -229,12 +252,11 @@
         bat   : pageEl.dataset.sfxBat    || 'assets/sfx_bat.mp3',
         ghoul : pageEl.dataset.sfxGhoul  || 'assets/sfx_ghoul.mp3',
         zombie: pageEl.dataset.sfxZombie || 'assets/sfx_zombie.mp3',
-      }
+      },
+      runSeconds  : Math.max(1, parseInt(pageEl.dataset.runSeconds || '5',10))
     };
 
-    /* -------------------------------------------------------
-       2) COUNTDOWN (mirror behaviour from homepage)
-    --------------------------------------------------------*/
+    /* 2) COUNTDOWN */
     (function countdown(){
       const target  = new Date(CFG.halloweenISO);
       const timerEl = $('#countdown-timer');
@@ -263,17 +285,14 @@
       tick(); setInterval(tick, 1000);
     })();
 
-    /* -------------------------------------------------------
-       3) CTA WIRING
-    --------------------------------------------------------*/
+    /* 3) CTA WIRING + BG IMAGE */
     $('#cta-coinflip').href = CFG.ctaCoinflip;
     $('#cta-jackpot').href  = CFG.ctaJackpot;
+    if (CFG.bgSrc) { $('#bgimg').style.backgroundImage = `url('${CFG.bgSrc}')`; }
 
-    /* -------------------------------------------------------
-       4) AUDIO INIT (scream -> ambient fade-in)
-    --------------------------------------------------------*/
+    /* 4) AUDIO INIT (scream -> ambient fade-in) */
     const scream  = $('#scream');  scream.src  = CFG.screamSrc;
-    const ambient = $('#ambient'); ambient.src = CFG.ambientSrc; ambient.volume = 0; // fade in later
+    const ambient = $('#ambient'); ambient.src = CFG.ambientSrc; ambient.volume = 0;
 
     function fadeInAmbient(durationMs=1800, targetVol=0.18){
       const steps = 18, step = targetVol/steps, dt = Math.max(50, Math.floor(durationMs/steps));
@@ -285,10 +304,7 @@
       }, dt);
     }
 
-    /* -------------------------------------------------------
-       5) FLYER ART + UNIQUE SFX + RANDOM SPAWN
-    --------------------------------------------------------*/
-    // Emoji fallbacks (edit IMGS to use your PNG/SVGs and set data-use-emojis="false")
+    /* 5) FLYERS + UNIQUE SFX + RANDOM SPAWN (auto-stop) */
     const EMOJIS = ['👻','🦇','🧟','🧟‍♀️','🧟‍♂️','🧌'];
     const IMGS   = [
       // { src: 'assets/ghost.png', cls: 'flyer flyer--ghost', size: 96, type:'ghost' },
@@ -297,13 +313,7 @@
       // { src: 'assets/zombie.png',cls: 'flyer flyer--zomb',  size:104, type:'zombie'},
     ];
 
-    // Preload SFX (we clone on play so overlapping is fine)
-    const SFX = {
-      ghost : CFG.sfx.ghost,
-      bat   : CFG.sfx.bat,
-      ghoul : CFG.sfx.ghoul,
-      zombie: CFG.sfx.zombie
-    };
+    const SFX = { ghost: CFG.sfx.ghost, bat: CFG.sfx.bat, ghoul: CFG.sfx.ghoul, zombie: CFG.sfx.zombie };
 
     function playSfx(kind){
       const src = SFX[kind];
@@ -315,7 +325,6 @@
       } catch(e){}
     }
 
-    // Spawn anywhere on screen with a bit of margin
     function randomPos(){
       const w = window.innerWidth, h = window.innerHeight;
       const marginX = Math.max(24, w * 0.06);
@@ -325,9 +334,12 @@
       return { x, y };
     }
 
-    function spawnFlyer(){
-      let el, type = 'ghoul';
+    let runFlyers = false;
+    let keepAliveInterval = null;
 
+    function spawnFlyer(){
+      if (!runFlyers) return;
+      let el, type = 'ghoul';
       if (CFG.useEmojis){
         el = document.createElement('div');
         el.className = 'flyer';
@@ -345,59 +357,64 @@
         el.style.width = (pick.size || 96) + 'px';
         type = pick.type || 'ghoul';
       }
-
       const {x,y} = randomPos();
       el.style.left = x + 'px';
       el.style.top  = y + 'px';
-
       document.body.appendChild(el);
       playSfx(type);
-
       el.addEventListener('animationend', ()=> el.remove());
     }
 
     function burst(count=10, spreadMs=420){
+      if (!runFlyers) return;
       let i = 0;
       const t = setInterval(()=>{
+        if (!runFlyers) { clearInterval(t); return; }
         spawnFlyer();
         if (++i >= count) clearInterval(t);
       }, Math.max(40, Math.floor(spreadMs/count)));
     }
 
-    /* -------------------------------------------------------
-       6) JUMP-SCARE SEQUENCE
-    --------------------------------------------------------*/
+    function stopFlyersAndSfx(){
+      runFlyers = false;
+      if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
+      // Flyers already on screen will auto-remove at animationend; no new SFX will play.
+    }
+
+    /* 6) JUMP-SCARE SEQUENCE + HIDE/SHOW CONTENT */
     const veil  = $('#veil');
     const begin = $('#begin');
     const booEl = $('#boo');
     const txtEl = $('#explain');
+    const cardy = $('#cardy');
 
     async function startShow(){
-      // Start scream immediately
+      // Show card container now (but headline/paragraph still animate)
+      cardy.classList.add('show');
+
+      // Jump-scare scream
       try { scream.currentTime = 0; await scream.play(); } catch(e){}
 
       // Reveal headline + flyer burst
       requestAnimationFrame(()=> booEl.classList.add('show'));
+      runFlyers = true;
       burst(18, 560);
       setTimeout(()=> txtEl.classList.add('show'), 800);
 
-      // Fade in ambient loop after scream ends (or after 1.2s fallback)
+      // Ambient loop fades in after scream
       const startAmbient = async()=>{
-        try { await ambient.play(); fadeInAmbient(2000, 0.18); } catch(e){}
+        try { await ambient.play(); fadeInAmbient(1800, 0.18); } catch(e){}
       };
-      if ('onended' in scream){
-        scream.onended = startAmbient;
-      } else {
-        setTimeout(startAmbient, 1200);
-      }
+      if ('onended' in scream){ scream.onended = startAmbient; } else { setTimeout(startAmbient, 1200); }
 
-      // Keep subtle life in the scene
-      setInterval(()=> burst(3, 220), 1600);
+      // Keep a few flyers coming… then stop after runSeconds
+      keepAliveInterval = setInterval(()=> burst(3, 220), 1400);
+      setTimeout(stopFlyersAndSfx, CFG.runSeconds * 1000);
     }
 
     begin.addEventListener('click', ()=>{
-      veil.remove();
-      startShow();
+      veil.remove();     // unlock page + audio
+      startShow();       // run the sequence
     });
     document.addEventListener('keydown', (e)=>{ if ($('#veil') && e.key === 'Enter') begin.click(); });
   </script>
