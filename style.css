@@ -68,7 +68,7 @@ a, .btn--outline { color: var(--slime); }
   top: 0;
   z-index: 1002;                          /* above countdown */
   height: var(--banner-h);
-  background: #0D0D0D url('assets/banner-treatz.png') center/contain no-repeat;
+  background: #0D0D0D url('assets/banner-treatz.png') center/cover no-repeat;
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
 }
 
