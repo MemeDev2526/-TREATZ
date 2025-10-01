@@ -99,6 +99,7 @@
         0 0 24px rgba(106,0,255,.35),
         0 2px 0 rgba(0,0,0,.65);
     }
+    
 
     /* Copy */
     .explain{
@@ -121,6 +122,19 @@
     .btn--outline{background:transparent; color:var(--white); border:1px solid var(--white); opacity:.95}
     .muted{opacity:.85; font-size:.9rem; margin-top:8px; text-align:center;}
 
+    .sub.fright-paper{
+      animation: spookyPulse 2.8s infinite ease-in-out;
+      color: var(--slime);
+      text-shadow: 
+        0 0 10px rgba(255,107,0,.7),
+        0 0 20px rgba(106,0,255,.6),
+        0 0 30px rgba(57,255,20,.5);
+    }
+    @keyframes spookyPulse {
+      0%,100% { transform: scale(1); opacity:1; }
+      50%     { transform: scale(1.08); opacity:.85; }
+    }
+
     /* Veil (keep page hidden until click) */
     .veil{
       position:fixed; inset:0; display:grid; place-items:center; z-index:20;
@@ -131,10 +145,14 @@
       border:1px solid var(--card-border); padding:22px 26px; border-radius:18px; text-align:center;
       box-shadow:var(--shadow); max-width:520px;
     }
-    .veil__title{
+    .veil__title{ 
+      transform: scale(2.25);  /* Warning!! up 2.25x */
       font-family:"Luckiest Guy"; font-size:clamp(20px,3.4vw,34px);
       margin:0 0 10px; color:var(--orange);
       text-shadow:0 0 14px rgba(255,149,0,.4), 0 0 22px rgba(106,0,255,.4);
+    }
+    .veil__subtitle{
+      transform: scale(1.5);   /* “Only the brave…” up 1.5x */
     }
     .veil__btn{
       margin-top:14px; font-size:clamp(18px,2.6vw,24px);
