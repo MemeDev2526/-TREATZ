@@ -24,15 +24,15 @@
   <!-- =========================================================
        TOP BANNER + GLOBAL COUNTDOWN (kept sticky below banner)
        ========================================================= -->
-  <div class="brand-banner" role="img" aria-label="$TREATZ banner">
-    <!-- Fallback: full-bleed cover -->
+  <div class="brand-banner">
     <img src="assets/Banner_Top.png" alt="$TREATZ banner" />
   </div>
 
 
+
   <div class="countdown" id="countdown" aria-live="polite">
   <div class="countdown__inner">
-    <img id="countdown-logo" class="countdown__logo" alt="$TREATZ" />
+    <img id="countdown-logo" class="countdown__logo" src="assets/TREATZ_Logo.png" alt="$TREATZ logo" />
     <span class="countdown__label">Countdown to Halloween:</span>
     <span class="countdown__timer" id="countdown-timer">--d --h --m --s</span>
     <span class="countdown__omen" id="countdown-omen"></span>
@@ -44,41 +44,32 @@
        NAVIGATION + TOKEN / BUY ACTION BAR
        ======================================= -->
   <header class="nav">
-    <div class="nav__wrap">    
-        <img src="assets/TREATZ_Logo.png" alt="$TREATZ logo" style="height:48px;">
-        <span class="nav__brand-text">$TREATZ</span>
-      </a>
+  <div class="nav__wrap">    
+    <a href="/" class="nav__brand">
+      <img src="assets/TREATZ_Logo.png" alt="$TREATZ logo" style="height:48px;">
+      <span class="nav__brand-text">$TREATZ</span>
+    </a>
 
+    <nav class="nav__links" aria-label="Primary">
+      <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter</a>
+      <a href="#" id="link-telegram"  data-live="false" target="_blank" rel="noopener">Telegram</a>
+      <a href="https://trickortreatsol.tech/whitepaper" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
+    </nav>
+  </div>
 
-      <nav class="nav__links" aria-label="Primary">
-        <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter</a>
-        <a href="#" id="link-telegram"  data-live="false" target="_blank" rel="noopener">Telegram</a>
-        <a href="https://trickortreatsol.tech/whitepaper" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
-      </nav>
+  <div class="tokenbar" role="group" aria-label="Token & Buy">
+    <div class="tokenbar__address">
+      <span class="tokenbar__label">Token:</span>
+      <code id="token-address">—</code>
+      <button class="btn btn--ghost" id="btn-copy">Copy</button>
     </div>
-
-    <div class="tokenbar" role="group" aria-label="Token & Buy">
-      <div class="tokenbar__address">
-        <span class="tokenbar__label">Token:</span>
-        <code id="token-address">4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump</code>
-        <button class="btn btn--ghost" id="btn-copy">Copy</button>
-      </div>
-      <div class="tokenbar__actions">
-        <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
-        <div class="wallet">
-          <button id="btn-connect" class="btn btn--primary">Connect Wallet</button>
-          <div id="wallet-menu" class="wallet__menu" hidden>
-            <button type="button" data-wallet="phantom">Phantom</button>
-            <button type="button" data-wallet="solflare">Solflare</button>
-            <button type="button" data-wallet="backpack">Backpack</button>
-          </div>
-        </div>
-        <button id="btn-openwallet" class="btn btn--ghost">Open Wallet</button>
-        <!-- helper button only used if Phantom isn't detected -->
-        <a id="btn-open-in-phantom" class="btn btn--outline" href="#" style="display:none">Open in Phantom App</a>
-       </div>
+    <div class="tokenbar__actions">
+      <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
+      ...
     </div>
-  </header>
+  </div>
+</header>
+
 
   <!-- ==========================
        BACKGROUND ART LAYER
@@ -242,9 +233,9 @@
        ========================== -->
   <div id="fx-layer" aria-hidden="true"></div>
   <!-- Smooth drift/bob mascot -->
-  <img id="mascot-floater" alt="Mascot" style="position:fixed; left:30px; top:30px; width:140px; pointer-events:none; opacity:.9;">
-  <!-- Classic bounce mascot (new) -->
-  <img id="mascot-bouncer" alt="Mascot Bounce" style="position:fixed; right:30px; bottom:30px; width:110px; pointer-events:none; opacity:.85;">
+  <img id="mascot-floater" alt="Mascot" />
+  <img id="mascot-bouncer" alt="Mascot Bounce" />
+
 
   <!-- ==========================
        CONFIG (MUST LOAD BEFORE app.js)
@@ -254,8 +245,7 @@
       apiBase: "https://treatz-de1d.onrender.com/api",  // ← set to your Render URL
       token: { symbol: "$TREATZ", decimals: 6 },          // SPL mint decimals
       links: {
-        discord: "https://discord.gg/yourinvite",
-        telegram: "https://t.me/yourgroup",
+        telegram: "t.me/trickortreatsol",
         twitter: "https://x.com/trickortreatsol?s=21",
         whitepaper: "https://trickortreatsol.tech/whitepaper"
       },
