@@ -6,13 +6,12 @@ Target DB path: /data/treatz.db (Render disk)
 
 from __future__ import annotations
 from typing import Optional
-from datetime import datetime, timedelta
-import os, sqlite3
+from datetime import datetime
+import os, sqlite3, secrets
 import aiosqlite
 
-
 # =========================================================
-# Canonical Schema  (match main.py / init_db.py)
+# Canonical Schema
 # =========================================================
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -22,7 +21,7 @@ CREATE TABLE IF NOT EXISTS kv (
   v TEXT
 );
 
--- Canonical rounds table: TEXT id like 'R0123'
+-- Rounds table: TEXT id like 'R0123'
 CREATE TABLE IF NOT EXISTS rounds (
   id                 TEXT PRIMARY KEY,
   status             TEXT NOT NULL CHECK(status IN ('OPEN','CLOSED','SETTLED')) DEFAULT 'OPEN',
@@ -36,7 +35,7 @@ CREATE TABLE IF NOT EXISTS rounds (
   finalize_slot      INTEGER,
   entropy            TEXT,
 
-  -- optional outcome storage (we still write winner/tx into KV for history API)
+  -- optional outcome storage (history convenience)
   winner             TEXT,
   payout_sig         TEXT
 );
@@ -59,7 +58,7 @@ CREATE TABLE IF NOT EXISTS bets (
 
 CREATE TABLE IF NOT EXISTS entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  round_id TEXT NOT NULL,              -- <- TEXT to match rounds.id
+  round_id TEXT NOT NULL,
   user TEXT,
   tickets INTEGER NOT NULL,
   tx_sig TEXT,
@@ -87,12 +86,15 @@ async def connect(db_path: str = DB_PATH) -> aiosqlite.Connection:
     await conn.commit()
     return conn
 
-
+async def ensure_schema(conn: aiosqlite.Connection) -> None:
+    """Apply canonical schema (idempotent)."""
+    await conn.executescript(SCHEMA)
+    await conn.commit()
 
 # =========================================================
 # KV Helpers
 # =========================================================
-async def kv_set(conn: aiosqlite.Connection, k: str, v: str) -> None:
+async def kv_set(conn: aiosqlite.Connection, k: str, v: str, commit: bool = True) -> None:
     """
     Upsert a key/value pair in the KV table.
     """
@@ -101,8 +103,8 @@ async def kv_set(conn: aiosqlite.Connection, k: str, v: str) -> None:
         "ON CONFLICT(k) DO UPDATE SET v=excluded.v",
         (k, v),
     )
-    await conn.commit()
-
+    if commit:
+        await conn.commit()
 
 async def kv_get(conn: aiosqlite.Connection, k: str) -> Optional[str]:
     """
@@ -111,10 +113,10 @@ async def kv_get(conn: aiosqlite.Connection, k: str) -> Optional[str]:
     async with conn.execute("SELECT v FROM kv WHERE k=?", (k,)) as cur:
         row = await cur.fetchone()
         return row[0] if row else None
-        
-# =========================
+
+# =========================================================
 # Sync helpers for scheduler/payouts
-# =========================
+# =========================================================
 def connect_sync(db_path: str = DB_PATH) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -123,16 +125,17 @@ def connect_sync(db_path: str = DB_PATH) -> sqlite3.Connection:
     conn.commit()
     return conn
 
-def create_round_sync(conn: sqlite3.Connection, opens_at, closes_at) -> str:
-    rid = f"R{os.urandom(2).hex()}"[:5].upper().replace("0X","R")  # short 'Rxxxx'
+def create_round_sync(conn: sqlite3.Connection, opens_at: datetime, closes_at: datetime) -> str:
+    """Create a new round row synchronously, returns new round ID."""
+    rid = f"R{secrets.randbelow(10_000):04d}"  # e.g. R0042
     conn.execute(
         "INSERT INTO rounds (id, opens_at, closes_at, pot, status) VALUES (?, ?, ?, 0, 'OPEN')",
         (rid, opens_at.isoformat(), closes_at.isoformat()),
     )
     conn.commit()
-    return rid  # TEXT id like R1a2b
+    return rid
 
 def mark_round_closed_sync(conn: sqlite3.Connection, round_id: str) -> None:
+    """Mark a round CLOSED synchronously."""
     conn.execute("UPDATE rounds SET status='CLOSED' WHERE id=?", (round_id,))
     conn.commit()
-
