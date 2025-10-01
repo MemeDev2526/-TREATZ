@@ -158,9 +158,29 @@
     return `${d}d ${String(h).padStart(2,"0")}h ${String(m).padStart(2,"0")}m ${String(s).padStart(2,"0")}s`;
   };
 
-  function initHalloweenCountdown(){
-    const timerEl = $("#countdown-timer");
-    const omenEl  = $("#countdown-omen");
+  /* =========================================================
+   Halloween Countdown (robust)
+   ========================================================= */
+function nextHalloween() {
+  const now  = new Date();
+  const m    = now.getMonth(); // 0..11, Oct = 9
+  const d    = now.getDate();
+  const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
+  return new Date(year, 9, 31, 23, 59, 59, 0); // local time
+}
+
+function formatDHMS(ms){
+  let s = Math.max(0, Math.floor(ms/1000));
+  const d = Math.floor(s / 86400); s %= 86400;
+  const h = Math.floor(s / 3600);  s %= 3600;
+  const m = Math.floor(s / 60);    s %= 60;
+  return `${d}d ${String(h).padStart(2,"0")}h ${String(m).padStart(2,"0")}m ${String(s).padStart(2,"0")}s`;
+}
+
+function initHalloweenCountdown(){
+  try{
+    const timerEl = document.getElementById("countdown-timer");
+    const omenEl  = document.getElementById("countdown-omen");
     if (!timerEl) return;
 
     const omens = [
@@ -173,7 +193,7 @@
       "Don’t blink. The jackpot watches back.",
       "Another door may open before midnight…"
     ];
-    let omenIdx = Math.floor(Math.random() * omens.length);
+    let i = Math.floor(Math.random() * omens.length);
     let target = nextHalloween();
 
     const tick = () => {
@@ -181,16 +201,24 @@
       if (diff <= 0) target = nextHalloween();
       timerEl.textContent = formatDHMS(target - Date.now());
     };
-    tick();
-    setInterval(tick, 1000);
-
-    const rotateOmen = () => {
-      omenIdx = (omenIdx + 1) % omens.length;
-      if (omenEl) omenEl.textContent = omens[omenIdx];
+    const rotate = () => {
+      i = (i + 1) % omens.length;
+      if (omenEl) omenEl.textContent = omens[i];
     };
-    rotateOmen();
-    setInterval(rotateOmen, 12000);
-  }
+
+    tick(); rotate();
+    window.__treatz_cd_timer && clearInterval(window.__treatz_cd_timer);
+    window.__treatz_cd_timer = setInterval(tick, 1000);
+    window.__treatz_cd_omen  && clearInterval(window.__treatz_cd_omen);
+    window.__treatz_cd_omen  = setInterval(rotate, 12000);
+  }catch(e){ console.error("Countdown init failed", e); }
+}
+
+// run it no matter the script load order
+initHalloweenCountdown();
+document.addEventListener("DOMContentLoaded", initHalloweenCountdown);
+window.addEventListener("load", initHalloweenCountdown);
+
 
 /* ────────────────────────────────────────────────────────
    3) Static links, logo/mascot assets, token copy
@@ -210,11 +238,12 @@
   const tokenEl = $("#token-address");
   if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
 
+  // Assets (navbar logo + countdown logo + mascot)
   const logoImg = $("#site-logo");
   const cdLogo  = $("#countdown-logo");
   if (C.assets?.logo) {
     if (logoImg){ logoImg.src = C.assets.logo; logoImg.alt = "$TREATZ"; }
-    if (cdLogo){  cdLogo.src  = C.assets.logo; cdLogo.alt  = "$TREATZ"; }
+    if (cdLogo){  cdLogo.src  = C.assets.logo;  cdLogo.alt  = "$TREATZ"; }
     logoImg?.addEventListener("error", () => {
       const t = document.querySelector(".nav__brand-text");
       if (t) t.style.display = "inline-block";
