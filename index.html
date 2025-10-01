@@ -19,8 +19,22 @@
   <link id="treatz-css" rel="stylesheet" href="style.css?v={{ site.github.build_revision }}">
   <!-- Build ID injected at deploy -->
   <!-- Config must come BEFORE app.js -->
-  <script>
-    window.TREATZ_CONFIG = { /* your config */ };
+  <<script>
+  window.TREATZ_CONFIG = {
+    apiBase: "https://treatz-de1d.onrender.com/api",
+    rpcUrl:  "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY",
+    token: { symbol: "$TREATZ", decimals: 6 },
+    links: {
+      telegram: "https://t.me/trickortreatsol",
+      twitter:  "https://x.com/trickortreatsol?s=21",
+      whitepaper: "https://trickortreatsol.tech/whitepaper"
+    },
+    buyUrl: "#",
+    tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
+    assets: { logo: "assets/TREATZ_Logo.png", mascot: "assets/Mascot.png" }
+  };
+</script>
+<<script>
     window.TREATZ_BUILD = "__BUILD__";
   </script>
 
@@ -92,7 +106,18 @@
     </div>
     <div class="tokenbar__actions">
       <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
-      ...
+      <!-- Wallet Controls -->
+      <div class="wallet">
+        <button class="btn btn--ghost" id="btn-openwallet" type="button">Open Wallet</button>
+        <button class="btn btn--primary" id="btn-connect" type="button">Connect Wallet</button>
+        <div class="wallet__menu" id="wallet-menu" hidden>
+        <button data-wallet="phantom">Phantom</button>
+        <button data-wallet="solflare">Solflare</button>
+          <button data-wallet="backpack">Backpack</button>
+        </div>
+        <!-- Mobile helper: open this site inside Phantom if no provider -->
+        <a class="btn btn--outline" id="btn-open-in-phantom" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
+      </div>
     </div>
   </div>
 </header>
