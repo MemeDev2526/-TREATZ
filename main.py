@@ -14,7 +14,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from config import settings
-import db as dbmod  # aiosqlite helpers (connect, kv_get/kv_set)
+import db as dbmod
+from db import ensure_schema   # import canonical schema
 
 # NEW: payout helpers (sign + send SPL from vaults)
 from payouts import pay_coinflip_winner, pay_jackpot_winner, pay_jackpot_split
@@ -39,9 +40,11 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 ADMIN_TOKEN = getattr(settings, "ADMIN_TOKEN", "")
 _auth_scheme = HTTPBearer(auto_error=False)
 def admin_guard(creds: HTTPAuthorizationCredentials = Depends(_auth_scheme)):
-    # If ADMIN_TOKEN is unset, allow (useful from Render private shell/service).
     if not ADMIN_TOKEN:
-        return True
+        # allow only if explicitly running in debug/dev
+        if getattr(settings, "DEBUG", False):
+            return True
+        raise HTTPException(401, "ADMIN_TOKEN required in production")
     if not creds or creds.credentials != ADMIN_TOKEN:
         raise HTTPException(401, "Unauthorized")
     return True
@@ -69,73 +72,6 @@ app.add_middleware(
 
 API = (getattr(settings, "API_PREFIX", "/api") or "/api").rstrip("/")
 
-
-# =========================================================
-# DB Schema (SQLite / aiosqlite)
-# =========================================================
-SCHEMA_SQL = """
-PRAGMA journal_mode=WAL;
-
-CREATE TABLE IF NOT EXISTS kv (
-  k TEXT PRIMARY KEY,
-  v TEXT
-);
-
-CREATE TABLE IF NOT EXISTS rounds (
-  id TEXT PRIMARY KEY,
-  status TEXT NOT NULL,
-  opens_at TEXT NOT NULL,
-  closes_at TEXT NOT NULL,
-  server_seed_hash TEXT,
-  client_seed TEXT,
-  pot INTEGER DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS bets (
-  id TEXT PRIMARY KEY,
-  user TEXT,
-  client_seed TEXT,
-  server_seed_hash TEXT,
-  server_seed_reveal TEXT,
-  wager INTEGER,
-  side TEXT,
-  result TEXT,
-  win INTEGER,
-  status TEXT,
-  tx_sig TEXT,
-  created_at TEXT,
-  settled_at TEXT
-);
-
-CREATE TABLE IF NOT EXISTS entries (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  round_id TEXT NOT NULL,
-  user TEXT,
-  tickets INTEGER NOT NULL,
-  tx_sig TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
-  FOREIGN KEY(round_id) REFERENCES rounds(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_rounds_opens_at ON rounds(opens_at);
-CREATE INDEX IF NOT EXISTS idx_entries_round ON entries(round_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_txsig ON entries(tx_sig);
-""".strip()
-
-
-async def ensure_schema(db):
-    await db.executescript(SCHEMA_SQL)
-    # --- lightweight migrations (ignore if already added) ---
-    try:
-        await db.execute("ALTER TABLE rounds ADD COLUMN server_seed_reveal TEXT")
-    except Exception:
-        pass
-    try:
-        await db.execute("ALTER TABLE rounds ADD COLUMN finalize_slot INTEGER")
-    except Exception:
-        pass
-
-
 # =========================================================
 # Crypto Helpers
 # =========================================================
@@ -143,8 +79,10 @@ def _hash(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
 
-def _hmac(secret: str, msg: str) -> bytes:
-    return hmac.new(secret.encode(), msg.encode(), hashlib.sha256).digest()
+def _hmac(secret: str, msg: str, as_hex: bool = False) -> str | bytes:
+    """Return HMAC-SHA256 over msg using secret. Hex for storage, raw bytes for RNG."""
+    dig = hmac.new(secret.encode(), msg.encode(), hashlib.sha256).digest()
+    return dig.hex() if as_hex else dig
 
 
 # =========================================================
@@ -304,6 +242,22 @@ class ConfigResp(BaseModel):
     timers: dict
     limits: dict
 
+class RecentRoundResp(BaseModel):
+    id: str
+    pot: int
+
+class TxLinkResp(BaseModel):
+    url: str
+
+class CreditResp(BaseModel):
+    wallet: str
+    credit: int
+
+class EntryResp(BaseModel):
+    user: str
+    tickets: int
+    tx_sig: str
+    created_at: str
 
 # =========================================================
 # Endpoints — Bets
@@ -353,7 +307,17 @@ async def create_bet(body: NewBet):
 # =========================================================
 # Endpoints — Rounds (current / recent)
 # =========================================================
-@app.get(f"{API}/rounds/current")
+class RoundCurrentResp(BaseModel):
+    round_id: str
+    status: str
+    opens_at: str
+    closes_at: str
+    pot: int
+    next_opens_at: str
+    round_minutes: int
+    break_minutes: int
+
+@app.get(f"{API}/rounds/current", response_model=RoundCurrentResp)
 async def rounds_current():
     rid = await dbmod.kv_get(app.state.db, "current_round_id")
     async with app.state.db.execute(
@@ -361,21 +325,21 @@ async def rounds_current():
         (rid,),
     ) as cur:
         row = await cur.fetchone()
-        if not row:
-            raise HTTPException(404, "No current round")
-        next_open = (datetime.fromisoformat(row[3]) + timedelta(minutes=ROUND_BREAK)).isoformat()
-        return {
-            "round_id": row[0],
-            "status": row[1],
-            "opens_at": row[2],
-            "closes_at": row[3],
-            "pot": row[4],
-            "next_opens_at": next_open,
-            "round_minutes": ROUND_MIN,
-            "break_minutes": ROUND_BREAK,
-        }
+    if not row:
+        raise HTTPException(404, "No current round")
+    next_open = (datetime.fromisoformat(row[3]) + timedelta(minutes=ROUND_BREAK)).isoformat()
+    return RoundCurrentResp(
+        round_id=row[0],
+        status=row[1],
+        opens_at=row[2],
+        closes_at=row[3],
+        pot=row[4],
+        next_opens_at=next_open,
+        round_minutes=ROUND_MIN,
+        break_minutes=ROUND_BREAK,
+    )
 
-@app.get(f"{API}/rounds/recent")
+@app.get(f"{API}/rounds/recent", response_model=list[RecentRoundResp])
 async def rounds_recent(limit: int = 10):
     async with app.state.db.execute(
         "SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT ?",
@@ -385,9 +349,10 @@ async def rounds_recent(limit: int = 10):
 
     if not rows:
         rid = await dbmod.kv_get(app.state.db, "current_round_id")
-        return [{"id": rid, "pot": 0}] if rid else []
+        return [RecentRoundResp(id=rid, pot=0)] if rid else []
 
-    return [{"id": r[0], "pot": r[1]} for r in rows]
+    return [RecentRoundResp(id=r[0], pot=r[1]) for r in rows]
+
 
 # =========================================================
 # Read Endpoints — Fairness & Transparency
@@ -528,9 +493,9 @@ async def get_config(include_balances: bool = False):
 
 EXPLORER_BASE = "https://solscan.io/tx/"
 
-@app.get(f"{API}/tx/{{sig}}")
+@app.get(f"{API}/tx/{sig}", response_model=TxLinkResp)
 def tx_link(sig: str):
-    return {"url": f"{EXPLORER_BASE}{sig}"}
+    return TxLinkResp(url=f"{EXPLORER_BASE}{sig}")
 
 @app.get(f"{API}/health/full")
 async def health_full():
@@ -550,20 +515,23 @@ async def health_full():
     }
 
 # Raffle credit for a wallet (base units)
-@app.get(f"{API}/credits/{{wallet}}")
+@app.get(f"{API}/credits/{wallet}", response_model=CreditResp)
 async def get_credit(wallet: str):
     val = await dbmod.kv_get(app.state.db, f"raffle_credit:{wallet}")
-    return {"wallet": wallet, "credit": int(val or 0)}
+    return CreditResp(wallet=wallet, credit=int(val or 0))
 
 # Entries for a round (paginated)
-@app.get(f"{API}/rounds/{{round_id}}/entries")
+@app.get(f"{API}/rounds/{round_id}/entries", response_model=list[EntryResp])
 async def list_round_entries(round_id: str, offset: int = 0, limit: int = 100):
     async with app.state.db.execute(
         "SELECT user, tickets, tx_sig, created_at FROM entries WHERE round_id=? ORDER BY id ASC LIMIT ? OFFSET ?",
         (round_id, limit, offset),
     ) as cur:
         rows = await cur.fetchall()
-    return [{"user": r[0], "tickets": int(r[1] or 0), "tx_sig": r[2], "created_at": r[3]} for r in rows]
+    return [
+        EntryResp(user=r[0], tickets=int(r[1] or 0), tx_sig=r[2], created_at=r[3])
+        for r in rows
+    ]
 
 # =========================================================
 # Webhooks — Helius (MVP)
@@ -715,23 +683,27 @@ async def helius_webhook(request: Request):
             tickets = amt // settings.TICKET_PRICE
             remainder = amt - (tickets * settings.TICKET_PRICE)
 
-            if tickets > 0:
-                await app.state.db.execute(
-                    "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
-                    (round_id, sender_raw, tickets, tx_sig),
-                )
-                await app.state.db.execute(
-                    "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
-                    (tickets * settings.TICKET_PRICE, round_id),
-                )
+            try:
+                await app.state.db.execute("BEGIN")
+                if tickets > 0:
+                    await app.state.db.execute(
+                        "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
+                        (round_id, sender_raw, tickets, tx_sig),
+                    )
+                    await app.state.db.execute(
+                        "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
+                        (tickets * settings.TICKET_PRICE, round_id),
+                    )
+                if remainder > 0:
+                    key = f"raffle_credit:{sender_raw}"
+                    existing = await dbmod.kv_get(app.state.db, key)
+                    cur = int(existing or 0)
+                    await dbmod.kv_set(app.state.db, key, str(cur + remainder))
+                await app.state.db.commit()
+            except Exception:
+                await app.state.db.rollback()
+                raise
 
-            if remainder > 0:
-                key = f"raffle_credit:{sender_raw}"
-                existing = await dbmod.kv_get(app.state.db, key)
-                cur = int(existing or 0)
-                await dbmod.kv_set(app.state.db, key, str(cur + remainder))
-
-            await app.state.db.commit()
 
 # =========================================================
 # Admin Helpers (simple, no auth — secure behind network!)
