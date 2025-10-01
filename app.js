@@ -212,10 +212,11 @@
   if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
 
   const logoImg = $("#site-logo");
-  if (logoImg && C.assets?.logo) {
-    logoImg.src = C.assets.logo;
-    logoImg.alt = "$TREATZ";
-    logoImg.addEventListener("error", () => {
+  const cdLogo  = $("#countdown-logo");
+  if (C.assets?.logo) {
+    if (logoImg){ logoImg.src = C.assets.logo; logoImg.alt = "$TREATZ"; }
+    if (cdLogo){  cdLogo.src  = C.assets.logo; cdLogo.alt  = "$TREATZ"; }
+    logoImg?.addEventListener("error", () => {
       const t = document.querySelector(".nav__brand-text");
       if (t) t.style.display = "inline-block";
       logoImg.remove();
@@ -223,7 +224,7 @@
   } else {
     const t = document.querySelector(".nav__brand-text");
     if (t) t.style.display = "inline-block";
-    if (logoImg) logoImg.remove();
+    logoImg?.remove();
   }
 
   const mascotImg = $("#mascot-floater");
@@ -710,6 +711,14 @@
 /* ────────────────────────────────────────────────────────
    10) Boot
    ──────────────────────────────────────────────────────── */
+  /* ────────────────────────────────────────────────────────
+   10) Boot
+   ──────────────────────────────────────────────────────── */
+  // Run once now and again if DOMContentLoaded fires later for any reason.
   initHalloweenCountdown();
+  document.addEventListener("DOMContentLoaded", initHalloweenCountdown);
+
+})(); // IIFE
+
 
 })(); // IIFE
