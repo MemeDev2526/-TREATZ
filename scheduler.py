@@ -3,7 +3,6 @@ import os
 import asyncio
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from payouts import settle_and_payout
 
 from db import (
     connect_sync as get_conn,
