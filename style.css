@@ -62,6 +62,19 @@ a, .btn--outline { color: var(--slime); }
   padding:16px;
 }
 
+.wallet{ position:relative; display:inline-block; }
+.wallet__menu{
+  position:absolute; top:110%; left:0; min-width:180px;
+  background:rgba(13,13,13,.95); border:1px solid rgba(255,255,255,.1);
+  border-radius:12px; padding:.4rem; box-shadow:0 10px 24px rgba(0,0,0,.35);
+}
+.wallet__menu button{
+  display:block; width:100%; text-align:left; padding:.55rem .7rem;
+  background:transparent; color:#fff; border:none; border-radius:8px; font-weight:700;
+}
+.wallet__menu button:hover{ background:rgba(255,255,255,.08) }
+
+
 /* =========================================================
    Top Banner & Global Countdown
    ========================================================= */
