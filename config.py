@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # =========================================================
     # RPC / Admin
     # =========================================================
-    RPC_URL: str = "https://api.mainnet-beta.solana.com"
+    RPC_URL: str = "https://mainnet.helius-rpc.com/?api-key=3b97cb2d-4eff-4bd3-a17f-f5d157a686a5"
     ADMIN_TOKEN: Optional[str] = None
 
     # =========================================================
