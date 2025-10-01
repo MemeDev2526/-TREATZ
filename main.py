@@ -515,13 +515,13 @@ async def health_full():
     }
 
 # Raffle credit for a wallet (base units)
-@app.get(f"{API}/credits/{wallet}", response_model=CreditResp)
-async def get_credit(wallet: str):
+@app.get(f"{API}/credits/{{wallet}}", response_model=CreditResp)
+async def get_credits(wallet: str) -> CreditResp:
     val = await dbmod.kv_get(app.state.db, f"raffle_credit:{wallet}")
     return CreditResp(wallet=wallet, credit=int(val or 0))
 
 # Entries for a round (paginated)
-@app.get(f"{API}/rounds/{round_id}/entries", response_model=list[EntryResp])
+@app.get(f"{API}/rounds/{{round_id}}/entries", response_model=list[EntryResp])
 async def list_round_entries(round_id: str, offset: int = 0, limit: int = 100):
     async with app.state.db.execute(
         "SELECT user, tickets, tx_sig, created_at FROM entries WHERE round_id=? ORDER BY id ASC LIMIT ? OFFSET ?",
