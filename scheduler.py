@@ -5,6 +5,12 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from payouts import settle_and_payout
 
+from db import (
+    connect_sync as get_conn,
+    create_round_sync,
+    mark_round_closed_sync,
+)
+
 # --- ENV (read directly here, per your preference) ---
 ROUND_MIN = int(os.getenv("ROUND_MIN", 30))
 ROUND_BREAK = int(os.getenv("ROUND_BREAK", 0))
@@ -52,18 +58,20 @@ async def raffle_loop():
             now = datetime.now(timezone.utc)
             opens_at = now
             closes_at = now + timedelta(minutes=ROUND_MIN)
-            round_id = create_round(conn, opens_at, closes_at)
-            print(f"[RAFFLE] Opened {round_id} {opens_at} → {closes_at}")
+
+            rid = create_round_sync(conn, opens_at, closes_at)   # integer id
+            print(f"[RAFFLE] Opened R{rid} {opens_at} → {closes_at}")
 
             while datetime.now(timezone.utc) < closes_at:
                 await asyncio.sleep(5)
 
-            mark_round_closed(conn, round_id)
-            print(f"[RAFFLE] Closing {round_id} — settling")
+            mark_round_closed_sync(conn, rid)
+            print(f"[RAFFLE] Closing R{rid} — settling")
 
             try:
-                result = settle_and_payout(conn, round_id)
-                print(f"[RAFFLE] {round_id} winner {result.get('winner')} pot {result.get('pot')}")
+                # payouts.settle_and_payout should accept a sync sqlite3.Connection + integer id
+                result = settle_and_payout(conn, rid)
+                print(f"[RAFFLE] R{rid} winner {result.get('winner')} pot {result.get('pot')}")
             except Exception as e:
                 print(f"[RAFFLE] payout error {e}")
 
@@ -71,4 +79,4 @@ async def raffle_loop():
         except Exception as e:
             print(f"[RAFFLE] loop error {e}")
             await asyncio.sleep(5)
-
+            
