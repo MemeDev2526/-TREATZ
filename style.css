@@ -68,25 +68,38 @@ a, .btn--outline { color: var(--slime); }
 .brand-banner{
   position: sticky;
   top: 0;
-  z-index: 1002;                          /* above countdown */
+  z-index: 1002;
   height: var(--banner-h);
   background: #0D0D0D url('assets/banner-treatz.png') center/cover no-repeat;
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
+  display:flex; align-items:center; justify-content:center;
 }
+.brand-banner img{
+  height: 100%;
+  width: auto;
+  display:block;
+}
+
 
 /* Countdown sits under the banner and never hides it */
 .countdown{
   position: sticky;
-  /* push it just a bit further down to compensate for scale */
-  top: calc(var(--banner-h) + (var(--countdown-scale) - 1) * var(--countdown-h));
+  /* sit flush under the banner with NO math gap */
+  top: var(--banner-h);
   z-index: 1001;
-  transform: scale(var(--countdown-scale));  /* keep your scale */
-  transform-origin: top center;              /* growth only downward */
+  transform: scale(var(--countdown-scale));
+  transform-origin: top center;
   backdrop-filter: blur(4px);
   background:#000;
   border-bottom: 1px solid rgba(255,255,255,.08);
   box-shadow: inset 0 -2px 0 rgba(0,255,163,.15), 0 6px 16px rgba(0,0,0,.25);
 }
+
+/* ensure content below doesn't tuck under the sticky countdown */
+.countdown + .nav{
+  margin-top: calc(var(--countdown-h) * var(--countdown-scale));
+}
+
 .countdown__inner{
   max-width:1200px; 
   margin:0 auto; 
