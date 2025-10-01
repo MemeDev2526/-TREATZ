@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-  
-<audio id="bg-ambient" src="assets/ambient_loop.mp3" preload="auto" loop></audio>
-  
+    
 <head>
   <!-- ========== META ========== -->
   <meta charset="utf-8" />
@@ -24,6 +22,16 @@
   <!-- <link rel="icon" href="assets/favicon.png"> -->
 </head>
 <body>
+
+  <audio id="bg-ambient" src="assets/ambient_loop.mp3" preload="auto" loop></audio>
+  
+  <!-- ==========================
+     TOP BANNER (sticky)
+     ========================== -->
+  <div class="brand-banner">
+    <img src="assets/Banner_Top.png" alt="$TREATZ banner" />
+  </div>
+
   <!-- =========================================================
             GLOBAL COUNTDOWN (kept sticky below banner)
        ========================================================= -->
@@ -229,9 +237,7 @@
   <div id="fx-layer" aria-hidden="true"></div>
   <!-- Smooth drift/bob mascot -->
   <img id="mascot-floater" alt="Mascot" />
-  <img id="mascot-bouncer" alt="Mascot Bounce" />
-
-
+ 
   <!-- ==========================
        CONFIG (MUST LOAD BEFORE app.js)
        ========================== -->
