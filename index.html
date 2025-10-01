@@ -53,17 +53,6 @@
     <img src="assets/Banner_Top.png" alt="$TREATZ banner" />
   </div>
 
-  <!-- place the script immediately after the banner -->
-  <script>
-    function setBannerVar(){
-      const img = document.querySelector('.brand-banner img');
-      if (!img) return;
-      const h = img.getBoundingClientRect().height || 0;
-      document.documentElement.style.setProperty('--banner-h', h + 'px');
-    }
-    window.addEventListener('load', setBannerVar);
-    window.addEventListener('resize', setBannerVar);
-  </script>
 
   <!-- =========================================================
             GLOBAL COUNTDOWN (kept sticky below banner)
