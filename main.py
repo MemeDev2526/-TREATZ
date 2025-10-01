@@ -454,9 +454,15 @@ async def get_config(include_balances: bool = False):
     game_bal = jack_bal = None
     max_wager = None
     if include_balances:
-        game_bal = await _rpc_get_token_balance(game_vault_ata)
-        jack_bal = await _rpc_get_token_balance(jackpot_vault_ata)
-        if game_bal is not None:
+        try:
+            game_bal = await _rpc_get_token_balance(game_vault_ata)
+        except Exception:
+            game_bal = None
+        try:
+            jack_bal = await _rpc_get_token_balance(jackpot_vault_ata)
+        except Exception:
+            jack_bal = None
+        if isinstance(game_bal, int):
             max_wager = game_bal // 2
 
     return {
