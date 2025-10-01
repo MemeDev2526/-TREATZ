@@ -24,7 +24,7 @@ def to_public_key(addr: str | PublicKey) -> PublicKey:
     
 # Mints & vaults
 MINT = to_public_key(os.getenv("TREATZ_MINT", "11111111111111111111111111111111"))
-TOKEN_DECIMALS = int(os.getenv("TOKEN_DECIMALS", "9"))
+TOKEN_DECIMALS = int(os.getenv("TOKEN_DECIMALS", "6"))
 
 # Game (coin flip) vaults
 GAME_VAULT = to_public_key(os.getenv("GAME_VAULT", "11111111111111111111111111111111"))
