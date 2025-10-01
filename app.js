@@ -236,6 +236,15 @@ if (openInPhantom) {
   if (logoImg && C.assets?.logo) {
     logoImg.src = C.assets.logo;
     logoImg.alt = "$TREATZ";
+    logoImg.addEventListener("error", () => {
+      const t = document.querySelector(".nav__brand-text");
+      if (t) t.style.display = "inline-block";
+      logoImg.remove();
+    });
+  } else {
+    const t = document.querySelector(".nav__brand-text");
+    if (t) t.style.display = "inline-block";
+    if (logoImg) logoImg.remove();
   }
 
 const mascotImg = $("#mascot-floater");
