@@ -46,10 +46,10 @@
     }, 2200);
   };
   
-  function isMobile() {
+  function isMobile(){
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 }
-function phantomDeepLinkForThisSite() {
+function phantomDeepLinkForThisSite(){
   const url = location.href.split('#')[0];
   return `https://phantom.app/ul/browse/${encodeURIComponent(url)}`;
 }
@@ -550,11 +550,11 @@ async function loadPlayerStats(){
 
     // Optional endpoints (safe to fail silently)
     let credit = 0, spent = 0, won = 0;
-    try { credit = await fetch(`${api}/players/${PUBKEY.toBase58()}/credit`).then(r=>r.json()).then(j=>Number(j?.credit||0)); } catch{}
     try {
-      const sum = await fetch(`${api}/players/${PUBKEY.toBase58()}/summary`).then(r=>r.json());
-      spent = Number(sum?.spent || 0); won = Number(sum?.won || 0);
+      const c = await fetch(`${api}/credits/${PUBKEY.toBase58()}`).then(r=>r.json());
+      credit = Number(c?.credit || 0);
     } catch {}
+    // summary endpoint not implemented on backend yet; leave zeros gracefully
 
     // Write UI
     document.getElementById("ps-tickets")?.replaceChildren(document.createTextNode(yourTickets.toLocaleString()));
@@ -788,7 +788,8 @@ async function loadHistory(query=""){
   const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
   try {
-    const base = await fetch(`${API}/rounds/recent?limit=10`).then(r=>r.json());
+    const api = (window.TREATZ_CONFIG?.apiBase || "").replace(/\/+$/,"");
+    const base = await fetch(`${api}/rounds/recent?limit=10`).then(r=>r.json());
     const ids  = (query && /^R\d+$/i.test(query)) ? base.filter(x=>x.id===query) : base;
     const rows = [];
     for (const r of ids){
@@ -835,28 +836,6 @@ function armAmbient(){
   document.addEventListener("click", start, {once:true});
 }
 armAmbient();
-
-// House edge display
-(async()=>{
-  await ensureConfig();
-  if (CONFIG?.raffle?.splits) {
-    const s = CONFIG.raffle.splits;
-    const bps = 10000 - (s.winner + s.dev + s.burn);
-    const el = document.getElementById("edge-line");
-    if (el) el.textContent = `House edge: ${(bps/100).toFixed(2)}%`;
-  }
-})();
-
-// Raffle schedule display (surface cadence so it feels "scheduled")
-(async()=>{
-  await ensureConfig();
-  const roundM = Number(CONFIG?.raffle?.round_minutes || 0);
-  const breakM = Number(CONFIG?.raffle?.break_minutes || 0);
-  const el = document.getElementById("raffle-schedule");
-  if (el && (roundM || breakM)) {
-    el.textContent = `Draws every ${roundM} min${breakM?`, ${breakM} min break between rounds`:""}.`;
-  }
-})();
 
 // ===========================
 // Mascot: float/bounce around screen
