@@ -132,6 +132,18 @@ a, .btn--outline { color: var(--slime); }
 .countdown__label{ font-weight:700; letter-spacing:.3px }
 .countdown__timer{ font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem; color:var(--slime); border:1px solid rgba(57,255,20,.25); border-radius:8px; box-shadow: 0 0 12px rgba(57,255,20,.35) }
 .countdown__omen{ font-size:.95rem; opacity:.9; margin-left:8px; color:#d8c2ff; font-style: italic }
+/* Countdown logo inside the bar */
+.countdown__logo{
+  height: 40px;
+  width: auto;
+  margin-right: .6rem;
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(57,255,20,.35);
+}
+@media (max-width: 600px){
+  .countdown__logo{ height: 32px; }
+}
+
 
 /* Optional glow under banner */
 .brand-banner::after{
