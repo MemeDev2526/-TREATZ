@@ -81,15 +81,15 @@ a, .btn--outline { color: var(--slime); }
 .brand-banner{
   position: sticky;
   top: 0;
-  z-index: 1002;
+  z-index: 1002;                          /* above countdown */
   height: var(--banner-h);
-  /* background is already full-bleed; force the element itself to span the viewport */
-  width: 100vw;
-  left: 50%;
-  margin-left: -50vw;
-  background: #0D0D0D url('assets/banner-treatz.png') center/cover no-repeat;
+  /* scale to full width without aggressive crop */
+  background-color:#0D0D0D;
+  background-image:url('assets/banner-treatz.png');
+  background-position:center top;
+  background-repeat:no-repeat;
+  background-size:100% auto;              /* ← was cover */
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
-  display:flex; align-items:center; justify-content:center;
 }
 .brand-banner img{
   width: 100%;
