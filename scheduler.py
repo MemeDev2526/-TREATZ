@@ -3,7 +3,6 @@ import os
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from config import RAFFLE_ROUND_MINUTES, RAFFLE_BREAK_MINUTES
 from db import get_conn, create_round, mark_round_closed
 from payouts import settle_and_payout
 
