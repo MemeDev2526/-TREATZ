@@ -196,7 +196,6 @@
    3) Static links, logo/mascot assets, token copy
    ──────────────────────────────────────────────────────── */
   const link = (id, href) => { const el = document.getElementById(id); if (el && href) el.href = href; };
-  link("link-discord",   C.links?.discord);
   link("link-telegram",  C.links?.telegram);
   link("link-twitter",   C.links?.twitter);
   link("link-whitepaper",C.links?.whitepaper);
