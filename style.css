@@ -144,8 +144,8 @@ a, .btn--outline { color: var(--slime); }
 .countdown__omen{ font-size:.95rem; opacity:.9; margin-left:8px; color:#d8c2ff; font-style: italic }
 /* Countdown logo inside the bar */
 .countdown__logo{
-  height: 40px; width: auto; margin-right: .6rem;
-  border-radius: 8px; box-shadow: 0 0 12px rgba(57,255,20,.35);
+  height: 60px; width: auto; margin-right: .6rem;
+  border-radius: 5px; box-shadow: 0 0 12px rgba(57,255,20,.35);
 }
 @media (max-width: 600px){
   .countdown__logo{ height: 32px; }
@@ -426,7 +426,7 @@ body.flash { animation: screen-flash 0.9s ease both; }
   pointer-events:none; opacity:.9; z-index: 1000;
 }
 #mascot-bouncer{
-  position:fixed; right:30px; bottom:30px; width:110px;
+  position:fixed; right:30px; bottom:30px; width:140px;
   pointer-events:none; opacity:.85; z-index: 1000;
 }
 
