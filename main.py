@@ -13,7 +13,6 @@ from typing import Literal, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from scheduler import raffle_loop
 from config import settings
 import db as dbmod  # aiosqlite helpers (connect, kv_get/kv_set)
 
