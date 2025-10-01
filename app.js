@@ -43,6 +43,13 @@
     return `https://phantom.app/ul/browse/${encodeURIComponent(url)}`;
   };
 
+  // fetch helper (throws on !ok)
+  async function jfetch(url, opts) {
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return r.json();
+  }
+
 /* ────────────────────────────────────────────────────────
    1) FX: Wrappers / Candy / Ghosts
    ──────────────────────────────────────────────────────── */
@@ -72,7 +79,7 @@
 
   const svgGhost = () => `
 <svg width="44" height="56" viewBox="0 0 44 56" xmlns="http://www.w3.org/2000/svg">
-  <path d="M22 2c11 0 20 9 20 20v28c-4-2-8-2-12 0-4-2-8-2-12 0-4-2-8-2-12 0V22C6 11 11 2 22 2z" fill="rgba(200,200,255,.9)"/>
+  <path d="M22 2c11 0 20 9 20 20v28c-4-2-8-2-12 0-4-2-8-2-12 0V22C6 11 11 2 22 2z" fill="rgba(200,200,255,.9)"/>
   <circle cx="16" cy="22" r="4" fill="#0D0D0D"/>
   <circle cx="28" cy="22" r="4" fill="#0D0D0D"/>
 </svg>`;
@@ -142,83 +149,63 @@
 /* ────────────────────────────────────────────────────────
    2) Countdown (Halloween)
    ──────────────────────────────────────────────────────── */
-  const nextHalloween = () => {
-    const now = new Date();
-    const m = now.getMonth(); // 0..11
-    const d = now.getDate();
-    const y = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
-    return new Date(y, 9, 31, 23, 59, 59, 0);
-  };
+  function nextHalloween() {
+    const now  = new Date();
+    const m    = now.getMonth(); // 0..11, Oct = 9
+    const d    = now.getDate();
+    const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
+    return new Date(year, 9, 31, 23, 59, 59, 0); // local time
+  }
 
-  const formatDHMS = (ms) => {
+  function formatDHMS(ms){
     let s = Math.max(0, Math.floor(ms/1000));
     const d = Math.floor(s / 86400); s %= 86400;
     const h = Math.floor(s / 3600);  s %= 3600;
     const m = Math.floor(s / 60);    s %= 60;
     return `${d}d ${String(h).padStart(2,"0")}h ${String(m).padStart(2,"0")}m ${String(s).padStart(2,"0")}s`;
-  };
+  }
 
-  /* =========================================================
-   Halloween Countdown (robust)
-   ========================================================= */
-function nextHalloween() {
-  const now  = new Date();
-  const m    = now.getMonth(); // 0..11, Oct = 9
-  const d    = now.getDate();
-  const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
-  return new Date(year, 9, 31, 23, 59, 59, 0); // local time
-}
+  function initHalloweenCountdown(){
+    try{
+      const timerEl = document.getElementById("countdown-timer");
+      const omenEl  = document.getElementById("countdown-omen");
+      if (!timerEl) return;
 
-function formatDHMS(ms){
-  let s = Math.max(0, Math.floor(ms/1000));
-  const d = Math.floor(s / 86400); s %= 86400;
-  const h = Math.floor(s / 3600);  s %= 3600;
-  const m = Math.floor(s / 60);    s %= 60;
-  return `${d}d ${String(h).padStart(2,"0")}h ${String(m).padStart(2,"0")}m ${String(s).padStart(2,"0")}s`;
-}
+      const omens = [
+        "The wrappers rustle. Something’s awake.",
+        "Candy fog thickens… footsteps in the mist.",
+        "Lanterns flicker. The ritual nears.",
+        "Whispers from the vault… tickets scratch.",
+        "A second game stirs beneath the moon.",
+        "The cauldron hums. Keys turn in the dark.",
+        "Don’t blink. The jackpot watches back.",
+        "Another door may open before midnight…"
+      ];
+      let i = Math.floor(Math.random() * omens.length);
+      let target = nextHalloween();
 
-function initHalloweenCountdown(){
-  try{
-    const timerEl = document.getElementById("countdown-timer");
-    const omenEl  = document.getElementById("countdown-omen");
-    if (!timerEl) return;
+      const tick = () => {
+        const diff = target - Date.now();
+        if (diff <= 0) target = nextHalloween();
+        timerEl.textContent = formatDHMS(target - Date.now());
+      };
+      const rotate = () => {
+        i = (i + 1) % omens.length;
+        if (omenEl) omenEl.textContent = omens[i];
+      };
 
-    const omens = [
-      "The wrappers rustle. Something’s awake.",
-      "Candy fog thickens… footsteps in the mist.",
-      "Lanterns flicker. The ritual nears.",
-      "Whispers from the vault… tickets scratch.",
-      "A second game stirs beneath the moon.",
-      "The cauldron hums. Keys turn in the dark.",
-      "Don’t blink. The jackpot watches back.",
-      "Another door may open before midnight…"
-    ];
-    let i = Math.floor(Math.random() * omens.length);
-    let target = nextHalloween();
+      tick(); rotate();
+      window.__treatz_cd_timer && clearInterval(window.__treatz_cd_timer);
+      window.__treatz_cd_timer = setInterval(tick, 1000);
+      window.__treatz_cd_omen  && clearInterval(window.__treatz_cd_omen);
+      window.__treatz_cd_omen  = setInterval(rotate, 12000);
+    }catch(e){ console.error("Countdown init failed", e); }
+  }
 
-    const tick = () => {
-      const diff = target - Date.now();
-      if (diff <= 0) target = nextHalloween();
-      timerEl.textContent = formatDHMS(target - Date.now());
-    };
-    const rotate = () => {
-      i = (i + 1) % omens.length;
-      if (omenEl) omenEl.textContent = omens[i];
-    };
-
-    tick(); rotate();
-    window.__treatz_cd_timer && clearInterval(window.__treatz_cd_timer);
-    window.__treatz_cd_timer = setInterval(tick, 1000);
-    window.__treatz_cd_omen  && clearInterval(window.__treatz_cd_omen);
-    window.__treatz_cd_omen  = setInterval(rotate, 12000);
-  }catch(e){ console.error("Countdown init failed", e); }
-}
-
-// run it no matter the script load order
-initHalloweenCountdown();
-document.addEventListener("DOMContentLoaded", initHalloweenCountdown);
-window.addEventListener("load", initHalloweenCountdown);
-
+  // run regardless of script load order
+  initHalloweenCountdown();
+  document.addEventListener("DOMContentLoaded", initHalloweenCountdown);
+  window.addEventListener("load", initHalloweenCountdown);
 
 /* ────────────────────────────────────────────────────────
    3) Static links, logo/mascot assets, token copy
@@ -238,21 +225,11 @@ window.addEventListener("load", initHalloweenCountdown);
   const tokenEl = $("#token-address");
   if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
 
-  // Assets (navbar logo + countdown logo + mascot)
-  const logoImg = $("#site-logo");
+  // Countdown logo + mascot
   const cdLogo  = $("#countdown-logo");
-  if (C.assets?.logo) {
-    if (logoImg){ logoImg.src = C.assets.logo; logoImg.alt = "$TREATZ"; }
-    if (cdLogo){  cdLogo.src  = C.assets.logo;  cdLogo.alt  = "$TREATZ"; }
-    logoImg?.addEventListener("error", () => {
-      const t = document.querySelector(".nav__brand-text");
-      if (t) t.style.display = "inline-block";
-      logoImg.remove();
-    });
-  } else {
-    const t = document.querySelector(".nav__brand-text");
-    if (t) t.style.display = "inline-block";
-    logoImg?.remove();
+  if (C.assets?.logo && cdLogo) {
+    cdLogo.src  = C.assets.logo;
+    cdLogo.alt  = "$TREATZ";
   }
 
   const mascotImg = $("#mascot-floater");
@@ -307,7 +284,7 @@ window.addEventListener("load", initHalloweenCountdown);
     "confirmed"
   );
 
-  let WALLET = null;     // provider (phantom/solflare/backpack)
+  let WALLET = null;     // provider
   let PUBKEY = null;     // solanaWeb3.PublicKey
   let CONFIG = null;     // /api/config payload
   let DECIMALS = TOKEN.decimals;
@@ -324,7 +301,6 @@ window.addEventListener("load", initHalloweenCountdown);
     return null;
   };
 
-  // Single public connector: try preferred -> fallbacks
   async function connectWallet(preferred) {
     if (PUBKEY) return PUBKEY;
 
@@ -372,15 +348,14 @@ window.addEventListener("load", initHalloweenCountdown);
 
   async function ensureConfig() {
     if (!CONFIG) {
-      const r = await fetch(`${API}/config?include_balances=true`);
-      CONFIG = await r.json();
+      const r = await jfetch(`${API}/config?include_balances=true`);
+      CONFIG = r;
       DECIMALS = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6);
       TEN_POW  = 10 ** DECIMALS;
     }
     return CONFIG;
   }
 
-  // Wallet menu (optional small dropdown)
   const menu = document.getElementById("wallet-menu");
   document.getElementById("btn-connect")?.addEventListener("click", async () => {
     if (PUBKEY) { await disconnectWallet(); return; }
@@ -428,23 +403,22 @@ window.addEventListener("load", initHalloweenCountdown);
     try{
       await ensureConfig();
 
-      const cur = await fetch(`${API}/rounds/current`, {cache:"no-store"}).then(r=>r.json());
-      const entries = await fetch(`${API}/rounds/${cur.round_id}/entries`, {cache:"no-store"})
-        .then(r=>r.json()).catch(()=>[]);
+      const cur = await jfetch(`${API}/rounds/current`);
+      const entries = await jfetch(`${API}/rounds/${cur.round_id}/entries`).catch(()=>[]);
 
       const you = (entries || []).filter(e=> String(e.user).toLowerCase() === String(PUBKEY.toBase58()).toLowerCase());
       const yourTickets = you.reduce((s,e)=> s + Number(e.tickets||0), 0);
 
       let credit = 0, spent = 0, won = 0;
       try {
-        const c = await fetch(`${API}/credits/${PUBKEY.toBase58()}`).then(r=>r.json());
+        const c = await jfetch(`${API}/credits/${PUBKEY.toBase58()}`);
         credit = Number(c?.credit || 0);
       } catch {}
 
-      document.getElementById("ps-tickets")?.replaceChildren(document.createTextNode(yourTickets.toLocaleString()));
-      document.getElementById("ps-credit") ?.replaceChildren(document.createTextNode((credit / TEN_POW).toLocaleString()));
-      document.getElementById("ps-spent")  ?.replaceChildren(document.createTextNode((spent  / TEN_POW).toLocaleString()));
-      document.getElementById("ps-won")    ?.replaceChildren(document.createTextNode((won    / TEN_POW).toLocaleString()));
+      $("#ps-tickets")?.replaceChildren(document.createTextNode(yourTickets.toLocaleString()));
+      $("#ps-credit") ?.replaceChildren(document.createTextNode((credit / TEN_POW).toLocaleString()));
+      $("#ps-spent")  ?.replaceChildren(document.createTextNode((spent  / TEN_POW).toLocaleString()));
+      $("#ps-won")    ?.replaceChildren(document.createTextNode((won    / TEN_POW).toLocaleString()));
 
       panel.hidden = false;
     }catch(e){ console.error("loadPlayerStats", e); }
@@ -489,13 +463,11 @@ window.addEventListener("load", initHalloweenCountdown);
       const side = (new FormData(e.target).get("side") || "TRICK").toString();
       if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
 
-      const createRes = await fetch(`${API}/bets`, {
+      const bet = await jfetch(`${API}/bets`, {
         method: "POST",
         headers: { "content-type":"application/json" },
         body: JSON.stringify({ amount: toBaseUnits(amountHuman), side })
       });
-      if (!createRes.ok) throw new Error(`Bet create failed (${createRes.status})`);
-      const bet = await createRes.json();
 
       $("#bet-deposit").textContent = bet.deposit;
       $("#bet-memo").textContent    = bet.memo;
@@ -528,7 +500,7 @@ window.addEventListener("load", initHalloweenCountdown);
     }
   });
 
-  // Visual spin + FX (kept from your UI)
+  // Visual spin + FX
   $("#cf-play")?.addEventListener("click", () => {
     const coin = $("#coin"); if (!coin) return;
     coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin");
@@ -540,7 +512,7 @@ window.addEventListener("load", initHalloweenCountdown);
   });
 
 /* ────────────────────────────────────────────────────────
-   8) Jackpot — buy tickets + single raffle UI controller
+   8) Jackpot — buy tickets + raffle UI
    ──────────────────────────────────────────────────────── */
   document.getElementById("jp-buy")?.addEventListener("click", async ()=>{
     try {
@@ -552,7 +524,7 @@ window.addEventListener("load", initHalloweenCountdown);
       if (!ticketPriceBase) throw new Error("Ticket price unavailable.");
       const amountBase = nTickets * ticketPriceBase;
 
-      const cur = await fetch(`${API}/rounds/current`).then(r=>r.json());
+      const cur = await jfetch(`${API}/rounds/current`);
       const memoStr = `JP:${cur.round_id}`;
 
       const mintPk = new solanaWeb3.PublicKey(CONFIG.token.mint);
@@ -581,17 +553,16 @@ window.addEventListener("load", initHalloweenCountdown);
     }
   });
 
-  // Single source of truth for raffle (prevents flicker)
   (async function initRaffleUI(){
     try {
-      const cfg = await fetch(`${API}/config?include_balances=true`).then(r=>r.json());
+      const cfg = await jfetch(`${API}/config?include_balances=true`);
       CONFIG = cfg; DECIMALS = Number(cfg?.token?.decimals || 6); TEN_POW = 10 ** DECIMALS;
 
       const priceBase = Number(cfg?.token?.ticket_price || 0);
       const elTicket = $("#ticket-price");
       if (elTicket) elTicket.textContent = (priceBase / TEN_POW).toLocaleString();
 
-      const round = await fetch(`${API}/rounds/current`).then(r=>r.json());
+      const round = await jfetch(`${API}/rounds/current`);
 
       const elPot   = $("#round-pot");
       const elId    = $("#round-id");
@@ -624,13 +595,13 @@ window.addEventListener("load", initHalloweenCountdown);
       };
       tick(); setInterval(tick, 1000);
 
-      // Recent rounds (initial + periodic)
+      // Recent rounds
       const list = $("#recent-rounds");
       async function loadRecent(){
         if (!list) return;
         list.innerHTML = `<li class="muted">Loading…</li>`;
         try {
-          const recent = await fetch(`${API}/rounds/recent?limit=10`).then(r=>r.json());
+          const recent = await jfetch(`${API}/rounds/recent?limit=10`);
           list.innerHTML = "";
           recent.forEach(r=>{
             const li = document.createElement("li");
@@ -651,7 +622,7 @@ window.addEventListener("load", initHalloweenCountdown);
         const target = ev.target.closest("button[data-r]");
         if (!target) return;
         const rid = target.getAttribute("data-r");
-        const p = await fetch(`${API}/rounds/${rid}/winner`).then(r=>r.json());
+        const p = await jfetch(`${API}/rounds/${rid}/winner`);
         const msg = [
           `Round: ${p.round_id}`,
           `Winner: ${p.winner || "TBD"}`,
@@ -673,11 +644,11 @@ window.addEventListener("load", initHalloweenCountdown);
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
     try {
-      const base = await fetch(`${API}/rounds/recent?limit=10`).then(r=>r.json());
+      const base = await jfetch(`${API}/rounds/recent?limit=10`);
       const ids  = (query && /^R\d+$/i.test(query)) ? base.filter(x=>x.id===query) : base;
       const rows = [];
       for (const r of ids){
-        const w = await fetch(`${API}/rounds/${r.id}/winner`).then(x=>x.json()).catch(()=>null);
+        const w = await jfetch(`${API}/rounds/${r.id}/winner`).catch(()=>null);
         rows.push(`<tr>
           <td>#${r.id}</td>
           <td>${fmtUnits(r.pot, TOKEN.decimals)} ${TOKEN.symbol}</td>
@@ -704,9 +675,9 @@ window.addEventListener("load", initHalloweenCountdown);
 
   async function announceLastWinner(){
     try {
-      const recent = await fetch(`${API}/rounds/recent?limit=1`).then(r=>r.json());
+      const recent = await jfetch(`${API}/rounds/recent?limit=1`);
       const rid = recent?.[0]?.id; if (!rid) return;
-      const w = await fetch(`${API}/rounds/${rid}/winner`).then(x=>x.json());
+      const w = await jfetch(`${API}/rounds/${rid}/winner`);
       if (w?.winner){
         toast(`Winner: ${w.winner.slice(0,4)}… — Pot ${fmtUnits(w.pot, TOKEN.decimals)} ${TOKEN.symbol}`);
       }
@@ -739,14 +710,7 @@ window.addEventListener("load", initHalloweenCountdown);
 /* ────────────────────────────────────────────────────────
    10) Boot
    ──────────────────────────────────────────────────────── */
-  /* ────────────────────────────────────────────────────────
-   10) Boot
-   ──────────────────────────────────────────────────────── */
-  // Run once now and again if DOMContentLoaded fires later for any reason.
   initHalloweenCountdown();
   document.addEventListener("DOMContentLoaded", initHalloweenCountdown);
-
-})(); // IIFE
-
 
 })(); // IIFE
