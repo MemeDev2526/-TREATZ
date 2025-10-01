@@ -64,7 +64,14 @@
       </div>
       <div class="tokenbar__actions">
         <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
-        <button id="btn-connect" class="btn btn--primary">Connect Wallet</button>
+        <div class="wallet">
+          <button id="btn-connect" class="btn btn--primary">Connect Wallet</button>
+          <div id="wallet-menu" class="wallet__menu" hidden>
+            <button type="button" data-wallet="phantom">Phantom</button>
+            <button type="button" data-wallet="solflare">Solflare</button>
+            <button type="button" data-wallet="backpack">Backpack</button>
+          </div>
+        </div>
         <button id="btn-openwallet" class="btn btn--ghost">Open Wallet</button>
         <!-- helper button only used if Phantom isn't detected -->
         <a id="btn-open-in-phantom" class="btn btn--outline" href="#" style="display:none">Open in Phantom App</a>
