@@ -16,10 +16,31 @@
   <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
 
   <!-- ========== CSS ========== -->
-  <link rel="stylesheet" href="style.css?v=13" />
+  <link id="treatz-css" rel="stylesheet" href="style.css?v={{ site.github.build_revision }}">
+  <!-- Build ID injected at deploy -->
+  <!-- Config must come BEFORE app.js -->
+  <script>
+    window.TREATZ_CONFIG = { /* your config */ };
+    window.TREATZ_BUILD = "__BUILD__";
+  </script>
 
+
+  <!-- Solana libs (needed by app.js) -->
+  <script src="https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js"></script>
+  <script src="https://unpkg.com/@solana/spl-token@0.4.7/dist/index.iife.js"></script>
+
+  <!-- Loader: inserts app.js with ?v=<build> -->
+  <script>
+    (function(b){
+      var l=document.getElementById('treatz-css');
+      if (l && !/\?v=/.test(l.href)) l.href='style.css?v='+b;
+      var s=document.createElement('script'); s.defer=true; s.src='app.js?v='+b;
+      document.head.appendChild(s);
+    })(window.TREATZ_BUILD || Date.now());
+  </script>
   <!-- Optional: basic favicon hook -->
   <!-- <link rel="icon" href="assets/favicon.png"> -->
+      <!-- Solana libs for browser (globals: solanaWeb3, splToken) -->
 </head>
 <body>
 
@@ -258,12 +279,3 @@
       }
     };
   </script>
-  <!-- Solana libs for browser (globals: solanaWeb3, splToken) -->
-<script src="https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js"></script>
-<script src="https://unpkg.com/@solana/spl-token@0.4.7/dist/index.iife.js"></script>
-
-
-  <!-- ==========================
-       APP LOGIC
-       ========================== -->
-  <script src="app.js?v=17" defer></script>
