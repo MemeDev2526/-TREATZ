@@ -22,20 +22,23 @@ CREATE TABLE IF NOT EXISTS kv (
   v TEXT
 );
 
--- Canonical rounds table (integer PK, outcome fields present)
+-- Canonical rounds table: TEXT id like 'R0123'
 CREATE TABLE IF NOT EXISTS rounds (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  status            TEXT NOT NULL CHECK(status IN ('OPEN','CLOSED','SETTLED')) DEFAULT 'OPEN',
-  opens_at          TEXT NOT NULL,
-  closes_at         TEXT NOT NULL,
-  pot               INTEGER NOT NULL DEFAULT 0,
+  id                 TEXT PRIMARY KEY,
+  status             TEXT NOT NULL CHECK(status IN ('OPEN','CLOSED','SETTLED')) DEFAULT 'OPEN',
+  opens_at           TEXT NOT NULL,
+  closes_at          TEXT NOT NULL,
+  pot                INTEGER NOT NULL DEFAULT 0,
 
-  -- outcome / fairness (nullable until settled)
-  winner            TEXT,
-  payout_sig        TEXT,
-  server_seed_hash  TEXT,
+  -- fairness / outcome
+  server_seed_hash   TEXT,
   server_seed_reveal TEXT,
-  entropy           TEXT
+  finalize_slot      INTEGER,
+  entropy            TEXT,
+
+  -- optional outcome storage (we still write winner/tx into KV for history API)
+  winner             TEXT,
+  payout_sig         TEXT
 );
 
 CREATE TABLE IF NOT EXISTS bets (
@@ -54,10 +57,9 @@ CREATE TABLE IF NOT EXISTS bets (
   settled_at TEXT
 );
 
--- ticket entries (raffle)
 CREATE TABLE IF NOT EXISTS entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  round_id INTEGER NOT NULL,
+  round_id TEXT NOT NULL,              -- <- TEXT to match rounds.id
   user TEXT,
   tickets INTEGER NOT NULL,
   tx_sig TEXT,
@@ -121,16 +123,16 @@ def connect_sync(db_path: str = DB_PATH) -> sqlite3.Connection:
     conn.commit()
     return conn
 
-def create_round_sync(conn: sqlite3.Connection, opens_at, closes_at) -> int:
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO rounds (opens_at, closes_at, pot, status) VALUES (?, ?, 0, 'OPEN')",
-        (opens_at.isoformat(), closes_at.isoformat())
+def create_round_sync(conn: sqlite3.Connection, opens_at, closes_at) -> str:
+    rid = f"R{os.urandom(2).hex()}"[:5].upper().replace("0X","R")  # short 'Rxxxx'
+    conn.execute(
+        "INSERT INTO rounds (id, opens_at, closes_at, pot, status) VALUES (?, ?, ?, 0, 'OPEN')",
+        (rid, opens_at.isoformat(), closes_at.isoformat()),
     )
     conn.commit()
-    return cur.lastrowid  # integer id (e.g., 123)
+    return rid  # TEXT id like R1a2b
 
-def mark_round_closed_sync(conn: sqlite3.Connection, round_id: int) -> None:
-    conn.execute("UPDATE rounds SET status='CLOSED' WHERE id=?", (int(round_id),))
+def mark_round_closed_sync(conn: sqlite3.Connection, round_id: str) -> None:
+    conn.execute("UPDATE rounds SET status='CLOSED' WHERE id=?", (round_id,))
     conn.commit()
 
