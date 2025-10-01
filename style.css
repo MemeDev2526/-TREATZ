@@ -3,21 +3,21 @@
    ========================================================= */
 :root{
   /* Brand palette */
-  --orange:#FF6B00; 
+  --orange:#FF6B00;
   --orange-hi:#FF9500;
   --pumpkin: var(--orange);              /* alias for legacy refs */
   --witch:#6A00FF;
   --slime:#39FF14;                       /* neon slime green */
-  --jet:#0D0D0D; 
-  --white:#FFFFFF; 
+  --jet:#0D0D0D;
+  --white:#FFFFFF;
   --gray:#AAAAAA;
 
   /* Background gradient stops */
-  --bg-a:#2C0A44; 
+  --bg-a:#2C0A44;
   --bg-b:#4D0D57;
 
   /* Surfaces / shadows */
-  --card:rgba(13,13,13,.72); 
+  --card:rgba(13,13,13,.72);
   --card-border:rgba(255,255,255,.12);
   --shadow:0 10px 30px rgba(0,0,0,.45);
 
@@ -34,8 +34,8 @@
 html,body{ height:100% }
 
 body{
-  margin:0; 
-  color:var(--white); 
+  margin:0;
+  color:var(--white);
   font-family:"Rubik", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
   background: linear-gradient(180deg,var(--bg-a),var(--bg-b));
   overflow-x:hidden;
@@ -48,18 +48,35 @@ body{
   text-shadow: 0 0 12px rgba(57,255,20,.25), 0 2px 0 rgba(0,0,0,.6);
 }
 
-.btn--primary, .btn--buy { 
-  font-family: "Luckiest Guy", cursive; 
-}
+.btn--primary, .btn--buy { font-family: "Luckiest Guy", cursive; }
 
 a, .btn--outline { color: var(--slime); }
 
-.card {
+.card{
   background: var(--card);
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid var(--card-border);
   box-shadow: 0 10px 24px rgba(0,0,0,.35), 0 0 24px rgba(57,255,20,.08);
-  border-radius:16px; 
+  border-radius:16px;
   padding:16px;
+}
+
+/* Keyboard focus visibility */
+:focus-visible{
+  outline: 3px solid rgba(57,255,20,.85);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.nav__links a:focus-visible,
+.btn:focus-visible{
+  box-shadow: 0 0 0 3px rgba(57,255,20,.35);
+}
+
+/* A11y helper */
+.visually-hidden{
+  position:absolute !important;
+  height:1px; width:1px;
+  overflow:hidden; clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap;
 }
 
 .wallet{ position:relative; display:inline-block; }
@@ -74,34 +91,23 @@ a, .btn--outline { color: var(--slime); }
 }
 .wallet__menu button:hover{ background:rgba(255,255,255,.08) }
 
-
 /* =========================================================
    Top Banner & Global Countdown
    ========================================================= */
 .brand-banner{
-  position: sticky;
-  top: 0;
-  z-index: 1002;                          /* above countdown */
+  background:#0D0D0D;
+  position: sticky; top: 0; z-index: 1002;
   height: var(--banner-h);
-  /* scale to full width without aggressive crop */
-  background-color:#0D0D0D;
-  background-image:url('assets/banner-treatz.png');
-  background-position:center top;
-  background-repeat:no-repeat;
-  background-size:100% auto;              /* ← was cover */
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
 }
 .brand-banner img{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;   /* ✅ ensures full cover if the background fails */
-  display:block;
+  width:100%; height:100%;
+  object-fit: cover; display:block;
 }
 
 /* Countdown sits under the banner and never hides it */
 .countdown{
   position: sticky;
-  /* sit flush under the banner with NO math gap */
   top: var(--banner-h);
   z-index: 1001;
   transform: scale(var(--countdown-scale));
@@ -114,36 +120,36 @@ a, .btn--outline { color: var(--slime); }
 
 /* ensure content below doesn't tuck under the sticky countdown */
 .countdown + .nav{
-  margin-top: calc(var(--countdown-h) * var(--countdown-scale));
+  margin-top: calc(var(--countdown-h) * var(--countdown-scale) + 4px);
 }
 
 .countdown__inner{
-  max-width:1200px; 
-  margin:0 auto; 
+  max-width:1200px;
+  margin:0 auto;
   font-size: clamp(1.1rem, 2.2vw, 2rem);
-  padding: 0.9rem 1.2rem; 
-  min-height: var(--countdown-h);  /* pairs with the computed top */
-  display:flex; gap:.75rem; 
-  align-items:center; justify-content:center; 
+  padding: 0.9rem 1.2rem;
+  min-height: var(--countdown-h);
+  display:flex; gap:.75rem;
+  align-items:center; justify-content:center;
   flex-wrap:wrap;
   color:#fff;
   text-shadow: 0 0 8px rgba(0,255,102,.45);
 }
 .countdown__label{ font-weight:700; letter-spacing:.3px }
-.countdown__timer{ font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem; color:var(--slime); border:1px solid rgba(57,255,20,.25); border-radius:8px; box-shadow: 0 0 12px rgba(57,255,20,.35) }
+.countdown__timer{
+  font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem;
+  color:var(--slime); border:1px solid rgba(57,255,20,.25);
+  border-radius:8px; box-shadow: 0 0 12px rgba(57,255,20,.35)
+}
 .countdown__omen{ font-size:.95rem; opacity:.9; margin-left:8px; color:#d8c2ff; font-style: italic }
 /* Countdown logo inside the bar */
 .countdown__logo{
-  height: 40px;
-  width: auto;
-  margin-right: .6rem;
-  border-radius: 8px;
-  box-shadow: 0 0 12px rgba(57,255,20,.35);
+  height: 40px; width: auto; margin-right: .6rem;
+  border-radius: 8px; box-shadow: 0 0 12px rgba(57,255,20,.35);
 }
 @media (max-width: 600px){
   .countdown__logo{ height: 32px; }
 }
-
 
 /* Optional glow under banner */
 .brand-banner::after{
@@ -175,7 +181,14 @@ a, .btn--outline { color: var(--slime); }
 }
 .nav__brand{ display:flex; align-items:center; gap:10px; }
 .nav__brand img{ height:44px; display:block }
-.nav__brand-text{ font-family:"Luckiest Guy", cursive; font-size:1.3rem; color:var(--orange); text-shadow:0 0 8px rgba(255,149,0,.4); display:none; }
+.nav__brand-text{
+  font-family:"Luckiest Guy", cursive; font-size:1.3rem; color:var(--orange);
+  text-shadow:0 0 8px rgba(255,149,0,.4);
+  display:none;
+}
+@media (min-width: 720px){
+  .nav__brand-text{ display:inline }
+}
 
 .nav__links{ display:flex; align-items:center; gap:10px; }
 .nav__links a{
@@ -188,10 +201,10 @@ a, .btn--outline { color: var(--slime); }
 .nav__links a:hover{ color:#fff; background:rgba(255,255,255,.1); text-shadow:none }
 
 .tokenbar{
-  max-width:1200px; margin:10px auto 16px; padding:8px 16px; 
-  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; 
-  background:linear-gradient(180deg, rgba(13,13,13,.85), rgba(13,13,13,.6)); 
-  border:1px solid var(--card-border); border-radius:14px; 
+  max-width:1200px; margin:10px auto 16px; padding:8px 16px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  background:linear-gradient(180deg, rgba(13,13,13,.85), rgba(13,13,13,.6));
+  border:1px solid var(--card-border); border-radius:14px;
   box-shadow:var(--shadow)
 }
 .tokenbar__label{ opacity:.85; margin-right:6px }
@@ -213,14 +226,24 @@ a, .btn--outline { color: var(--slime); }
    ========================================================= */
 .main{ max-width:1200px; margin:0 auto; padding:24px 16px 80px }
 .section{ margin:28px 0 }
-.section__title{ font-family:"Luckiest Guy", cursive; letter-spacing:.5px; font-size:2rem; margin:0 0 12px; text-shadow:0 2px 18px rgba(0,0,0,.35) }
+.section__title{
+  font-family:"Luckiest Guy", cursive; letter-spacing:.5px; font-size:2rem;
+  margin:0 0 12px; text-shadow:0 2px 18px rgba(0,0,0,.35)
+}
 
 .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:16px }
 .grid-3{ display:grid; grid-template-columns:2fr 1fr 1.2fr; gap:16px }
 @media (max-width:900px){ .grid-2,.grid-3{ grid-template-columns:1fr } }
 
 .label{ display:block; margin:.3rem 0 .35rem; font-weight:700 }
-input[type="number"], input[type="text"]{ width:100%; padding:.75rem .9rem; border-radius:12px; border:1px solid var(--card-border); background:#0f0f10; color:var(--white) }
+input[type="number"], input[type="text"]{
+  width:100%; padding:.75rem .9rem; border-radius:12px;
+  border:1px solid var(--card-border); background:#0f0f10; color:var(--white)
+}
+input[type="number"]{ -moz-appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+input::placeholder{ color:#cfcfcf; opacity:.7; }
 .help{ opacity:.8; font-size:.9rem }
 
 /* =========================================================
@@ -242,18 +265,19 @@ input[type="number"], input[type="text"]{ width:100%; padding:.75rem .9rem; bord
 }
 .ticker__inner{ display:inline-block; padding-left:100%; animation:ticker 18s linear infinite; }
 @keyframes ticker{ 0%{transform:translateX(0)} 100%{transform:translateX(-100%)} }
+
 .coin{ position:relative; width:140px; height:140px; perspective:800px }
 .coin__face{
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center; 
-  border-radius:50%; font-weight:900; letter-spacing:.5px; 
-  border:3px solid rgba(255,255,255,.25); 
-  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%), 
-             linear-gradient(180deg, rgba(255,107,0,.8), rgba(255,149,0,.8)); 
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  border-radius:50%; font-weight:900; letter-spacing:.5px;
+  border:3px solid rgba(255,255,255,.25);
+  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%),
+             linear-gradient(180deg, rgba(255,107,0,.8), rgba(255,149,0,.8));
   backface-visibility:hidden;
 }
 .coin__face--back{
-  transform:rotateY(180deg); 
-  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%), 
+  transform:rotateY(180deg);
+  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%),
              linear-gradient(180deg, rgba(0,255,163,.8), rgba(148,218,255,.8))
 }
 .coin.spin{ animation:spin 1.2s cubic-bezier(.2,.6,.2,1) 1 }
@@ -273,16 +297,14 @@ input[type="number"], input[type="text"]{ width:100%; padding:.75rem .9rem; bord
   color: var(--pumpkin); text-shadow: 0 0 8px rgba(57,255,20,.35);
   border: 2px solid rgba(255,255,255,.08);
 }
-.coin__face--front::after, 
+.coin__face--front::after,
 .coin__face--back::after{
   content:""; position:absolute; inset:-12px;
   border-radius:50%;
   background: conic-gradient(from 0deg, rgba(57,255,20,.12), transparent 40%, rgba(255,165,0,.12) 70%, transparent 100%);
   filter: blur(6px);
 }
-.coin__face--back{
-  color: var(--slime); text-shadow: 0 0 10px rgba(57,255,20,.6);
-}
+.coin__face--back{ color: var(--slime); text-shadow: 0 0 10px rgba(57,255,20,.6); }
 
 /* subtle slime ring behind coin */
 .cf-display::before{
@@ -292,8 +314,14 @@ input[type="number"], input[type="text"]{ width:100%; padding:.75rem .9rem; bord
   position:absolute; z-index:-1;
 }
 
+/* Respect reduced motion for ticker & coin */
+@media (prefers-reduced-motion: reduce){
+  .ticker__inner{ animation: none; transform: translateX(0); }
+  .coin.spin{ animation: none; }
+}
+
 /* =========================================================
-   TRICK Flash (subtle screen flicker) 
+   TRICK Flash (subtle screen flicker)
    ========================================================= */
 @keyframes screen-flash {
   0%   { filter: brightness(1) contrast(1); }
@@ -305,15 +333,11 @@ input[type="number"], input[type="text"]{ width:100%; padding:.75rem .9rem; bord
 }
 
 /* apply when JS adds .flash to <body> */
-body.flash {
-  animation: screen-flash 0.9s ease both;
-}
+body.flash { animation: screen-flash 0.9s ease both; }
 
 /* reduce motion: skip the effect */
-@media (prefers-reduced-motion: reduce) {
-  body.flash {
-    animation: none;
-  }
+@media (prefers-reduced-motion: reduce){
+  body.flash { animation: none; }
 }
 
 /* =========================================================
@@ -322,13 +346,14 @@ body.flash {
 .stats{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:10px }
 .stat__label{ display:block; opacity:.85; font-size:.9rem }
 .stat__value{ display:block; font-family:"Luckiest Guy"; font-size:1.35rem }
-.progress{ height:10px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; border:1px solid var(--card-border) }
-.progress__bar{ height:100%; background:linear-gradient(90deg, var(--witch), var(--slime)) }
 
-/* Slime progress (enhanced glow) */
 .progress{
-  height:10px; background: rgba(255,255,255,.06);
-  border-radius:10px; overflow:hidden; position:relative;
+  height:10px;
+  background: rgba(255,255,255,.06);
+  border:1px solid var(--card-border);
+  border-radius:10px;
+  overflow:hidden;
+  position:relative;
 }
 .progress__bar{
   height:100%;
@@ -336,10 +361,12 @@ body.flash {
   box-shadow: 0 0 18px rgba(57,255,20,.45);
 }
 .progress__bar::after{
-  content:""; position:absolute; right:-6px; top:-6px; width:22px; height:22px;
+  content:"";
+  position:absolute; right:-6px; top:-6px; width:22px; height:22px;
   background: radial-gradient(circle, rgba(57,255,20,.9), rgba(57,255,20,.2) 60%, transparent 70%);
   border-radius:50%; filter: blur(3px);
 }
+
 .stats .stat__label{ color:#c8c8c8 }
 .stats .stat__value{ color:var(--slime); font-weight:700 }
 
@@ -394,21 +421,13 @@ body.flash {
   100% { margin-left: -10px; }
 }
 
-/* Brand fills for inline SVG pieces */
-.fx-ghost svg path,
-.fx-skull svg path { filter: drop-shadow(0 0 12px rgba(57,255,20,.35)); }
-
-.fx-wrapper .w1 { fill: var(--witch); }
-.fx-wrapper .w2 { fill: var(--pumpkin); }
-.fx-wrapper .w3 { fill: var(--white); opacity:.9; }
-.fx-candy .c1   { fill: var(--witch); }
-.fx-candy .c2   { fill: var(--slime); }
-
-@media (max-width: 600px){
-  :root{
-    --countdown-h: 84px; /* mobile line wraps make the inner row taller */
-  }
-  .countdown__inner{ padding: 1.05rem 1rem; }
+#mascot-floater{
+  position:fixed; left:30px; top:30px; width:140px;
+  pointer-events:none; opacity:.9; z-index: 1000;
+}
+#mascot-bouncer{
+  position:fixed; right:30px; bottom:30px; width:110px;
+  pointer-events:none; opacity:.85; z-index: 1000;
 }
 
 /* =========================================================
