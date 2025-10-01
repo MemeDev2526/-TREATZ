@@ -1,10 +1,15 @@
 # scheduler.py
+import os
 import asyncio
 from datetime import datetime, timedelta, timezone
 
 from config import RAFFLE_ROUND_MINUTES, RAFFLE_BREAK_MINUTES
 from db import get_conn, create_round, mark_round_closed
 from payouts import settle_and_payout
+
+
+ROUND_MIN = int(os.getenv("ROUND_MIN", 30))
+ROUND_BREAK = int(os.getenv("ROUND_BREAK", 0))
 
 async def raffle_loop():
     """Simple round → close → payout → break loop."""
@@ -14,7 +19,7 @@ async def raffle_loop():
 
             now = datetime.now(timezone.utc)
             opens_at = now
-            closes_at = now + timedelta(minutes=RAFFLE_ROUND_MINUTES)
+            closes_at = now + timedelta(minutes=ROUND_MIN)
 
             round_id = create_round(conn, opens_at, closes_at)  # "R1234"
             print(f"[RAFFLE] Opened {round_id} {opens_at} → {closes_at}")
@@ -33,7 +38,7 @@ async def raffle_loop():
                 print(f"[RAFFLE] payout error {e}")
 
             # break between rounds
-            await asyncio.sleep(max(0, RAFFLE_BREAK_MINUTES * 60))
+            await asyncio.sleep(max(0, ROUND_BREAK * 60))
         except Exception as e:
             print(f"[RAFFLE] loop error {e}")
             await asyncio.sleep(5)  # backoff
