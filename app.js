@@ -383,17 +383,55 @@
 /* ────────────────────────────────────────────────────────
    5) Ticker + Player Stats
    ──────────────────────────────────────────────────────── */
-  const fakeWins = [
-    "0xA9b…3F just won 128,000 $TREATZ 🎉",
-    "0xF12…9d scooped 512,000 $TREATZ 💰",
-    "0x77C…4a hit TREAT twice! 26,000 $TREATZ",
-    "0x9E0…1c bought 10 tickets — bold 👀",
-  ];
-  function startTicker(lines=fakeWins){
-    const el = document.getElementById("fomo-ticker"); if (!el) return;
-    el.innerHTML = `<div class="ticker__inner">${lines.join(" • ")} • </div>`;
+  // ── Coin Flip Ticker: random wallets + wins/losses ─────────────────────────
+(function initCoinFlipTicker(){
+  const el = document.getElementById("fomo-ticker");
+  if (!el) return;
+
+  // Base58-ish alphabet to look Solana-y
+  const ALPH = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+  const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+  const randFrom = (arr) => arr[randInt(0, arr.length - 1)];
+  const randWallet = () => {
+    const n = () => Array.from({length:4}, ()=> randFrom(ALPH)).join("");
+    return `${n()}…${n()}`;
+  };
+  const fmt = (n) => n.toLocaleString();
+
+  function makeLine(){
+    const who = randWallet();
+    const isWin = Math.random() < 0.58; // small bias to green so it feels fun
+    // size in $TREATZ (human, not base units)
+    const amount = [5_000, 10_000, 25_000, 50_000, 75_000, 100_000, 150_000, 250_000, 500_000][randInt(0,8)];
+    const verb = isWin ? "won" : "lost";
+    const emoji = isWin ? "🎉" : "💀";
+    const cls = isWin ? "tick-win" : "tick-loss";
+    // keep it short so the scroll reads well
+    return `<span class="${cls}">${who} ${verb} ${fmt(amount)} $TREATZ ${emoji}</span>`;
   }
-  startTicker();
+
+  function buildBatch(len=30){
+    const lines = [];
+    for (let i=0;i<len;i++) lines.push(makeLine());
+    // repeat the first few so the loop feels continuous
+    return lines.concat(lines.slice(0,5)).join(" • ");
+  }
+
+  function render(){
+    // reset to restart the CSS animation smoothly
+    el.innerHTML = "";
+    const inner = document.createElement("div");
+    inner.className = "ticker__inner";
+    inner.innerHTML = buildBatch(28) + " • ";
+    el.appendChild(inner);
+  }
+
+  render();
+  // refresh content every ~25s so it stays varied with the same scroll
+  setInterval(render, 25000);
+})();
+
 
   async function loadPlayerStats(){
     const panel = document.getElementById("player-stats");
