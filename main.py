@@ -493,8 +493,8 @@ async def get_config(include_balances: bool = False):
 
 EXPLORER_BASE = "https://solscan.io/tx/"
 
-@app.get(f"{API}/tx/{sig}", response_model=TxLinkResp)
-def tx_link(sig: str):
+@app.get(f"{API}/tx/{{sig}}", response_model=TxLinkResp)
+async def get_tx(sig: str) -> TxLinkResp:
     return TxLinkResp(url=f"{EXPLORER_BASE}{sig}")
 
 @app.get(f"{API}/health/full")
