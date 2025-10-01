@@ -475,7 +475,7 @@ async function connectWallet() {
   if (openInPhantom) openInPhantom.style.display = "none";
   return PUBKEY;
 }
-}
+
 async function disconnectWallet() {
   try { await WALLET?.disconnect(); } catch {}
   PUBKEY = null;
@@ -504,7 +504,7 @@ document.getElementById("btn-connect")?.addEventListener("click", async ()=>{
     setTimeout(loadPlayerStats, 500);
   } catch (e) {
     console.error(e);
-    alert("Install Phantom to play — opening phantom.app");
+    alert("Phantom wallet not detected. We’ll open phantom.app so you can install it.");
     window.open("https://phantom.app/", "_blank");
   }
 });
