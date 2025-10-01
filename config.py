@@ -20,17 +20,17 @@ class Settings(BaseSettings):
     # =========================================================
     # Vaults (public keys as strings)
     # =========================================================
-    GAME_VAULT: str
-    JACKPOT_VAULT: str
-    GAME_VAULT_ATA: Optional[str] = None
-    JACKPOT_VAULT_ATA: Optional[str] = None
-    GAME_VAULT_PK: Optional[str] = None   # server-side signing key
-    JACKPOT_VAULT_PK: Optional[str] = None
+    GAME_VAULT: str = "BSeXqAhun3MprUAxBdNAGDHyJY1yssf1yZYKden8uoGg"
+    JACKPOT_VAULT: str = "9MV8pJFPwLuwTZkJ7cg8pkeQdfGiLWXrkYt1M4FShLGU"
+    GAME_VAULT_ATA: Optional[str] = "" 
+    JACKPOT_VAULT_ATA: Optional[str] = "" 
+    GAME_VAULT_PK: Optional[str] = "" # server-side signing key
+    JACKPOT_VAULT_PK: Optional[str] = "" 
 
     # =========================================================
     # Token / Mint
     # =========================================================
-    TREATZ_MINT: Optional[str] = None     # empty/None for SOL-only MVP
+    TREATZ_MINT: Optional[str] = ""      # empty/None for SOL-only MVP
     TOKEN_DECIMALS: int = 6
 
     # =========================================================
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # Wallets
     # =========================================================
     BURN_ADDRESS: str = "1nc1nerator11111111111111111111111111111111"
-    DEV_WALLET: str
+    DEV_WALLET: str = "2RXHVnWajJrUzzuH3n8jbn7Xbk6Pyjo9aycmjTA2TjGu"
 
     # =========================================================
     # Secrets
