@@ -22,7 +22,7 @@
   --shadow:0 10px 30px rgba(0,0,0,.45);
 
   /* Layout metrics */
-  --banner-h: 90px;                      /* match banner art height */
+  --banner-h: 120px;                      /* match banner art height */
   --countdown-scale: 1.25;               /* keep your scale */
   --countdown-h: 64px;                   /* visual height of inner row (approx) */
 }
@@ -97,6 +97,7 @@ a, .btn--outline { color: var(--slime); }
 .brand-banner{
   background:#0D0D0D;
   position: sticky; top: 0; z-index: 1002;
+  height: var(--banner-h);
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
 }
 .brand-banner img{
