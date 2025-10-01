@@ -66,14 +66,7 @@ async def raffle_loop():
                 await asyncio.sleep(5)
 
             mark_round_closed_sync(conn, rid)
-            print(f"[RAFFLE] Closing R{rid} — settling")
-
-            try:
-                # payouts.settle_and_payout should accept a sync sqlite3.Connection + integer id
-                result = settle_and_payout(conn, rid)
-                print(f"[RAFFLE] R{rid} winner {result.get('winner')} pot {result.get('pot')}")
-            except Exception as e:
-                print(f"[RAFFLE] payout error {e}")
+            print(f"[RAFFLE] Closing R{rid} — settlement handled elsewhere")
 
             await asyncio.sleep(max(0, ROUND_BREAK * 60))
         except Exception as e:
