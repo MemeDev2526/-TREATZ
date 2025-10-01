@@ -184,36 +184,66 @@ async def _rpc_get_blockhash(slot: int) -> Optional[str]:
 # =========================================================
 # Lifecycle
 # =========================================================
+async def round_scheduler():
+    """
+    Watches current round timing; when it expires, calls admin_close_round()
+    which settles, pays, and opens the next round.
+    """
+    while True:
+        try:
+            rid = await dbmod.kv_get(app.state.db, "current_round_id")
+            if not rid:
+                await asyncio.sleep(2)
+                continue
+            async with app.state.db.execute(
+                "SELECT closes_at,status FROM rounds WHERE id=?", (rid,)
+            ) as cur:
+                row = await cur.fetchone()
+            if not row:
+                await asyncio.sleep(2)
+                continue
+            closes_at = datetime.fromisoformat(row[0])
+            status = (row[1] or "").upper()
+            now = datetime.utcnow()
+
+            if status == "OPEN" and now >= closes_at:
+                # Use the same logic as the admin endpoint (no HTTP needed)
+                await admin_close_round(auth=True)
+                # small breather to avoid tight loop
+                await asyncio.sleep(1.0)
+            else:
+                # sleep until close or check again shortly
+                sleep_s = max(1.0, min(5.0, (closes_at - now).total_seconds()))
+                await asyncio.sleep(sleep_s)
+        except Exception:
+            await asyncio.sleep(2.0)
+
 @app.on_event("startup")
 async def on_startup():
     # Connect DB + ensure schema
     app.state.db = await dbmod.connect(settings.DB_PATH)
     await ensure_schema(app.state.db)
 
-    asyncio.create_task(raffle_loop())
-    
     # Ensure a current (OPEN) round exists
     current = await dbmod.kv_get(app.state.db, "current_round_id")
     if not current:
         rid = f"R{secrets.randbelow(10_000):04d}"
         now = datetime.utcnow()
         closes = now + timedelta(minutes=ROUND_MIN)
-
-        # Commit round server seed
         round_srv = secrets.token_hex(32)
         await dbmod.kv_set(app.state.db, f"round:{rid}:server_seed", round_srv)
         srv_hash = _hash(round_srv)
-
-        # Predetermine finalize slot
         curr_slot = await _rpc_get_slot()
         finalize_slot = curr_slot + (ROUND_MIN * SLOTS_PER_MIN)
-
         await app.state.db.execute(
             "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) VALUES(?,?,?,?,?,?,?,?)",
             (rid, "OPEN", now.isoformat(), closes.isoformat(), srv_hash, secrets.token_hex(8), finalize_slot, 0),
         )
         await dbmod.kv_set(app.state.db, "current_round_id", rid)
         await app.state.db.commit()
+
+    # Start internal scheduler loop
+    asyncio.create_task(round_scheduler())
 
 # =========================================================
 # Health
