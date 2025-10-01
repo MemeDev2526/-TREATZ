@@ -75,7 +75,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_txsig ON entries(tx_sig);
 # =========================================================
 # Connection
 # =========================================================
-DB_PATH = os.getenv("DATABASE_URL", "/data/treatz.db")
+DB_PATH = os.getenv("DB_PATH", "/data/treatz.db")
 
 async def connect(db_path: str = DB_PATH) -> aiosqlite.Connection:
     """
