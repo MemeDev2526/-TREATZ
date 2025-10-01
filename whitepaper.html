@@ -199,6 +199,17 @@
     @media (prefers-reduced-motion: reduce){
       .flyer{animation:none; opacity:.85; transform:scale(1);}
     }
+    /* --- Whitepaper scroll fix overrides --- */
+    body{
+      overflow-x: hidden;
+      overflow-y: auto;             /* allow scrolling */
+    }
+    .stage{
+      position: relative;           /* was fixed */
+      inset: auto;                  /* clear fixed positioning */
+      min-height: 100vh;
+      padding: 6vh 0 12vh;
+    }
   </style>
 </head>
 
@@ -241,9 +252,15 @@
         <h2 style="margin:.2rem 0 .4rem">Why no “whitepaper”?</h2>
         <p><strong>Because it’s Halloween</strong>—and because <strong>$TREATZ</strong> is simple, on-chain, and player-driven:</p>
         <p class="narrative">
-          🎃 In a sea of spooky rugs, <strong>$TREATZ</strong> is the bag worth braving the night for.  
-          Every coin toss is a heartbeat, every raffle ticket a candle lit in the dark.  
-          The charts will scream, the wrappers will rise — and only those who grab a bag will taste the treat.
+          🎃 The trenches can be spooky with FUD, rugs, and trolls lurking about. But <strong>$TREATZ</strong> is the bag worth braving the night for.
+          Just like trick-or-treating, nothing hits harder than spotting the best wrapper in your bag. $TREATZ glow orange, purple, and green across Solana streets — 
+          instantly recognized, impossible to ignore.
+         
+          $TREATZ isn’t just another bag—it’s the Halloween bag. 
+          The one kids brag about, the one degens ape for, the one CT remembers when the lights go out.
+          Other coins dress up in costumes. $TREATZ is the costume, the candy, and the chaos all rolled into one glowing wrapper.
+          This October, there’s no trick. Only <strong>$TREATZ</strong>..
+          And behind the wrappers? More surprises waiting in the dark…
         </p>
         <ul>
           <li>🎃 <em>Trick or Treat Coin Toss</em> — Pick TRICK or TREAT, send your wager, find your fate.</li>
