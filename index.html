@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+  
+<audio id="bg-ambient" src="assets/ambient_loop.mp3" preload="auto" loop></audio>
+  
 <head>
   <!-- ========== META ========== -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>$TREATZ — Halloween Meme Coin on Solana</title>
+  <title>$TREATZ — The Sweetest Halloween Meme Coin on Solana</title>
   <meta name="description" content="$TREATZ — Trick-or-Treat coin toss & Jackpot Raffle. Spooky season on Solana." />
   <meta name="theme-color" content="#0D0D0D" />
 
@@ -22,13 +25,8 @@
 </head>
 <body>
   <!-- =========================================================
-       TOP BANNER + GLOBAL COUNTDOWN (kept sticky below banner)
+            GLOBAL COUNTDOWN (kept sticky below banner)
        ========================================================= -->
-  <div class="brand-banner">
-    <img src="assets/Banner_Top.png" alt="$TREATZ banner" />
-  </div>
-
-
 
   <div class="countdown" id="countdown" aria-live="polite">
   <div class="countdown__inner">
@@ -46,8 +44,7 @@
   <header class="nav">
   <div class="nav__wrap">    
     <a href="/" class="nav__brand">
-      <img src="assets/TREATZ_Logo.png" alt="$TREATZ logo" style="height:48px;">
-      <span class="nav__brand-text">$TREATZ</span>
+      <span class="nav__brand-text">$TREATZ - Own Uptober. Hold the bag. 🍬</span>
     </a>
 
     <nav class="nav__links" aria-label="Primary">
@@ -83,7 +80,7 @@
     
     <!-- ============= COIN FLIP ============= -->
     <section class="section" id="coin-flip" aria-labelledby="coinflip-title">
-      <h2 class="section__title" id="coinflip-title">🎃 Trick or Treat — Coin Toss</h2>
+      <h2 class="section__title" id="coinflip-title">🎃 Trickz or $TREATZ — Coin Toss</h2>
       <div class="ticker" id="fomo-ticker" aria-live="polite"></div>
       <div class="card grid-2">
         <!-- Form -->
@@ -124,7 +121,7 @@
 
     <!-- ============= JACKPOT RAFFLE ============= -->
     <section class="section" id="jackpot" aria-labelledby="jackpot-title">
-      <h2 class="section__title" id="jackpot-title">🕯️ Jackpot Raffle</h2>
+      <h2 class="section__title" id="jackpot-title">🕯️ 🎃 Jack'O'Lantern Raffle 🎃</h2>
 
       <div class="card grid-3">
         <!-- Stats -->
@@ -163,7 +160,7 @@
             <label class="label" for="jp-amount">Buy Tickets</label>
             <input id="jp-amount" type="number" min="1" step="1" placeholder="1" />
             <button class="btn btn--primary" id="jp-buy" type="button">Enter Raffle</button>
-            <p class="help">Tickets recorded on-chain. Auto-payout to winner. % burn to $TREATZ.</p>
+            <p class="help">Tickets recorded on-chain. Auto-payout to winner. % burn to incinerator and gone forever.</p>
           </div>
         </div>
 
@@ -226,8 +223,6 @@
     </footer>
   </main>
 
-<audio id="bg-ambient" src="assets/ambient_loop.mp3" preload="auto" loop></audio>
-
   <!-- ==========================
        RENDERED FX LAYER + MASCOT
        ========================== -->
@@ -252,7 +247,7 @@
       buyUrl: "#",
       tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
       assets: {
-        logo: "assets/logo.png",
+        logo: "assets/TREATZ_Logo.png",
         mascot: "assets/Mascot.png"
       }
     };
