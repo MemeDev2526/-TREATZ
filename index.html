@@ -24,7 +24,11 @@
   <!-- =========================================================
        TOP BANNER + GLOBAL COUNTDOWN (kept sticky below banner)
        ========================================================= -->
-  <div class="brand-banner" role="img" aria-label="$TREATZ banner"></div>
+  <div class="brand-banner" role="img" aria-label="$TREATZ banner">
+    <!-- Fallback: if CSS background fails, this image still renders -->
+    <img src="assets/TREATZ_banner.png" alt="$TREATZ banner" />
+  </div>
+
 
   <div class="countdown" id="countdown" aria-live="polite">
     <div class="countdown__inner">
@@ -173,8 +177,8 @@
             </div>
             <!-- app.js fills this list from /rounds/recent -->
             <ul class="mini-table__list recent-list" id="recent-rounds"></ul>
-          
-       
+          </div> <!-- ✅ close .mini-table -->
+
           <!-- Player stats (appears when wallet connected) -->
           <div id="player-stats" class="card small" hidden style="margin-top:.75rem;">
             <div><strong>Your tickets (current round):</strong> <span id="ps-tickets">0</span></div>
