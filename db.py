@@ -1,12 +1,13 @@
 """
 $TREATZ — db.py
-Lightweight aiosqlite helpers + canonical schema (kept in sync with main.py/init_db.py)
+Canonical schema + BOTH async (aiosqlite) and sync (sqlite3) helpers.
+Target DB path: /data/treatz.db (Render disk)
 """
 
 from __future__ import annotations
-
 from typing import Optional
 from datetime import datetime, timedelta
+import os, sqlite3
 import aiosqlite
 
 
@@ -21,14 +22,20 @@ CREATE TABLE IF NOT EXISTS kv (
   v TEXT
 );
 
+-- Canonical rounds table (integer PK, outcome fields present)
 CREATE TABLE IF NOT EXISTS rounds (
-  id TEXT PRIMARY KEY,
-  status TEXT NOT NULL,         -- OPEN | SETTLED
-  opens_at TEXT NOT NULL,
-  closes_at TEXT NOT NULL,
-  server_seed_hash TEXT,
-  client_seed TEXT,
-  pot INTEGER DEFAULT 0         -- smallest units (lamports if SOL)
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  status            TEXT NOT NULL CHECK(status IN ('OPEN','CLOSED','SETTLED')) DEFAULT 'OPEN',
+  opens_at          TEXT NOT NULL,
+  closes_at         TEXT NOT NULL,
+  pot               INTEGER NOT NULL DEFAULT 0,
+
+  -- outcome / fairness (nullable until settled)
+  winner            TEXT,
+  payout_sig        TEXT,
+  server_seed_hash  TEXT,
+  server_seed_reveal TEXT,
+  entropy           TEXT
 );
 
 CREATE TABLE IF NOT EXISTS bets (
@@ -37,19 +44,20 @@ CREATE TABLE IF NOT EXISTS bets (
   client_seed TEXT,
   server_seed_hash TEXT,
   server_seed_reveal TEXT,
-  wager INTEGER,                -- smallest units
-  side TEXT,                    -- TRICK | TREAT
-  result TEXT,                  -- TRICK | TREAT
-  win INTEGER,                  -- 1 | 0
-  status TEXT,                  -- PENDING | SETTLED
+  wager INTEGER,
+  side TEXT,
+  result TEXT,
+  win INTEGER,
+  status TEXT,
   tx_sig TEXT,
   created_at TEXT,
   settled_at TEXT
 );
 
+-- ticket entries (raffle)
 CREATE TABLE IF NOT EXISTS entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  round_id TEXT NOT NULL,
+  round_id INTEGER NOT NULL,
   user TEXT,
   tickets INTEGER NOT NULL,
   tx_sig TEXT,
@@ -62,18 +70,21 @@ CREATE INDEX IF NOT EXISTS idx_entries_round   ON entries(round_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_txsig ON entries(tx_sig);
 """.strip()
 
-
 # =========================================================
 # Connection
 # =========================================================
-async def connect(db_path: str = "treatz.db") -> aiosqlite.Connection:
+DB_PATH = os.getenv("DATABASE_URL", "/data/treatz.db")
+
+async def connect(db_path: str = DB_PATH) -> aiosqlite.Connection:
     """
-    Open a connection, ensure schema, and return the connection.
+    Async connection for FastAPI handlers; ensures schema.
     """
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = await aiosqlite.connect(db_path)
     await conn.executescript(SCHEMA)
     await conn.commit()
     return conn
+
 
 
 # =========================================================
@@ -99,17 +110,27 @@ async def kv_get(conn: aiosqlite.Connection, k: str) -> Optional[str]:
         row = await cur.fetchone()
         return row[0] if row else None
         
-def create_round(conn, opens_at: datetime, closes_at: datetime):
+# =========================
+# Sync helpers for scheduler/payouts
+# =========================
+def connect_sync(db_path: str = DB_PATH) -> sqlite3.Connection:
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(SCHEMA)
+    conn.commit()
+    return conn
+
+def create_round_sync(conn: sqlite3.Connection, opens_at, closes_at) -> int:
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO rounds (opens_at, closes_at, pot, status) VALUES (?, ?, ?, ?)",
-        (opens_at.isoformat(), closes_at.isoformat(), 0, "OPEN"),
+        "INSERT INTO rounds (opens_at, closes_at, pot, status) VALUES (?, ?, 0, 'OPEN')",
+        (opens_at.isoformat(), closes_at.isoformat())
     )
     conn.commit()
-    rid = cur.lastrowid
-    return f"R{rid}"
+    return cur.lastrowid  # integer id (e.g., 123)
 
-def mark_round_closed(conn, round_id: str):
-    cur = conn.cursor()
-    cur.execute("UPDATE rounds SET status = ? WHERE id = ?", ("CLOSED", round_id.lstrip("R")))
+def mark_round_closed_sync(conn: sqlite3.Connection, round_id: int) -> None:
+    conn.execute("UPDATE rounds SET status='CLOSED' WHERE id=?", (int(round_id),))
     conn.commit()
+
