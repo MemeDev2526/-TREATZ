@@ -696,7 +696,7 @@ async def helius_webhook(request: Request):
 
             if win and wager > 0 and not existing_payout:
                 try:
-                    payout_amount = wager * 2
+                    payout_amount = wager * int(getattr(settings, "WIN_AMOUNT", 2))
                     payout_sig = await pay_coinflip_winner(sender_raw, payout_amount)
                     await dbmod.kv_set(app.state.db, f"bet:{bet_id}:payout_sig", payout_sig)
                     await app.state.db.commit()
