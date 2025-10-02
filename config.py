@@ -7,6 +7,8 @@ from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     # =========================================================
     # API
     # =========================================================
@@ -15,58 +17,58 @@ class Settings(BaseSettings):
     # =========================================================
     # RPC / Admin
     # =========================================================
-    RPC_URL = os.geten("RPC_URL","https://mainnet.helius-rpc.com/?api-key=3b97cb2d-4eff-4bd3-a17f-f5d157a686a5")
+    RPC_URL: str = os.getenv("RPC_URL", "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY")
     ADMIN_TOKEN: Optional[str] = None
 
     # =========================================================
     # Vaults (public keys as strings)
     # =========================================================
-    GAME_VAULT = os.getenv("GAME_VAULT", "BSeXqAhun3MprUAxBdNAGDHyJY1yssf1yZYKden8uoGg")
-    JACKPOT_VAULT = os.getenv("JACKPOT_VAULT", "9MV8pJFPwLuwTZkJ7cg8pkeQdfGiLWXrkYt1M4FShLGU")
-    GAME_VAULT_ATA    = os.getenv("GAME_VAULT_ATA", "")
-    JACKPOT_VAULT_ATA = os.getenv("JACKPOT_VAULT_ATA", "")
-    GAME_VAULT_PK: Optional[str] = "" # server-side signing key
-    JACKPOT_VAULT_PK: Optional[str] = "" 
+    GAME_VAULT: str = os.getenv("GAME_VAULT", "")
+    JACKPOT_VAULT: str = os.getenv("JACKPOT_VAULT", "")
+    GAME_VAULT_ATA: str = os.getenv("GAME_VAULT_ATA", "")
+    JACKPOT_VAULT_ATA: str = os.getenv("JACKPOT_VAULT_ATA", "")
+    GAME_VAULT_PK: Optional[str] = None  # base58 secret key (server only)
+    JACKPOT_VAULT_PK: Optional[str] = None
 
     # =========================================================
     # Token / Mint
     # =========================================================
-    TREATZ_MINT: os.getenv(TREATZ_MINT","")
-    TOKEN_DECIMALS    = int(os.getenv("TOKEN_DECIMALS", 6))
+    TREATZ_MINT: str = os.getenv("TREATZ_MINT", "")
+    TOKEN_DECIMALS: int = int(os.getenv("TOKEN_DECIMALS", 6))
 
     # =========================================================
     # Economics
     # =========================================================
-    EDGE_BPS: int = 150       # coinflip house edge (bps) [not yet used]
-    WIN_AMOUNT: int = 2       # coinflip win multiplier (2x)
-    TICKET_PRICE: int = 1_000_000
-    SPLT_BURN: int = 10
-    SPLT_DEV: int = 10
-    SPLT_WINNER: int = 80
+    EDGE_BPS: int = 150
+    WIN_AMOUNT: int = 2
+    TICKET_PRICE: int = int(os.getenv("TICKET_PRICE", "1000000"))
+    SPLT_BURN: int = int(os.getenv("SPLT_BURN", "10"))
+    SPLT_DEV: int = int(os.getenv("SPLT_DEV", "10"))
+    SPLT_WINNER: int = int(os.getenv("SPLT_WINNER", "80"))
 
     # =========================================================
     # Game Logic
     # =========================================================
-    ROUND_BREAK: int = 2
-    ROUND_MIN: int = 2
-    SLOTS_PER_MIN: int = 150  # Solana slots per minute (approx)
+    ROUND_BREAK: int = int(os.getenv("ROUND_BREAK", "2"))
+    ROUND_MIN: int = int(os.getenv("ROUND_MIN", "2"))
+    SLOTS_PER_MIN: int = int(os.getenv("SLOTS_PER_MIN", "150"))
 
     # =========================================================
     # Wallets
     # =========================================================
-    BURN_ADDRESS: str = "1nc1nerator11111111111111111111111111111111"
-    DEV_WALLET: str = "2RXHVnWajJrUzzuH3n8jbn7Xbk6Pyjo9aycmjTA2TjGu"
+    BURN_ADDRESS: str = os.getenv("BURN_ADDRESS", "1nc1nerator11111111111111111111111111111111")
+    DEV_WALLET: str = os.getenv("DEV_WALLET", "")
 
     # =========================================================
     # Secrets
     # =========================================================
-    HMAC_SECRET: Optional[str] = None
-    HELIUS_SIGNATURE_HEADER: Optional[str] = None
+    HMAC_SECRET: Optional[str] = os.getenv("HMAC_SECRET", None)
+    HELIUS_SIGNATURE_HEADER: Optional[str] = os.getenv("HELIUS_SIGNATURE_HEADER", None)
 
     # =========================================================
     # Database
     # =========================================================
-    DB_PATH: str = "/data/treatz.db"
+    DB_PATH: str = os.getenv("DB_PATH", "/data/treatz.db")
 
 # Instantiate global settings (values resolved from environment)
 settings = Settings()
