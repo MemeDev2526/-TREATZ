@@ -252,6 +252,7 @@
   const link = (id, href) => { const el = document.getElementById(id); if (el && href) el.href = href; };
   link("link-telegram",  C.links?.telegram);
   link("link-twitter",   C.links?.twitter);
+  link("link-tiktok",    C.links?.tiktok);       // NEW
   link("link-whitepaper",C.links?.whitepaper);
   link("btn-buy",        C.buyUrl);
 
@@ -636,26 +637,28 @@
     try {
       await ensureConfig();
       if (!PUBKEY) await connectWallet("phantom");
-
+  
       const amountHuman = Number(document.getElementById("bet-amount").value || "0");
       const side = (new FormData(e.target).get("side") || "TRICK").toString();
       if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
-
+  
       const bet = await jfetch(`${API}/bets`, {
         method: "POST",
         headers: { "content-type":"application/json" },
         body: JSON.stringify({ amount: toBaseUnits(amountHuman), side })
       });
 
+      const betId = bet.bet_id; // NEW: keep for polling
+  
       $("#bet-deposit").textContent = bet.deposit;
       $("#bet-memo").textContent    = bet.memo;
-
+  
       const mintPk = new solanaWeb3.PublicKey(CONFIG.token.mint);
       const gameAtaStr = CONFIG?.vaults?.game_vault_ata;
       if (!gameAtaStr) throw new Error("Game vault ATA not configured on the server.");
       const destAta = new solanaWeb3.PublicKey(gameAtaStr);
       const payer = PUBKEY;
-
+  
       const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
@@ -666,30 +669,13 @@
         memoIx(bet.memo)
       );
 
-      const { blockhash } = await CONNECTION.getLatestBlockhash("finalized");
-      const tx = new solanaWeb3.Transaction({ feePayer: payer });
-      tx.recentBlockhash = blockhash;
-      tx.add(...ixs);
-
-      const sigRes = await WALLET.signAndSendTransaction(tx);
-      const signature = typeof sigRes === "string" ? sigRes : sigRes?.signature;
-      $("#cf-status").textContent = signature
-        ? `Sent: ${signature.slice(0,8)}… (await confirmation)`
-        : `Sent. Awaiting confirmation…`;
-
-      // Local celebratory FX after submit
-      rainTreatz({ count: 16 });
-      const msg = side === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…";
-      showWinBanner(msg);
-
-    } catch (err) {
-      console.error(err);
-      $("#cf-status").textContent = `Error: ${err.message || err}`;
-    }
-  });
+   (
 
   // Visual spin + FX button
-  $("#cf-play")?.addEventListener("click", () => {
+  $("#cf-play")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     const coin = $("#coin"); if (!coin) return;
     coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin");
     rainTreatz({ count: 22 });
@@ -700,6 +686,11 @@
       showWinBanner(msg);
     }, 1120);
   });
+
+  // NEW: neutralize dead "#" anchors globally
+  document.querySelectorAll('a[href="#"]').forEach(a =>
+    a.addEventListener("click", ev => ev.preventDefault())
+  );
 
 /* ────────────────────────────────────────────────────────
    8) Jackpot — buy tickets + raffle UI
@@ -765,9 +756,13 @@
       if (elId)  elId.textContent  = round.round_id;
       if (elPot) elPot.textContent = (Number(round.pot||0) / TEN_POW).toLocaleString();
 
-      const opensAt = new Date(round.opens_at);
-      const closesAt = new Date(round.closes_at);
-      const nextOpensAt = new Date(cfg?.timers?.next_opens_at || (closesAt.getTime() + (cfg?.raffle?.break_minutes||0)*60*1000));
+      const sanitizeISO = (s) => String(s || "")
+        .replace(" ", "T")
+        .replace(/\.\d+/, "")   // strip microseconds
+      .replace(/Z?$/, "Z");   // force Z
+      const opensAt     = new Date(sanitizeISO(round.opens_at));
+      const closesAt    = new Date(sanitizeISO(round.closes_at));
+      const nextOpensAt = new Date(sanitizeISO(cfg?.timers?.next_opens_at) || (closesAt.getTime() + (cfg?.raffle?.break_minutes||0)*60*1000));
       const schedEl = document.getElementById("raffle-schedule");
       if (schedEl) {
         const mins = Number(cfg?.raffle?.duration_minutes || 0);
@@ -882,23 +877,30 @@
   }
 
   function armAmbient(){
-    const a = document.getElementById("bg-ambient"); if (!a) return;
+    const a = document.getElementById("bg-ambient"); 
+    if (!a) return;
+
+    // ensure a real src exists (from config or default)
+    if (!a.src) {
+      const cfgSrc = (window.TREATZ_CONFIG?.assets?.ambient) || a.getAttribute("data-src") || "assets/ambient.mp3";
+      a.src = cfgSrc;
+    }
+
     a.muted = true; a.volume = 0; a.loop = true;
+
     const start = async ()=>{
-      try { await a.play(); } catch {}
-      // fade in
+      try { await a.play(); } catch { /* Safari blocks until gesture; we’re inside one */ }
       a.muted = false;
-      let v = 0;
-      const tgt = 0.12;
-      const step = () => {
-        v = Math.min(tgt, v + 0.02);
-        a.volume = v;
-        if (v < tgt) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-      ["click","touchstart","keydown"].forEach(ev=>document.removeEventListener(ev, start));
+
+      // fade in
+      let v = 0, tgt = 0.12;
+      const fade = () => { v = Math.min(tgt, v + 0.02); a.volume = v; if (v < tgt) requestAnimationFrame(fade); };
+      requestAnimationFrame(fade);
+
+      ["click","touchstart","keydown"].forEach(evName=>document.removeEventListener(evName, start));
     };
-    ["click","touchstart","keydown"].forEach(ev=>document.addEventListener(ev, start, { once:false }));
+
+    ["click","touchstart","keydown"].forEach(evName=>document.addEventListener(evName, start, { passive:true }));
   }
   armAmbient();
 
