@@ -134,7 +134,29 @@ async def _rpc_get_blockhash(slot: int) -> Optional[str]:
         if isinstance(b, dict) and b.get("result") and b["result"].get("blockhash"):
             return b["result"]["blockhash"]
         return None
-
+        
+async def _rpc_account_exists(pubkey_str: str) -> bool:
+    """Return True if an account exists (non-null), False otherwise."""
+    try:
+        async with AsyncClient(RPC_URL) as c:
+            # accept either str or Pubkey
+            try:
+                from solders.pubkey import Pubkey
+                key = Pubkey.from_string(pubkey_str)
+            except Exception:
+                key = pubkey_str
+            r = await c.get_account_info(key, commitment="confirmed")
+            # solders style: r.value is None or Account
+            val = getattr(r, "value", None)
+            if val is not None:
+                return True
+            # dict style
+            if isinstance(r, dict):
+                v = ((r.get("result") or {}).get("value"))
+                return v is not None
+    except Exception:
+        return False
+    return False
 
 # =========================================================
 # Lifecycle
@@ -424,6 +446,46 @@ async def get_bet(bet_id: str):
         "short_deposit": int(short_amt) if short_amt is not None else None,
     }
 
+# =========================================================
+# Public RPC Proxies (Frontend-safe)
+# =========================================================
+@app.get(f"{API}/cluster/latest_blockhash")
+async def latest_blockhash():
+    """
+    Frontend-safe latest blockhash. Does not expose provider URL.
+    """
+    try:
+        async with AsyncClient(RPC_URL) as c:
+            resp = await c.get_latest_blockhash()  # default commitment
+            # solders object?
+            val = getattr(resp, "value", None)
+            if val is not None:
+                bh = getattr(val, "blockhash", None)
+                lvh = getattr(val, "last_valid_block_height", None) or getattr(val, "lastValidBlockHeight", None)
+                return {
+                    "blockhash": str(bh),
+                    "last_valid_block_height": int(lvh) if lvh is not None else None
+                }
+            # dict shape
+            if isinstance(resp, dict):
+                v = ((resp.get("result") or {}).get("value") or resp.get("result") or {})
+                return {
+                    "blockhash": v.get("blockhash"),
+                    "last_valid_block_height": v.get("lastValidBlockHeight") or v.get("last_valid_block_height")
+                }
+    except Exception as e:
+        raise HTTPException(503, f"blockhash_unavailable: {e}")
+
+@app.get(f"{API}/accounts/{{pubkey}}/exists")
+async def account_exists(pubkey: str):
+    """
+    Frontend-safe check: does this account exist?
+    """
+    try:
+        ok = await _rpc_account_exists(pubkey)
+        return {"exists": bool(ok)}
+    except Exception as e:
+        raise HTTPException(400, f"bad_pubkey: {e}")
 
 @app.get(f"{API}/rounds/{{round_id}}/winner", response_model=RoundWinnerResp)
 async def get_round_winner(round_id: str):
