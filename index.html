@@ -26,7 +26,7 @@
       links: {
         telegram: "https://t.me/trickortreatsol",
         twitter:  "https://x.com/trickortreatsol?s=21",
-        TikTok:  "https://www.tiktok.com/@sol_treatz",
+        tiktok:   "https://www.tiktok.com/@sol_treatz",
         whitepaper: "https://trickortreatsol.tech/whitepaper"
       },
       buyUrl: "#",
@@ -91,7 +91,7 @@
       <nav class="nav__links" aria-label="Primary">
         <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter</a>
         <a href="#" id="link-telegram"  target="_blank" rel="noopener">Telegram</a>
-        <a href="#" id="link-TikTok"   target="_blank" rel="noopener">TikTok</a>
+                <a href="#" id="link-tiktok"   target="_blank" rel="noopener">TikTok</a>
         <a href="https://trickortreatsol.tech/whitepaper" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
       </nav>
     </div>
@@ -209,19 +209,19 @@
           <p id="raffle-schedule" class="help" style="margin-top:.5rem;"></p>
         </div>
         <!-- Inline wallet controls for the game area -->
-        <div class="wallet wallet--inline">
-          <button class="btn btn--ghost"   id="btn-openwallet" type="button" hidden>Open Wallet</button>
-          <button class="btn btn--primary" id="btn-connect"    type="button">Connect Wallet</button>
+        <        <div class="wallet wallet--inline">
+          <button class="btn btn--ghost"   id="btn-openwallet-2" type="button" hidden>Open Wallet</button>
+          <button class="btn btn--primary" id="btn-connect-2"    type="button">Connect Wallet</button>
 
           <!-- Optional legacy dropdown (still works as fallback) -->
-          <div class="wallet__menu" id="wallet-menu" hidden>
+          <div class="wallet__menu" id="wallet-menu-2" hidden>
             <button data-wallet="phantom">Phantom</button>
             <button data-wallet="solflare">Solflare</button>
             <button data-wallet="backpack">Backpack</button>
           </div>
 
-          <!-- Mobile deep link helper (same ID your JS expects) -->
-          <a class="btn btn--outline" id="btn-open-in-phantom" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
+          <!-- Mobile deep link helper (unique id) -->
+          <a class="btn btn--outline" id="btn-open-in-phantom-2" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
         </div>
 
         <!-- Buy Tickets -->
