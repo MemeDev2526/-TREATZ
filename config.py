@@ -2,6 +2,7 @@
 $TREATZ — Config
 Centralized environment + constants, powered by pydantic-settings.
 """
+import os
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,24 +15,24 @@ class Settings(BaseSettings):
     # =========================================================
     # RPC / Admin
     # =========================================================
-    RPC_URL: str = "https://mainnet.helius-rpc.com/?api-key=3b97cb2d-4eff-4bd3-a17f-f5d157a686a5"
+    RPC_URL = os.geten("RPC_URL","https://mainnet.helius-rpc.com/?api-key=3b97cb2d-4eff-4bd3-a17f-f5d157a686a5")
     ADMIN_TOKEN: Optional[str] = None
 
     # =========================================================
     # Vaults (public keys as strings)
     # =========================================================
-    GAME_VAULT: str = "BSeXqAhun3MprUAxBdNAGDHyJY1yssf1yZYKden8uoGg"
-    JACKPOT_VAULT: str = "9MV8pJFPwLuwTZkJ7cg8pkeQdfGiLWXrkYt1M4FShLGU"
-    GAME_VAULT_ATA: Optional[str] = "" 
-    JACKPOT_VAULT_ATA: Optional[str] = "" 
+    GAME_VAULT = os.getenv("GAME_VAULT", "BSeXqAhun3MprUAxBdNAGDHyJY1yssf1yZYKden8uoGg")
+    JACKPOT_VAULT = os.getenv("JACKPOT_VAULT", "9MV8pJFPwLuwTZkJ7cg8pkeQdfGiLWXrkYt1M4FShLGU")
+    GAME_VAULT_ATA    = os.getenv("GAME_VAULT_ATA", "")
+    JACKPOT_VAULT_ATA = os.getenv("JACKPOT_VAULT_ATA", "")
     GAME_VAULT_PK: Optional[str] = "" # server-side signing key
     JACKPOT_VAULT_PK: Optional[str] = "" 
 
     # =========================================================
     # Token / Mint
     # =========================================================
-    TREATZ_MINT: Optional[str] = ""      # empty/None for SOL-only MVP
-    TOKEN_DECIMALS: int = 6
+    TREATZ_MINT: os.getenv(TREATZ_MINT","")
+    TOKEN_DECIMALS    = int(os.getenv("TOKEN_DECIMALS", 6))
 
     # =========================================================
     # Economics
