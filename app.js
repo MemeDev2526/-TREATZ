@@ -310,7 +310,7 @@
     closeWalletModal();
     connectWallet(w).catch(console.error);
   });
-  
+
   const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
   const CONNECTION = new solanaWeb3.Connection(
     (window.TREATZ_CONFIG?.rpcUrl || "https://api.mainnet-beta.solana.com"),
@@ -335,26 +335,22 @@
   };
 
   function onProviderConnect(pk) {
-    try {
-      if (pk) PUBKEY = new solanaWeb3.PublicKey(pk.toString());
-    } catch { /* ignore */ }
+    try { if (pk) PUBKEY = new solanaWeb3.PublicKey(pk.toString()); } catch {}
     setWalletLabels();
     setTimeout(loadPlayerStats, 400);
   }
-
   function onProviderDisconnect() {
     PUBKEY = null;
     setWalletLabels();
   }
-
   function wireProvider(p) {
     try {
-      p?.on?.("connect", (pubkey) => onProviderConnect(pubkey || p.publicKey));
-      p?.on?.("disconnect", onProviderDisconnect);
-      p?.on?.("accountChanged", (pubkey) => onProviderConnect(pubkey));
+      p?.on?.("connect",       (pubkey) => onProviderConnect(pubkey || p.publicKey));
+      p?.on?.("disconnect",    onProviderDisconnect);
+      p?.on?.("accountChanged",(pubkey) => onProviderConnect(pubkey));
     } catch {}
   }
-  
+
   async function connectWallet(preferred) {
     if (PUBKEY) return PUBKEY;
 
@@ -365,16 +361,17 @@
       const res = await p.connect();
       WALLET = p;
       wireProvider(p);
-      PUBKEY = new solanaWeb3.PublicKey((res.publicKey?.toString?.() || res.publicKey || res).toString());
+      const got = (res?.publicKey?.toString?.() || res?.publicKey || res).toString();
+      PUBKEY = new solanaWeb3.PublicKey(got);
       setWalletLabels();
       setTimeout(loadPlayerStats, 500);
       return PUBKEY;
     }
 
-    // No provider found → guide install
+    // No provider found → guide install / deep link
     if (isMobile()) {
       location.href = phantomDeepLinkForThisSite();
-      throw new Error("Opening in Phantom...");
+      throw new Error("Opening in Phantom…");
     } else {
       window.open("https://phantom.app/", "_blank");
       throw new Error("Wallet not found");
@@ -385,26 +382,26 @@
     try { await WALLET?.disconnect(); } catch {}
     PUBKEY = null;
     setWalletLabels();
-    const m = document.getElementById("wallet-menu"); // optional
-    if (m) m.hidden = true;            // close the menu on disconnect
+    const m = document.getElementById("wallet-menu"); // optional legacy
+    if (m) m.hidden = true;
   }
 
   function setWalletLabels() {
-     const btnConnect = document.getElementById("btn-connect");
-     const btnOpen    = document.getElementById("btn-openwallet");
-     if (!btnConnect || !btnOpen) return;
+    const btnConnect = document.getElementById("btn-connect");
+    const btnOpen    = document.getElementById("btn-openwallet");
+    if (!btnConnect || !btnOpen) return;
 
-     if (PUBKEY) {
-       const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
-       btnConnect.textContent = "Disconnect";
-       btnOpen.textContent    = `Wallet (${short})`;
-       btnOpen.hidden = false;                   // ⟵ show only when connected
-     } else {
-       btnConnect.textContent = "Connect Wallet";
-       btnOpen.hidden = true;                    // ⟵ hide when not connected
-     }
-     updateDeepLinkVisibility();                 // ⟵ keep the deep-link in sync
-   }
+    if (PUBKEY) {
+      const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
+      btnConnect.textContent = "Disconnect";
+      btnOpen.textContent    = `Wallet (${short})`;
+      btnOpen.hidden = false;
+    } else {
+      btnConnect.textContent = "Connect Wallet";
+      btnOpen.hidden = true;
+    }
+    updateDeepLinkVisibility();
+  }
 
   async function ensureConfig() {
     if (!CONFIG) {
@@ -416,7 +413,7 @@
     return CONFIG;
   }
 
-  const menu = document.getElementById("wallet-menu");
+  // PRIMARY connect button (modal-first logic)
   document.getElementById("btn-connect")?.addEventListener("click", async () => {
     if (PUBKEY) { await disconnectWallet(); return; }
 
@@ -440,11 +437,9 @@
     }
     openWalletModal();                     // 2+ → let the user pick
   });
-  
-    // Otherwise let user pick
-    if (menu) menu.hidden = !menu.hidden;
-  });
 
+  // (Optional) legacy dropdown fallback — keep listener, but don’t toggle from the main handler
+  const menu = document.getElementById("wallet-menu");
   menu?.addEventListener("click", (e)=>{
     const b = e.target.closest("button[data-wallet]");
     if (!b) return;
