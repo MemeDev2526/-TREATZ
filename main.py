@@ -89,17 +89,20 @@ def _hmac(secret: str, msg: str, as_hex: bool = False) -> str | bytes:
 # RPC Helpers
 # =========================================================
 async def _rpc_get_token_balance(ata: str) -> int:
-    """Return token balance (base units) for a token account address."""
+    """Return token balance (base units) for a token account address.
+    Returns 0 if RPC is unreachable, so callers can fail gracefully."""
     if not ata:
         return 0
-    async with AsyncClient(RPC_URL) as c:
-        r = await c.get_token_account_balance(ata)
-        # solana-py typed response
-        val = getattr(r, "value", None)
-        if val and hasattr(val, "amount"):
-            return int(val.amount)
-        # fallback for raw style
-        return int(r["result"]["value"]["amount"])
+    try:
+        async with AsyncClient(RPC_URL) as c:
+            r = await c.get_token_account_balance(ata)
+            val = getattr(r, "value", None)
+            if val and hasattr(val, "amount"):
+                return int(val.amount)
+            return int(r["result"]["value"]["amount"])
+    except Exception:
+        # RPC down or bad response → treat as empty
+        return 0
 
 async def _rpc_get_slot() -> int:
     async with AsyncClient(RPC_URL) as c:
@@ -271,6 +274,14 @@ async def create_bet(body: NewBet):
     # Enforce max wager based on current vault balance (base units)
     vault_bal = await _rpc_get_token_balance(getattr(settings, "GAME_VAULT_ATA", ""))
     max_wager = vault_bal // 2
+
+    # If RPC is down or vault unfunded, max_wager will be 0; fail clearly with JSON
+    if max_wager <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Wagering temporarily unavailable (RPC unreachable or game vault empty). Try again shortly."
+        )
+
     if body.amount > max_wager:
         raise HTTPException(400, f"Max wager is {max_wager} base units right now.")
 
