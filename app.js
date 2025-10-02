@@ -252,13 +252,14 @@
   const link = (id, href) => { const el = document.getElementById(id); if (el && href) el.href = href; };
   link("link-telegram",  C.links?.telegram);
   link("link-twitter",   C.links?.twitter);
-  link("link-tiktok",    C.links?.tiktok);       // NEW
+  link("link-tiktok",    C.links?.tiktok);      // NEW
   link("link-whitepaper",C.links?.whitepaper);
   link("btn-buy",        C.buyUrl);
 
   // Deep-link button(s): show only on mobile with NO provider and when NOT connected
   const deepLinks = [
     document.getElementById("btn-open-in-phantom"),
+    document.getElementById("btn-open-in-phantom-2"),      // NEW
     document.getElementById("btn-open-in-phantom-modal"),
   ].filter(Boolean);
 
@@ -454,18 +455,20 @@
   }
 
   function setWalletLabels() {
-    const btnConnect = document.getElementById("btn-connect");
-    const btnOpen    = document.getElementById("btn-openwallet");
-    if (!btnConnect || !btnOpen) return;
-
+    const connectBtns = $$("#btn-connect, #btn-connect-2");
+    const openBtns    = $$("#btn-openwallet, #btn-openwallet-2");
+  
     if (PUBKEY) {
       const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
-      btnConnect.textContent = "Disconnect";
-      btnOpen.textContent    = `Wallet (${short})`;
-      btnOpen.hidden = false;
+      connectBtns.forEach(b => b && (b.textContent = "Disconnect"));
+      openBtns.forEach(b => {
+        if (!b) return;
+        b.textContent = `Wallet (${short})`;
+        b.hidden = false;
+      });
     } else {
-      btnConnect.textContent = "Connect Wallet";
-      btnOpen.hidden = true;
+      connectBtns.forEach(b => b && (b.textContent = "Connect Wallet"));
+      openBtns.forEach(b => b && (b.hidden = true));
     }
     updateDeepLinkVisibility();
   }
@@ -481,32 +484,23 @@
   }
 
   // PRIMARY connect button (modal-first logic)
-  document.getElementById("btn-connect")?.addEventListener("click", async () => {
+  $$("#btn-connect, #btn-connect-2").forEach(btn => btn?.addEventListener("click", async () => {
     try {
       if (PUBKEY) { await disconnectWallet(); return; }
-
       const present = [
         getPhantomProvider()  && "phantom",
         getSolflareProvider() && "solflare",
         getBackpackProvider() && "backpack",
       ].filter(Boolean);
-
-      if (present.length === 0) {           // no providers → show modal + deep link
-        openWalletModal();
-        updateDeepLinkVisibility();
-        return;
-      }
-      if (present.length === 1) {           // exactly one → connect immediately
-        await connectWallet(present[0]);
-        return;
-      }
-      openWalletModal();                     // 2+ → let the user pick
+      if (present.length === 0) { openWalletModal(); updateDeepLinkVisibility(); return; }
+      if (present.length === 1) { await connectWallet(present[0]); return; }
+      openWalletModal();
     } catch (err) {
       console.error("[btn-connect] error", err);
       alert(err.message || "Failed to open wallet.");
     }
-  });
-
+  }));
+  
   // (Optional) legacy dropdown fallback (if present in DOM)
   const menu = document.getElementById("wallet-menu");
   menu?.addEventListener("click", (e)=>{
@@ -517,14 +511,14 @@
     connectWallet(w).catch(err=>console.error(err));
   });
 
-  document.getElementById("btn-openwallet")?.addEventListener("click", async ()=>{
+  $$("#btn-openwallet, #btn-openwallet-2").forEach(btn => btn?.addEventListener("click", async ()=>{
     try {
       if (!PUBKEY) { await connectWallet("phantom"); return; }
       const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
       alert(`Connected: ${short}`);
     } catch (e) { console.error(e); }
-  });
-
+  }));
+  
   setWalletLabels();
   document.addEventListener("DOMContentLoaded", updateDeepLinkVisibility);
   window.addEventListener("load", updateDeepLinkVisibility);
