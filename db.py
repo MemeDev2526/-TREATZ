@@ -130,9 +130,9 @@ def create_round_sync(conn: sqlite3.Connection, opens_at: datetime, closes_at: d
     """Create a new round row synchronously, returns new round ID."""
     rid = f"R{secrets.randbelow(10_000):04d}"  # e.g. R0042
     conn.execute(
-        "INSERT INTO rounds (id, opens_at, closes_at, pot, status) VALUES (?, ?, ?, 0, 'OPEN')",
-        (rid, opens_at.isoformat(), closes_at.isoformat()),
-    )
+        "INSERT INTO rounds (opens_at, closes_at, pot, status) VALUES (?, ?, 0, 'open')",
+        (opens_at.isoformat(), closes_at.isoformat()),
+      )
     conn.commit()
     return rid
 
