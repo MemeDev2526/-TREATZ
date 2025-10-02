@@ -354,10 +354,6 @@
       p?.on?.("accountChanged", (pubkey) => onProviderConnect(pubkey));
     } catch {}
   }
-
-  // After you set WALLET in connectWallet:
-  WALLET = p;
-  wireProvider(p);
   
   async function connectWallet(preferred) {
     if (PUBKEY) return PUBKEY;
