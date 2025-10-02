@@ -89,38 +89,32 @@ def _hmac(secret: str, msg: str, as_hex: bool = False) -> str | bytes:
 # RPC Helpers
 # =========================================================
 async def _rpc_get_token_balance(ata: str) -> int:
-    """Return token balance (base units) for a token account address.
-
-    Handles both solders-typed responses and plain dict RPCResponse.
-    """
     if not ata:
         return 0
-    async with AsyncClient(RPC_URL) as c:
-        r = await c.get_token_account_balance(ata)
+    try:
+        async with AsyncClient(RPC_URL) as c:
+            # Accept both str and Pubkey transparently
+            try:
+                from solders.pubkey import Pubkey
+                key = Pubkey.from_string(ata)
+            except Exception:
+                key = ata  # fall back to raw string if solders isn't used
 
-        # solders typed: r.value.amount (str)
-        val = getattr(r, "value", None)
-        amt = None
-        if val is not None:
-            # value can be a TokenAmount (attr) or a dict (key)
-            if hasattr(val, "amount"):          # TokenAmount
-                amt = getattr(val, "amount")
-            elif isinstance(val, dict):         # dict-ish
-                amt = val.get("amount")
+            r = await c.get_token_account_balance(key)
 
-        if amt is None:
-            # plain dict RPCResponse: r["result"]["value"]["amount"]
-            if isinstance(r, dict):
-                try:
-                    amt = r["result"]["value"]["amount"]
-                except Exception:
-                    amt = None
+            # solders style
+            val = getattr(r, "value", None)
+            amt = None
+            if val is not None:
+                amt = getattr(val, "amount", None) or (val.get("amount") if isinstance(val, dict) else None)
 
-        try:
+            # dict style
+            if amt is None and isinstance(r, dict):
+                amt = (((r.get("result") or {}).get("value") or {}).get("amount"))
+
             return int(str(amt)) if amt is not None else 0
-        except Exception:
-            return 0
-
+    except Exception:
+        return 0
 
 async def _rpc_get_slot() -> int:
     async with AsyncClient(RPC_URL) as c:
