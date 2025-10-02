@@ -23,7 +23,7 @@ from payouts import pay_coinflip_winner, pay_jackpot_winner, pay_jackpot_split
 # NEW: RPC helpers for balances/entropy
 from solana.rpc.async_api import AsyncClient
 
-RPC_URL = getattr(settings, "RPC_URL", "https://api.mainnet-beta.solana.com")
+RPC_URL = settings.RPC_URL
 ROUND_MIN = int(getattr(settings, "ROUND_MIN", 30))
 ROUND_BREAK = int(getattr(settings, "ROUND_BREAK", 0))
 SPLT_WIN = int(getattr(settings, "SPLT_WINNER", 80))
@@ -538,6 +538,15 @@ async def health_full():
         "ts": time.time(),
         "version": "0.1.0",
     }
+
+# NEW: debug exactly what RPC URL this process is using
+@app.get(f"{API}/health/rpc")
+async def health_rpc():
+    try:
+        slot = await _rpc_get_slot()
+        return {"ok": True, "rpc_url": RPC_URL, "slot": slot}
+    except Exception as e:
+        return {"ok": False, "rpc_url": RPC_URL, "error": str(e)}
 
 # Raffle credit for a wallet (base units)
 @app.get(f"{API}/credits/{{wallet}}", response_model=CreditResp)
