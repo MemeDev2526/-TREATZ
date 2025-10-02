@@ -13,7 +13,7 @@ from typing import Literal, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from config import settings
+from config import settings, (TREATZ_MINT, TOKEN_DECIMALS, GAME_VAULT, GAME_VAULT_ATA, JACKPOT_VAULT, JACKPOT_VAULT_ATA)
 import db as dbmod
 from db import ensure_schema   # import canonical schema
 
@@ -466,7 +466,7 @@ async def get_config(include_balances: bool = False):
             max_wager = game_bal // 2
 
     return {
-        "token": {
+        
             "mint": settings.TREATZ_MINT,
             "decimals": getattr(settings, "TOKEN_DECIMALS", 6),
             "ticket_price": settings.TICKET_PRICE,  # base units
