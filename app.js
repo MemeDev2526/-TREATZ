@@ -153,6 +153,38 @@
   }
   window.playResultFX = playResultFX;
 
+  // Coin faces from images
+  function setCoinFaces(treatImg, trickImg) {
+    const front = document.querySelector(".coin__face--front");
+    const back  = document.querySelector(".coin__face--back");
+    if (!front || !back) return;
+    Object.assign(front.style, {
+      background: `center/contain no-repeat url('${treatImg}')`,
+      border: "none", textIndent: "-9999px"
+    });
+    Object.assign(back.style, {
+      background: `center/contain no-repeat url('${trickImg}')`,
+      border: "none", textIndent: "-9999px", transform: "rotateY(180deg)"
+    });
+  }
+  document.addEventListener("DOMContentLoaded", ()=>{
+    setCoinFaces("assets/coin_treatz.jpg", "assets/coin_trickz.jpg");
+  });
+
+  // Win banner (cute, brief)
+  function showWinBanner(text) {
+    const el = document.createElement("div");
+    el.textContent = text;
+    Object.assign(el.style, {
+      position:"fixed", left:"50%", top:"18px", transform:"translateX(-50%)",
+      background:"linear-gradient(90deg,#2aff6b,#9bff2a)",
+      color:"#032316", padding:"10px 14px", fontWeight:"900",
+      borderRadius:"999px", zIndex:10000, boxShadow:"0 8px 24px rgba(0,0,0,.35)"
+    });
+    document.body.appendChild(el);
+    setTimeout(()=>{ el.style.opacity="0"; el.style.transition="opacity .35s"; setTimeout(()=>el.remove(), 400); }, 1800);
+  }
+
 /* ────────────────────────────────────────────────────────
    2) Countdown (Halloween)
    ──────────────────────────────────────────────────────── */
@@ -313,13 +345,14 @@
   function getBackpackProvider(){
     return window.backpack?.solana || null;
   }
-  function getProviderByName(name){
-    name = (name||"").toLowerCase();
-    if (name === "phantom")  return getPhantomProvider();
-    if (name === "solflare") return getSolflareProvider();
-    if (name === "backpack") return getBackpackProvider();
+  const getProviderByName = (name) => {
+    name = (name || "").toLowerCase();
+    const ph = (window.phantom && window.phantom.solana) || window.solana;
+    if (name === "phantom"  && ph?.isPhantom)        return ph;
+    if (name === "solflare" && window.solflare?.isSolflare) return window.solflare;
+    if (name === "backpack" && window.backpack?.solana)     return window.backpack.solana;
     return null;
-  }
+  };
 
   // Simple modal control (matches your HTML/CSS)
   const modal = document.getElementById("wallet-modal");
@@ -354,56 +387,62 @@
 
   function onProviderConnect(pk) {
     try {
-      if (pk) {
-        const base58 = typeof pk.toBase58 === "function" ? pk.toBase58() : pk.toString();
-        PUBKEY = new solanaWeb3.PublicKey(base58);
-      }
+      const k = pk?.toString?.() || pk?.publicKey?.toString?.() || WALLET?.publicKey?.toString?.();
+      if (k) PUBKEY = new solanaWeb3.PublicKey(k);
     } catch {}
     setWalletLabels();
     setTimeout(loadPlayerStats, 400);
   }
+
   function onProviderDisconnect() {
     PUBKEY = null;
     setWalletLabels();
   }
+
   function wireProvider(p) {
     try {
-      p?.on?.("connect",       (pubkey) => onProviderConnect(pubkey || p.publicKey));
-      p?.on?.("disconnect",    onProviderDisconnect);
-      p?.on?.("accountChanged",(pubkey) => onProviderConnect(pubkey));
+      p?.on?.("connect",        (pubkey) => onProviderConnect(pubkey || p.publicKey));
+      p?.on?.("disconnect",     onProviderDisconnect);
+      p?.on?.("accountChanged", (pubkey) => onProviderConnect(pubkey));
     } catch {}
   }
 
   async function connectWallet(preferred) {
     if (PUBKEY) return PUBKEY;
 
+    // must be called in direct user gesture; callers should be click handlers
     const order = [preferred, "phantom", "solflare", "backpack"].filter(Boolean);
     for (const name of order) {
       const p = getProviderByName(name);
       if (!p) continue;
+
+      let res;
       try {
-        const res = await p.connect();
-        WALLET = p;
-        wireProvider(p);
-        const pkAny = res?.publicKey || p.publicKey || res;
-        const base58 = typeof pkAny?.toBase58 === "function" ? pkAny.toBase58() : String(pkAny);
-        PUBKEY = new solanaWeb3.PublicKey(base58);
-        setWalletLabels();
-        setTimeout(loadPlayerStats, 500);
-        console.log(`[connectWallet] connected via ${name}: ${PUBKEY.toBase58()}`);
-        return PUBKEY;
-      } catch (err) {
-        console.warn(`[connectWallet] ${name} connect failed`, err);
+        res = await p.connect({ onlyIfTrusted: false });
+      } catch (e) {
+        // user closed or rejected; try next provider
+        continue;
       }
+
+      WALLET = p;
+      wireProvider(p);
+
+      const got = (res?.publicKey?.toString?.() || res?.publicKey || res || p.publicKey)?.toString?.();
+      if (!got) throw new Error("Wallet did not return a public key.");
+      PUBKEY = new solanaWeb3.PublicKey(got);
+
+      setWalletLabels();
+      setTimeout(loadPlayerStats, 500);
+      return PUBKEY;
     }
 
-    // No provider found → guide install / deep link
+    // No provider found → install or deep link
     if (isMobile()) {
       location.href = phantomDeepLinkForThisSite();
       throw new Error("Opening in Phantom…");
     } else {
       window.open("https://phantom.app/", "_blank");
-      throw new Error("Wallet extension not found");
+      throw new Error("Wallet not found");
     }
   }
 
@@ -637,13 +676,19 @@
       $("#cf-status").textContent = signature
         ? `Sent: ${signature.slice(0,8)}… (await confirmation)`
         : `Sent. Awaiting confirmation…`;
+
+      // Local celebratory FX after submit
+      rainTreatz({ count: 16 });
+      const msg = side === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…";
+      showWinBanner(msg);
+
     } catch (err) {
       console.error(err);
       $("#cf-status").textContent = `Error: ${err.message || err}`;
     }
   });
 
-  // Visual spin + FX
+  // Visual spin + FX button
   $("#cf-play")?.addEventListener("click", () => {
     const coin = $("#coin"); if (!coin) return;
     coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin");
@@ -651,6 +696,8 @@
     setTimeout(() => {
       const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
       playResultFX(side);
+      const msg = side === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…";
+      showWinBanner(msg);
     }, 1120);
   });
 
@@ -721,7 +768,12 @@
       const opensAt = new Date(round.opens_at);
       const closesAt = new Date(round.closes_at);
       const nextOpensAt = new Date(cfg?.timers?.next_opens_at || (closesAt.getTime() + (cfg?.raffle?.break_minutes||0)*60*1000));
-
+      const schedEl = document.getElementById("raffle-schedule");
+      if (schedEl) {
+        const mins = Number(cfg?.raffle?.duration_minutes || 0);
+        const brk  = Number(cfg?.raffle?.break_minutes || 0);
+        schedEl.textContent = `Each round: ${mins} min • Break: ${brk} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
+      }
       const fmt = (ms)=>{ if (ms<0) ms=0; const s=Math.floor(ms/1000);
         const h=String(Math.floor((s%86400)/3600)).padStart(2,"0");
         const m=String(Math.floor((s%3600)/60)).padStart(2,"0");
@@ -789,7 +841,7 @@
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
     try {
-      const base = await jfetch(`${API}/rounds/recent?limit=10}`);
+      const base = await jfetch(`${API}/rounds/recent?limit=10`);
       const ids  = (query && /^R\d+$/i.test(query)) ? base.filter(x=>x.id===query) : base;
       const rows = [];
       for (const r of ids){
@@ -831,26 +883,24 @@
 
   function armAmbient(){
     const a = document.getElementById("bg-ambient"); if (!a) return;
-    const start = ()=>{ a.volume = 0.12; a.play().catch(()=>{}); document.removeEventListener("click", start, {once:true}); };
-    document.addEventListener("click", start, {once:true});
+    a.muted = true; a.volume = 0; a.loop = true;
+    const start = async ()=>{
+      try { await a.play(); } catch {}
+      // fade in
+      a.muted = false;
+      let v = 0;
+      const tgt = 0.12;
+      const step = () => {
+        v = Math.min(tgt, v + 0.02);
+        a.volume = v;
+        if (v < tgt) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+      ["click","touchstart","keydown"].forEach(ev=>document.removeEventListener(ev, start));
+    };
+    ["click","touchstart","keydown"].forEach(ev=>document.addEventListener(ev, start, { once:false }));
   }
   armAmbient();
-
-  (function floatMascot(){
-    const el = document.getElementById("mascot-floater");
-    if (!el) return;
-    let x = 100, y = 100, vx = 1.2, vy = 1.0;
-    function step(){
-      const w = window.innerWidth, h = window.innerHeight;
-      const rect = el.getBoundingClientRect();
-      x += vx; y += vy;
-      if (x < 0 || x + rect.width  > w) vx = -vx;
-      if (y < 0 || y + rect.height > h) vy = -vy;
-      el.style.transform = `translate(${x}px, ${y}px)`;
-      requestAnimationFrame(step);
-    }
-    step();
-  })();
 
 /* ────────────────────────────────────────────────────────
    10) Boot
