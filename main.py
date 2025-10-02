@@ -90,19 +90,37 @@ def _hmac(secret: str, msg: str, as_hex: bool = False) -> str | bytes:
 # =========================================================
 async def _rpc_get_token_balance(ata: str) -> int:
     """Return token balance (base units) for a token account address.
-    Returns 0 if RPC is unreachable, so callers can fail gracefully."""
+
+    Handles both solders-typed responses and plain dict RPCResponse.
+    """
     if not ata:
         return 0
-    try:
-        async with AsyncClient(RPC_URL) as c:
-            r = await c.get_token_account_balance(ata)
-            val = getattr(r, "value", None)
-            if val and hasattr(val, "amount"):
-                return int(val.amount)
-            return int(r["result"]["value"]["amount"])
-    except Exception:
-        # RPC down or bad response → treat as empty
-        return 0
+    async with AsyncClient(RPC_URL) as c:
+        r = await c.get_token_account_balance(ata)
+
+        # solders typed: r.value.amount (str)
+        val = getattr(r, "value", None)
+        amt = None
+        if val is not None:
+            # value can be a TokenAmount (attr) or a dict (key)
+            if hasattr(val, "amount"):          # TokenAmount
+                amt = getattr(val, "amount")
+            elif isinstance(val, dict):         # dict-ish
+                amt = val.get("amount")
+
+        if amt is None:
+            # plain dict RPCResponse: r["result"]["value"]["amount"]
+            if isinstance(r, dict):
+                try:
+                    amt = r["result"]["value"]["amount"]
+                except Exception:
+                    amt = None
+
+        try:
+            return int(str(amt)) if amt is not None else 0
+        except Exception:
+            return 0
+
 
 async def _rpc_get_slot() -> int:
     async with AsyncClient(RPC_URL) as c:
@@ -541,13 +559,30 @@ async def health_full():
     }
 
 # NEW: debug exactly what RPC URL this process is using
-@app.get(f"{API}/health/rpc")
+@app.get(f"{API}/health/rpc", include_in_schema=False)
 async def health_rpc():
     try:
-        slot = await _rpc_get_slot()
-        return {"ok": True, "rpc_url": RPC_URL, "slot": slot}
+        async with AsyncClient(RPC_URL) as c:
+            slot_resp = await c.get_slot()
+            slot_val = getattr(slot_resp, "value", None)
+            if slot_val is None and isinstance(slot_resp, dict):
+                slot_val = slot_resp.get("result")
+        return {"ok": True, "rpc_url": RPC_URL, "slot": int(slot_val)}
     except Exception as e:
-        return {"ok": False, "rpc_url": RPC_URL, "error": f"{type(e).__name__}: {e}"}
+        return {"ok": False, "rpc_url": RPC_URL, "error": str(e)}
+
+@app.get(f"{API}/health/atas", include_in_schema=False)
+async def health_atas():
+    gv = getattr(settings, "GAME_VAULT_ATA", "")
+    jv = getattr(settings, "JACKPOT_VAULT_ATA", "")
+    gb = await _rpc_get_token_balance(gv) if gv else None
+    jb = await _rpc_get_token_balance(jv) if jv else None
+    return {
+        "game_vault_ata": gv or None,
+        "jackpot_vault_ata": jv or None,
+        "game_vault_balance": gb,
+        "jackpot_vault_balance": jb,
+    }
 
 # Raffle credit for a wallet (base units)
 @app.get(f"{API}/credits/{{wallet}}", response_model=CreditResp)
