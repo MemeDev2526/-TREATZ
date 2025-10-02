@@ -107,7 +107,8 @@ async def _rpc_get_token_balance(ata: str) -> int:
 async def _rpc_get_slot() -> int:
     async with AsyncClient(RPC_URL) as c:
         s = await c.get_slot()
-        return getattr(s, "value", s["result"])
+        val = getattr(s, "value", None)
+        return val if val is not None else s["result"]
 
 async def _rpc_get_blockhash(slot: int) -> Optional[str]:
     """Fetch blockhash at a specific slot; None if unavailable."""
@@ -546,7 +547,7 @@ async def health_rpc():
         slot = await _rpc_get_slot()
         return {"ok": True, "rpc_url": RPC_URL, "slot": slot}
     except Exception as e:
-        return {"ok": False, "rpc_url": RPC_URL, "error": str(e)}
+        return {"ok": False, "rpc_url": RPC_URL, "error": f"{type(e).__name__}: {e}"}
 
 # Raffle credit for a wallet (base units)
 @app.get(f"{API}/credits/{{wallet}}", response_model=CreditResp)
