@@ -22,8 +22,8 @@
   --shadow:0 10px 30px rgba(0,0,0,.45);
 
   /* Layout metrics */
-  --banner-h: 100px;                      /* match banner art height */
-  --countdown-scale: 1.25;               /* keep your scale */
+  --banner-h: 130px;                      /* match banner art height */
+  --countdown-scale: 1.225;               /* keep your scale */
   --countdown-h: 64px;                   /* visual height of inner row (approx) */
 }
 
