@@ -7,7 +7,8 @@ from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # let pydantic also read from your .env if present (optional)
+    model_config = SettingsConfigDict(env_file='-TREATZ.env', env_prefix='', extra='ignore')
 
     # =========================================================
     # API
@@ -23,18 +24,18 @@ class Settings(BaseSettings):
     # =========================================================
     # Vaults (public keys as strings)
     # =========================================================
-    GAME_VAULT: str = os.getenv("GAME_VAULT", "")
-    JACKPOT_VAULT: str = os.getenv("JACKPOT_VAULT", "")
+    GAME_VAULT: str = os.getenv("GAME_VAULT", "BSeXqAhun3MprUAxBdNAGDHyJY1yssf1yZYKden8uoGg")
+    JACKPOT_VAULT: str = os.getenv("JACKPOT_VAULT", "9MV8pJFPwLuwTZkJ7cg8pkeQdfGiLWXrkYt1M4FShLGU")
     GAME_VAULT_ATA: str = os.getenv("GAME_VAULT_ATA", "")
     JACKPOT_VAULT_ATA: str = os.getenv("JACKPOT_VAULT_ATA", "")
-    GAME_VAULT_PK: Optional[str] = None  # base58 secret key (server only)
-    JACKPOT_VAULT_PK: Optional[str] = None
+    GAME_VAULT_PK: Optional[str] = os.getenv("GAME_VAULT_PK")
+    JACKPOT_VAULT_PK: Optional[str] = os.getenv("JACKPOT_VAULT_PK")
 
     # =========================================================
     # Token / Mint
     # =========================================================
     TREATZ_MINT: str = os.getenv("TREATZ_MINT", "")
-    TOKEN_DECIMALS: int = int(os.getenv("TOKEN_DECIMALS", 6))
+    TOKEN_DECIMALS: int = int(os.getenv("TOKEN_DECIMALS", "6"))
 
     # =========================================================
     # Economics
@@ -51,19 +52,19 @@ class Settings(BaseSettings):
     # =========================================================
     ROUND_BREAK: int = int(os.getenv("ROUND_BREAK", "2"))
     ROUND_MIN: int = int(os.getenv("ROUND_MIN", "2"))
-    SLOTS_PER_MIN: int = int(os.getenv("SLOTS_PER_MIN", "150"))
+    SLOTS_PER_MIN: int = 150
 
     # =========================================================
     # Wallets
     # =========================================================
     BURN_ADDRESS: str = os.getenv("BURN_ADDRESS", "1nc1nerator11111111111111111111111111111111")
-    DEV_WALLET: str = os.getenv("DEV_WALLET", "")
+    DEV_WALLET: str = os.getenv("DEV_WALLET", "2RXHVnWajJrUzzuH3n8jbn7Xbk6Pyjo9aycmjTA2TjGu")
 
     # =========================================================
     # Secrets
     # =========================================================
-    HMAC_SECRET: Optional[str] = os.getenv("HMAC_SECRET", None)
-    HELIUS_SIGNATURE_HEADER: Optional[str] = os.getenv("HELIUS_SIGNATURE_HEADER", None)
+    HMAC_SECRET: Optional[str] = os.getenv("HMAC_SECRET")
+    HELIUS_SIGNATURE_HEADER: Optional[str] = os.getenv("HELIUS_SIGNATURE_HEADER")
 
     # =========================================================
     # Database
