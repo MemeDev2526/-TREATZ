@@ -24,21 +24,18 @@ CREATE TABLE IF NOT EXISTS kv (
 -- Rounds table: TEXT id like 'R0123'
 CREATE TABLE IF NOT EXISTS rounds (
   id                 TEXT PRIMARY KEY,
-  status             TEXT NOT NULL DEFAULT 'OPEN',
   opens_at           TEXT NOT NULL,
   closes_at          TEXT NOT NULL,
   pot                INTEGER NOT NULL DEFAULT 0,
+  status             TEXT NOT NULL DEFAULT 'OPEN',
   client_seed        TEXT,
-  -- fairness / outcome
   server_seed_hash   TEXT,
   server_seed_reveal TEXT,
   finalize_slot      INTEGER,
   entropy            TEXT,
-  -- optional outcome storage (history convenience)
   winner             TEXT,
   payout_sig         TEXT
 );
-
 
 CREATE TABLE IF NOT EXISTS bets (
   id TEXT PRIMARY KEY,
