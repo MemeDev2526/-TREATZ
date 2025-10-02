@@ -4,6 +4,13 @@
 (function () {
   "use strict";
 
+  console.log("TREATZ app boot", {
+    build: window.TREATZ_BUILD,
+    hasPhantom: !!(window.phantom?.solana || window.solana),
+    hasSolflare: !!window.solflare,
+    hasBackpack: !!window.backpack?.solana
+  });
+
 /* ────────────────────────────────────────────────────────
    0) Config, Constants, Tiny Helpers
    ──────────────────────────────────────────────────────── */
@@ -216,28 +223,27 @@
   link("link-whitepaper",C.links?.whitepaper);
   link("btn-buy",        C.buyUrl);
 
-   // Show deep-link ONLY on mobile when no provider is present
-   // Deep-link button(s): show only on mobile with NO provider and when NOT connected
-   const deepLinks = [
-     document.getElementById("btn-open-in-phantom"),
-     document.getElementById("btn-open-in-phantom-modal"),
-   ].filter(Boolean);
+  // Deep-link button(s): show only on mobile with NO provider and when NOT connected
+  const deepLinks = [
+    document.getElementById("btn-open-in-phantom"),
+    document.getElementById("btn-open-in-phantom-modal"),
+  ].filter(Boolean);
 
-   function updateDeepLinkVisibility() {
-     if (!deepLinks.length) return;
-     const href = phantomDeepLinkForThisSite();
-     const hasProvider = !!(window.solana?.isPhantom || window.solflare?.isSolflare || window.backpack?.solana);
-     const shouldShow = isMobile() && !hasProvider && !PUBKEY;
+  function updateDeepLinkVisibility() {
+    if (!deepLinks.length) return;
+    const href = phantomDeepLinkForThisSite();
+    const hasProvider = !!(getPhantomProvider() || getSolflareProvider() || getBackpackProvider());
+    const shouldShow = isMobile() && !hasProvider && !PUBKEY;
 
-     for (const a of deepLinks) {
-       a.href = href;
-       a.style.display = shouldShow ? "inline-block" : "none";
-       if (a.hasAttribute("hidden")) a.hidden = !shouldShow;
-     }
-   }
-   updateDeepLinkVisibility();
-   document.addEventListener("DOMContentLoaded", updateDeepLinkVisibility);
-   window.addEventListener("load", updateDeepLinkVisibility);
+    for (const a of deepLinks) {
+      a.href = href;
+      a.style.display = shouldShow ? "inline-block" : "none";
+      if (a.hasAttribute("hidden")) a.hidden = !shouldShow;
+    }
+  }
+  updateDeepLinkVisibility();
+  document.addEventListener("DOMContentLoaded", updateDeepLinkVisibility);
+  window.addEventListener("load", updateDeepLinkVisibility);
 
   const tokenEl = $("#token-address");
   if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
@@ -295,6 +301,26 @@
 /* ────────────────────────────────────────────────────────
    4) Wallet plumbing (multi-wallet; Phantom/Solflare/Backpack)
    ──────────────────────────────────────────────────────── */
+
+  // Provider getters (robust to new injection paths)
+  function getPhantomProvider(){
+    const p = window.phantom?.solana || window.solana;
+    return (p && p.isPhantom) ? p : null;
+  }
+  function getSolflareProvider(){
+    return (window.solflare && window.solflare.isSolflare) ? window.solflare : null;
+  }
+  function getBackpackProvider(){
+    return window.backpack?.solana || null;
+  }
+  function getProviderByName(name){
+    name = (name||"").toLowerCase();
+    if (name === "phantom")  return getPhantomProvider();
+    if (name === "solflare") return getSolflareProvider();
+    if (name === "backpack") return getBackpackProvider();
+    return null;
+  }
+
   // Simple modal control (matches your HTML/CSS)
   const modal = document.getElementById("wallet-modal");
   function openWalletModal(){ if (modal) modal.hidden = false; }
@@ -326,16 +352,13 @@
   const toBaseUnits   = (human) => Math.floor(Number(human) * TEN_POW);
   const fromBaseUnits = (base)  => Number(base) / TEN_POW;
 
-  const getProviderByName = (name) => {
-    name = (name || "").toLowerCase();
-    if (name === "phantom"  && window.solana?.isPhantom) return window.solana;
-    if (name === "solflare" && window.solflare?.isSolflare) return window.solflare;
-    if (name === "backpack" && window.backpack?.solana)     return window.backpack.solana;
-    return null;
-  };
-
   function onProviderConnect(pk) {
-    try { if (pk) PUBKEY = new solanaWeb3.PublicKey(pk.toString()); } catch {}
+    try {
+      if (pk) {
+        const base58 = typeof pk.toBase58 === "function" ? pk.toBase58() : pk.toString();
+        PUBKEY = new solanaWeb3.PublicKey(base58);
+      }
+    } catch {}
     setWalletLabels();
     setTimeout(loadPlayerStats, 400);
   }
@@ -358,14 +381,20 @@
     for (const name of order) {
       const p = getProviderByName(name);
       if (!p) continue;
-      const res = await p.connect();
-      WALLET = p;
-      wireProvider(p);
-      const got = (res?.publicKey?.toString?.() || res?.publicKey || res).toString();
-      PUBKEY = new solanaWeb3.PublicKey(got);
-      setWalletLabels();
-      setTimeout(loadPlayerStats, 500);
-      return PUBKEY;
+      try {
+        const res = await p.connect();
+        WALLET = p;
+        wireProvider(p);
+        const pkAny = res?.publicKey || p.publicKey || res;
+        const base58 = typeof pkAny?.toBase58 === "function" ? pkAny.toBase58() : String(pkAny);
+        PUBKEY = new solanaWeb3.PublicKey(base58);
+        setWalletLabels();
+        setTimeout(loadPlayerStats, 500);
+        console.log(`[connectWallet] connected via ${name}: ${PUBKEY.toBase58()}`);
+        return PUBKEY;
+      } catch (err) {
+        console.warn(`[connectWallet] ${name} connect failed`, err);
+      }
     }
 
     // No provider found → guide install / deep link
@@ -374,7 +403,7 @@
       throw new Error("Opening in Phantom…");
     } else {
       window.open("https://phantom.app/", "_blank");
-      throw new Error("Wallet not found");
+      throw new Error("Wallet extension not found");
     }
   }
 
@@ -382,8 +411,6 @@
     try { await WALLET?.disconnect(); } catch {}
     PUBKEY = null;
     setWalletLabels();
-    const m = document.getElementById("wallet-menu"); // optional legacy
-    if (m) m.hidden = true;
   }
 
   function setWalletLabels() {
@@ -415,30 +442,32 @@
 
   // PRIMARY connect button (modal-first logic)
   document.getElementById("btn-connect")?.addEventListener("click", async () => {
-    if (PUBKEY) { await disconnectWallet(); return; }
+    try {
+      if (PUBKEY) { await disconnectWallet(); return; }
 
-    const hasPhantom  = !!(window.solana?.isPhantom);
-    const hasSolflare = !!(window.solflare?.isSolflare);
-    const hasBackpack = !!(window.backpack?.solana);
-    const present = [
-      hasPhantom  && "phantom",
-      hasSolflare && "solflare",
-      hasBackpack && "backpack",
-    ].filter(Boolean);
+      const present = [
+        getPhantomProvider()  && "phantom",
+        getSolflareProvider() && "solflare",
+        getBackpackProvider() && "backpack",
+      ].filter(Boolean);
 
-    if (present.length === 0) {           // no providers → show modal + deep link
-      openWalletModal();
-      updateDeepLinkVisibility();
-      return;
+      if (present.length === 0) {           // no providers → show modal + deep link
+        openWalletModal();
+        updateDeepLinkVisibility();
+        return;
+      }
+      if (present.length === 1) {           // exactly one → connect immediately
+        await connectWallet(present[0]);
+        return;
+      }
+      openWalletModal();                     // 2+ → let the user pick
+    } catch (err) {
+      console.error("[btn-connect] error", err);
+      alert(err.message || "Failed to open wallet.");
     }
-    if (present.length === 1) {           // exactly one → connect immediately
-      connectWallet(present[0]).catch(console.error);
-      return;
-    }
-    openWalletModal();                     // 2+ → let the user pick
   });
 
-  // (Optional) legacy dropdown fallback — keep listener, but don’t toggle from the main handler
+  // (Optional) legacy dropdown fallback (if present in DOM)
   const menu = document.getElementById("wallet-menu");
   menu?.addEventListener("click", (e)=>{
     const b = e.target.closest("button[data-wallet]");
@@ -463,14 +492,11 @@
 /* ────────────────────────────────────────────────────────
    5) Ticker + Player Stats
    ──────────────────────────────────────────────────────── */
-  // ── Coin Flip Ticker: random wallets + wins/losses ─────────────────────────
 (function initCoinFlipTicker(){
   const el = document.getElementById("fomo-ticker");
   if (!el) return;
 
-  // Base58-ish alphabet to look Solana-y
   const ALPH = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-
   const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
   const randFrom = (arr) => arr[randInt(0, arr.length - 1)];
   const randWallet = () => {
@@ -481,25 +507,21 @@
 
   function makeLine(){
     const who = randWallet();
-    const isWin = Math.random() < 0.58; // small bias to green so it feels fun
-    // size in $TREATZ (human, not base units)
+    const isWin = Math.random() < 0.58;
     const amount = [5_000, 10_000, 25_000, 50_000, 75_000, 100_000, 150_000, 250_000, 500_000][randInt(0,8)];
     const verb = isWin ? "won" : "lost";
     const emoji = isWin ? "🎉" : "💀";
     const cls = isWin ? "tick-win" : "tick-loss";
-    // keep it short so the scroll reads well
     return `<span class="${cls}">${who} ${verb} ${fmt(amount)} $TREATZ ${emoji}</span>`;
   }
 
   function buildBatch(len=30){
     const lines = [];
     for (let i=0;i<len;i++) lines.push(makeLine());
-    // repeat the first few so the loop feels continuous
     return lines.concat(lines.slice(0,5)).join(" • ");
   }
 
   function render(){
-    // reset to restart the CSS animation smoothly
     el.innerHTML = "";
     const inner = document.createElement("div");
     inner.className = "ticker__inner";
@@ -508,10 +530,8 @@
   }
 
   render();
-  // refresh content every ~25s so it stays varied with the same scroll
   setInterval(render, 25000);
 })();
-
 
   async function loadPlayerStats(){
     const panel = document.getElementById("player-stats");
@@ -563,9 +583,10 @@
     return { ata, ix: null };
   }
 
+  const MEMO_PROGRAM_ID_CONST = MEMO_PROGRAM_ID; // alias for clarity
   const memoIx = (memoStr) => {
     const data = new TextEncoder().encode(memoStr);
-    return new solanaWeb3.TransactionInstruction({ programId: MEMO_PROGRAM_ID, keys: [], data });
+    return new solanaWeb3.TransactionInstruction({ programId: MEMO_PROGRAM_ID_CONST, keys: [], data });
   };
 
 /* ────────────────────────────────────────────────────────
@@ -768,7 +789,7 @@
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
     try {
-      const base = await jfetch(`${API}/rounds/recent?limit=10`);
+      const base = await jfetch(`${API}/rounds/recent?limit=10}`);
       const ids  = (query && /^R\d+$/i.test(query)) ? base.filter(x=>x.id===query) : base;
       const rows = [];
       for (const r of ids){
