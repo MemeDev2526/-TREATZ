@@ -217,16 +217,27 @@
   link("btn-buy",        C.buyUrl);
 
    // Show deep-link ONLY on mobile when no provider is present
-   // Deep-link button: show only on mobile with NO provider and when NOT connected
-   const openInPhantom = document.getElementById("btn-open-in-phantom");
+   // Deep-link button(s): show only on mobile with NO provider and when NOT connected
+   const deepLinks = [
+     document.getElementById("btn-open-in-phantom"),
+     document.getElementById("btn-open-in-phantom-modal"),
+   ].filter(Boolean);
+
    function updateDeepLinkVisibility() {
-     if (!openInPhantom) return;
-     openInPhantom.href = phantomDeepLinkForThisSite();
+     if (!deepLinks.length) return;
+     const href = phantomDeepLinkForThisSite();
      const hasProvider = !!(window.solana?.isPhantom || window.solflare?.isSolflare || window.backpack?.solana);
      const shouldShow = isMobile() && !hasProvider && !PUBKEY;
-     openInPhantom.style.display = shouldShow ? "inline-block" : "none";
+
+     for (const a of deepLinks) {
+       a.href = href;
+       a.style.display = shouldShow ? "inline-block" : "none";
+       if (a.hasAttribute("hidden")) a.hidden = !shouldShow;
+     }
    }
    updateDeepLinkVisibility();
+   document.addEventListener("DOMContentLoaded", updateDeepLinkVisibility);
+   window.addEventListener("load", updateDeepLinkVisibility);
 
   const tokenEl = $("#token-address");
   if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
@@ -284,6 +295,22 @@
 /* ────────────────────────────────────────────────────────
    4) Wallet plumbing (multi-wallet; Phantom/Solflare/Backpack)
    ──────────────────────────────────────────────────────── */
+  // Simple modal control (matches your HTML/CSS)
+  const modal = document.getElementById("wallet-modal");
+  function openWalletModal(){ if (modal) modal.hidden = false; }
+  function closeWalletModal(){ if (modal) modal.hidden = true; }
+  modal?.addEventListener("click", (e)=>{ if (e.target.matches("[data-close], .wm__backdrop")) closeWalletModal(); });
+  document.addEventListener("keydown", (e)=>{ if (e.key === "Escape") closeWalletModal(); });
+
+  // Modal list click → connect
+  modal?.addEventListener("click", (e)=>{
+    const b = e.target.closest(".wm__item[data-wallet]");
+    if (!b) return;
+    const w = b.getAttribute("data-wallet");
+    closeWalletModal();
+    connectWallet(w).catch(console.error);
+  });
+  
   const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
   const CONNECTION = new solanaWeb3.Connection(
     (window.TREATZ_CONFIG?.rpcUrl || "https://api.mainnet-beta.solana.com"),
@@ -307,6 +334,31 @@
     return null;
   };
 
+  function onProviderConnect(pk) {
+    try {
+      if (pk) PUBKEY = new solanaWeb3.PublicKey(pk.toString());
+    } catch { /* ignore */ }
+    setWalletLabels();
+    setTimeout(loadPlayerStats, 400);
+  }
+
+  function onProviderDisconnect() {
+    PUBKEY = null;
+    setWalletLabels();
+  }
+
+  function wireProvider(p) {
+    try {
+      p?.on?.("connect", (pubkey) => onProviderConnect(pubkey || p.publicKey));
+      p?.on?.("disconnect", onProviderDisconnect);
+      p?.on?.("accountChanged", (pubkey) => onProviderConnect(pubkey));
+    } catch {}
+  }
+
+  // After you set WALLET in connectWallet:
+  WALLET = p;
+  wireProvider(p);
+  
   async function connectWallet(preferred) {
     if (PUBKEY) return PUBKEY;
 
@@ -316,6 +368,7 @@
       if (!p) continue;
       const res = await p.connect();
       WALLET = p;
+      wireProvider(p);
       PUBKEY = new solanaWeb3.PublicKey((res.publicKey?.toString?.() || res.publicKey || res).toString());
       setWalletLabels();
       setTimeout(loadPlayerStats, 500);
@@ -572,12 +625,16 @@
         memoIx(bet.memo)
       );
 
-      const { blockhash, lastValidBlockHeight } = await CONNECTION.getLatestBlockhash("finalized");
-      const tx = new solanaWeb3.Transaction({ feePayer: payer, blockhash, lastValidBlockHeight });
+      const { blockhash } = await CONNECTION.getLatestBlockhash("finalized");
+      const tx = new solanaWeb3.Transaction({ feePayer: payer });
+      tx.recentBlockhash = blockhash;
       tx.add(...ixs);
 
-      const { signature } = await WALLET.signAndSendTransaction(tx);
-      $("#cf-status").textContent = `Sent: ${signature.slice(0,8)}… (await confirmation)`;
+      const sigRes = await WALLET.signAndSendTransaction(tx);
+      const signature = typeof sigRes === "string" ? sigRes : sigRes?.signature;
+      $("#cf-status").textContent = signature
+        ? `Sent: ${signature.slice(0,8)}… (await confirmation)`
+        : `Sent. Awaiting confirmation…`;
     } catch (err) {
       console.error(err);
       $("#cf-status").textContent = `Error: ${err.message || err}`;
@@ -625,12 +682,14 @@
         memoIx(memoStr)
       );
 
-      const { blockhash, lastValidBlockHeight } = await CONNECTION.getLatestBlockhash("finalized");
-      const tx = new solanaWeb3.Transaction({ feePayer: payer, blockhash, lastValidBlockHeight });
+      const { blockhash } = await CONNECTION.getLatestBlockhash("finalized");
+      const tx = new solanaWeb3.Transaction({ feePayer: payer });
+      tx.recentBlockhash = blockhash;
       tx.add(...ixs);
 
-      const { signature } = await WALLET.signAndSendTransaction(tx);
-      alert(`Tickets purchased! Tx: ${signature.slice(0,8)}…`);
+      const sigRes = await WALLET.signAndSendTransaction(tx);
+      const signature = typeof sigRes === "string" ? sigRes : sigRes?.signature;
+      alert(`Tickets purchased! Tx: ${signature ? signature.slice(0,8) + "…" : "pending"}`);
     } catch (e) {
       console.error(e);
       alert(e.message || "Ticket purchase failed.");
