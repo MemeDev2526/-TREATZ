@@ -481,7 +481,9 @@ async def get_config(include_balances: bool = False):
         if row:
             opens_at = row[0]
             closes_at = row[1]
-            next_opens_at = (datetime.fromisoformat(closes_at) + timedelta(minutes=ROUND_BREAK)).isoformat()
+            o_dt = datetime.fromisoformat(opens_at)
+            c_dt = datetime.fromisoformat(closes_at)
+            n_dt = c_dt + timedelta(minutes=ROUND_BREAK)
 
     # Vault balances / limits (optional — hits RPC)
     game_vault_ata = getattr(settings, "GAME_VAULT_ATA", "")
@@ -521,10 +523,10 @@ async def get_config(include_balances: bool = False):
             "jackpot_vault_ata": jackpot_vault_ata or None,
         },
         "timers": {
-            "current_round_id": rid,
-            "opens_at": opens_at,
-            "closes_at": closes_at,
-            "next_opens_at": next_opens_at,
+        "current_round_id": rid,
+        "opens_at": _rfc3339(o_dt),
+        "closes_at": _rfc3339(c_dt),
+        "next_opens_at": _rfc3339(n_dt),
         },
         "limits": {
             "max_wager_base_units": max_wager,            # null unless include_balances=true
@@ -872,7 +874,7 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
 
     await app.state.db.execute(
         "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) VALUES(?,?,?,?,?,?,?,?)",
-        (new_id, "OPEN", now.isoformat(), closes.isoformat(), srv_hash, secrets.token_hex(8), finalize_slot, 0),
+        (new_id, "OPEN", _rfc3339(now), _rfc3339(closes), srv_hash, secrets.token_hex(8), finalize_slot, 0),
     )
     await dbmod.kv_set(app.state.db, "current_round_id", new_id)
     await app.state.db.commit()
