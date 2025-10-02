@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <!--
-  $TREATZ — “Whitepaper” Jump Scare (v3 tweaks)
+  $TREATZ — “Whitepaper” Jump Scare (v3.1 mobile-safe)
 
   QUICK CONFIG (edit on <body>):
     data-halloween-iso   - Countdown target
@@ -52,8 +52,8 @@
       pointer-events:none;
     }
 
-    /* Countdown */
-    .countdown{position:sticky; top:0; z-index:1000; background: #000, rgba(106,0,255,.92)); border-bottom:1px solid rgba(255,255,255,.2)}
+    /* Countdown (background line FIXED) */
+    .countdown{position:sticky; top:0; z-index:1000; background:#000; border-bottom:1px solid rgba(255,255,255,.2)}
     .countdown__inner{max-width:1200px; margin:0 auto; padding:.55rem .9rem; display:flex; gap:.75rem; align-items:center; justify-content:center; flex-wrap:wrap}
     .countdown__label{font-weight:700; letter-spacing:.3px}
     .countdown__timer{font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem}
@@ -99,7 +99,6 @@
         0 0 24px rgba(106,0,255,.35),
         0 2px 0 rgba(0,0,0,.65);
     }
-    
 
     /* Copy */
     .explain{
@@ -155,7 +154,7 @@
       transform: scale(1.5);   /* “Only the brave…” up 1.5x */
     }
     .veil__btn{
-      margin-top:14px; font-size:clamp(18px,2.6vw,24px);
+      margin-top:14px; 
       font-size: clamp(16px, 3vw, 22px);
       padding:.95rem 1.6rem; border-radius:16px;
       background:linear-gradient(180deg,var(--orange),var(--orange-hi));
@@ -195,10 +194,15 @@
     @media (max-width: 480px){
       .explain{ font-size: 1.2rem; line-height: 1.8; }
     }
+    /* Tone down heavy blur on very small screens (perf-friendly) */
+    @media (max-width: 420px){
+      .veil{ backdrop-filter:none; background: rgba(9,9,9,.82); }
+    }
     
     @media (prefers-reduced-motion: reduce){
       .flyer{animation:none; opacity:.85; transform:scale(1);}
     }
+
     /* --- Whitepaper scroll fix overrides --- */
     body{
       overflow-x: hidden;
@@ -259,7 +263,7 @@
           $TREATZ isn’t just another bag—it’s the Halloween bag. 
           The one kids brag about, the one degens ape for, the one CT remembers when the lights go out.
           Other coins dress up in costumes. $TREATZ is the costume, the candy, and the chaos all rolled into one glowing wrapper.
-          This October, there’s no trick. Only <strong>$TREATZ</strong>..
+          This October, there’s no trick. Only <strong>$TREATZ</strong>.
           And behind the wrappers? More surprises waiting in the dark…
         </p>
         <ul>
@@ -313,6 +317,8 @@
       runSeconds  : Math.max(1, parseInt(pageEl.dataset.runSeconds || '5',10))
     };
 
+    const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
     /* 2) COUNTDOWN */
     (function countdown(){
       const target  = new Date(CFG.halloweenISO);
@@ -361,7 +367,7 @@
       }, dt);
     }
 
-    /* 5) FLYERS + UNIQUE SFX + RANDOM SPAWN (auto-stop) */
+    /* 5) FLYERS + SFX (pooled & throttled for mobile) */
     const EMOJIS = ['👻','🦇','🧟','🧟‍♀️','🧟‍♂️','🧌'];
     const IMGS   = [
       // { src: 'assets/ghost.png', cls: 'flyer flyer--ghost', size: 96, type:'ghost' },
@@ -371,15 +377,30 @@
     ];
 
     const SFX = { ghost: CFG.sfx.ghost, bat: CFG.sfx.bat, ghoul: CFG.sfx.ghoul, zombie: CFG.sfx.zombie };
+    const sfxPool = {};   // one Audio per type
+    const sfxLast = {};   // last play timestamp per type
+
+    function getSfx(kind){
+      const src = SFX[kind];
+      if (!src) return null;
+      if (!sfxPool[kind]) {
+        const a = new Audio(src);
+        a.preload = 'auto';
+        a.volume = IS_MOBILE ? 0.35 : 0.55;
+        sfxPool[kind] = a;
+        sfxLast[kind] = 0;
+      }
+      return sfxPool[kind];
+    }
 
     function playSfx(kind){
-      const src = SFX[kind];
-      if (!src) return;
-      try {
-        const a = new Audio(src);
-        a.volume = 0.55;
-        a.play().catch(()=>{});
-      } catch(e){}
+      const now = performance.now();
+      const minGap = IS_MOBILE ? 180 : 80; // throttle per type
+      if ((now - (sfxLast[kind] || 0)) < minGap) return;
+      const a = getSfx(kind);
+      if (!a) return;
+      try { a.currentTime = 0; a.play().catch(()=>{}); } catch(e){}
+      sfxLast[kind] = now;
     }
 
     function randomPos(){
@@ -424,18 +445,19 @@
 
     function burst(count=10, spreadMs=420){
       if (!runFlyers) return;
+      const target = IS_MOBILE ? Math.min(8, count) : count;
       let i = 0;
       const t = setInterval(()=>{
         if (!runFlyers) { clearInterval(t); return; }
         spawnFlyer();
-        if (++i >= count) clearInterval(t);
-      }, Math.max(40, Math.floor(spreadMs/count)));
+        if (++i >= target) clearInterval(t);
+      }, Math.max(40, Math.floor(spreadMs/target)));
     }
 
     function stopFlyersAndSfx(){
       runFlyers = false;
       if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
-      // Flyers already on screen will auto-remove at animationend; no new SFX will play.
+      // flyers will auto-remove on animationend
     }
 
     /* 6) JUMP-SCARE SEQUENCE + HIDE/SHOW CONTENT */
@@ -455,7 +477,7 @@
       // Reveal headline + flyer burst
       requestAnimationFrame(()=> booEl.classList.add('show'));
       runFlyers = true;
-      burst(18, 560);
+      burst(IS_MOBILE ? 10 : 18, IS_MOBILE ? 520 : 560);
       setTimeout(()=> txtEl.classList.add('show'), 800);
 
       // Ambient loop fades in after scream
@@ -465,8 +487,8 @@
       if ('onended' in scream){ scream.onended = startAmbient; } else { setTimeout(startAmbient, 1200); }
 
       // Keep a few flyers coming… then stop after runSeconds
-      keepAliveInterval = setInterval(()=> burst(3, 220), 1400);
-      setTimeout(stopFlyersAndSfx, CFG.runSeconds * 1000);
+      keepAliveInterval = setInterval(()=> burst(IS_MOBILE ? 2 : 3, 220), IS_MOBILE ? 1700 : 1400);
+      setTimeout(stopFlyersAndSfx, (CFG.runSeconds * 1000) - (IS_MOBILE ? 1200 : 0));
     }
 
     begin.addEventListener('click', ()=>{
