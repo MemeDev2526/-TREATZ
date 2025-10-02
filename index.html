@@ -100,22 +100,6 @@
       </div>
       <div class="tokenbar__actions">
         <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
-
-        <!-- Wallet Controls -->
-        <div class="wallet">
-          <button class="btn btn--ghost"   id="btn-openwallet" type="button" hidden>Open Wallet</button>
-          <button class="btn btn--primary" id="btn-connect"    type="button">Connect Wallet</button>
-
-          <!-- Legacy dropdown (unused once modal is present, can keep as fallback) -->
-          <div class="wallet__menu" id="wallet-menu" hidden>
-            <button data-wallet="phantom">Phantom</button>
-            <button data-wallet="solflare">Solflare</button>
-            <button data-wallet="backpack">Backpack</button>
-          </div>
-
-          <!-- Mobile helper: open this site inside Phantom if no provider -->
-          <a class="btn btn--outline" id="btn-open-in-phantom" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
-        </div>
       </div>
     </div>
   </header>
@@ -137,6 +121,21 @@
       <div class="card grid-2">
         <!-- Form -->
         <div class="card__col">
+          <!-- Inline wallet controls for the game area -->
+          <div class="wallet wallet--inline">
+            <button class="btn btn--ghost"   id="btn-openwallet" type="button" hidden>Open Wallet</button>
+            <button class="btn btn--primary" id="btn-connect"    type="button">Connect Wallet</button>
+
+            <!-- Optional legacy dropdown (still works as fallback) -->
+            <div class="wallet__menu" id="wallet-menu" hidden>
+              <button data-wallet="phantom">Phantom</button>
+              <button data-wallet="solflare">Solflare</button>
+              <button data-wallet="backpack">Backpack</button>
+            </div>
+
+              <!-- Mobile deep link helper (same ID your JS expects) -->
+            <a class="btn btn--outline" id="btn-open-in-phantom" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
+          </div>
           <form class="form" id="bet-form" autocomplete="off">
             <label class="label" for="bet-amount">Wager Amount ($TREATZ)</label>
             <input id="bet-amount" name="amount" type="number" min="0" step="1" placeholder="10,000" inputmode="numeric" />
@@ -204,6 +203,21 @@
             <div class="progress__bar" id="jp-progress" style="width:0%"></div>
           </div>
           <p id="raffle-schedule" class="help" style="margin-top:.5rem;"></p>
+        </div>
+        <!-- Inline wallet controls for the game area -->
+        <div class="wallet wallet--inline">
+          <button class="btn btn--ghost"   id="btn-openwallet" type="button" hidden>Open Wallet</button>
+          <button class="btn btn--primary" id="btn-connect"    type="button">Connect Wallet</button>
+
+          <!-- Optional legacy dropdown (still works as fallback) -->
+          <div class="wallet__menu" id="wallet-menu" hidden>
+            <button data-wallet="phantom">Phantom</button>
+            <button data-wallet="solflare">Solflare</button>
+            <button data-wallet="backpack">Backpack</button>
+          </div>
+
+          <!-- Mobile deep link helper (same ID your JS expects) -->
+          <a class="btn btn--outline" id="btn-open-in-phantom" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
         </div>
 
         <!-- Buy Tickets -->
