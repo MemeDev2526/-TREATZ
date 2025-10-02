@@ -1,315 +1,458 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <!-- ========== META ========== -->
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>$TREATZ — The Sweetest Halloween Meme Coin on Solana</title>
-  <meta name="description" content="$TREATZ — Trick-or-Treat coin toss & Jackpot Raffle. Spooky season on Solana." />
-  <meta name="theme-color" content="#0D0D0D" />
+/* =========================================================
+   $TREATZ — Global Theme Tokens
+   ========================================================= */
+:root{
+  /* Brand palette */
+  --orange:#FF6B00;
+  --orange-hi:#FF9500;
+  --pumpkin: var(--orange);              /* alias for legacy refs */
+  --witch:#6A00FF;
+  --slime:#39FF14;                       /* neon slime green */
+  --jet:#0D0D0D;
+  --white:#FFFFFF;
+  --gray:#AAAAAA;
 
-  <!-- ========== FONTS ========== -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
+  /* Background gradient stops */
+  --bg-a:#2C0A44;
+  --bg-b:#4D0D57;
 
-  <!-- ========== CSS ========== -->
-  <link id="treatz-css" rel="stylesheet" href="style.css?v={{ site.github.build_revision }}">
+  /* Surfaces / shadows */
+  --card:rgba(13,13,13,.72);
+  --card-border:rgba(255,255,255,.12);
+  --shadow:0 10px 30px rgba(0,0,0,.45);
 
-  <!-- ========== CONFIG (must be before app.js) ========== -->
-  <script>
-    window.TREATZ_CONFIG = {
-      apiBase: "https://treatz-de1d.onrender.com/api",
-      rpcUrl:  "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY",
-      token: { symbol: "$TREATZ", decimals: 6 },
-      links: {
-        telegram: "https://t.me/trickortreatsol",
-        twitter:  "https://x.com/trickortreatsol?s=21",
-        whitepaper: "https://trickortreatsol.tech/whitepaper"
-      },
-      buyUrl: "#",
-      tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
-      assets: { logo: "assets/TREATZ_Logo.png", mascot: "assets/Mascot.png" }
-    };
-  </script>
-  <script>
-    window.TREATZ_BUILD = "__BUILD__";
-  </script>
+  /* Layout metrics */
+  --banner-h: 120px;                      /* match banner art height */
+  --countdown-scale: 1.25;               /* keep your scale */
+  --countdown-h: 64px;                   /* visual height of inner row (approx) */
+}
 
-  <!-- ========== Solana libs (needed by app.js) ========== -->
-  <script src="https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js"></script>
-  <script src="https://unpkg.com/@solana/spl-token@0.4.7/dist/index.iife.js"></script>
+/* =========================================================
+   Base, Typography & Utilities
+   ========================================================= */
+*{ box-sizing:border-box }
+html,body{ height:100% }
 
-  <!-- ========== Loader: inserts app.js with ?v=<build> ========== -->
-  <script>
-    (function(b){
-      var l=document.getElementById('treatz-css');
-      if (l && !/\?v=/.test(l.href)) l.href='style.css?v='+b;
-      var s=document.createElement('script'); s.defer=true; s.src='app.js?v='+b;
-      document.head.appendChild(s);
-    })(window.TREATZ_BUILD || Date.now());
-  </script>
-  <!-- Optional: favicon -->
-  <!-- <link rel="icon" href="assets/favicon.png"> -->
-</head>
-<body>
+body{
+  margin:0;
+  color:var(--white);
+  font-family:"Rubik", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  background: linear-gradient(180deg,var(--bg-a),var(--bg-b));
+  overflow-x:hidden;
+}
 
-  <audio id="bg-ambient" src="assets/ambient_loop.mp3" preload="auto" loop></audio>
+.section__title, .nav__brand, h1, h2.display {
+  font-family: "Creepster", "Luckiest Guy", cursive;
+  letter-spacing:.5px;
+  color: var(--pumpkin);
+  text-shadow: 0 0 12px rgba(57,255,20,.25), 0 2px 0 rgba(0,0,0,.6);
+}
 
-  <!-- ==========================
-     TOP BANNER (sticky)
-     ========================== -->
-  <div class="brand-banner">
-    <img src="assets/Banner_Top.png" alt="$TREATZ banner" />
-  </div>
+.btn--primary, .btn--buy { font-family: "Luckiest Guy", cursive; }
 
-  <!-- ==========================
-      GLOBAL COUNTDOWN
-      ========================== -->
-  <div class="countdown" id="countdown" aria-live="polite">
-    <div class="countdown__inner">
-      <img id="countdown-logo" class="countdown__logo" src="assets/TREATZ_Logo.png" alt="$TREATZ logo" />
-      <span class="countdown__label">Countdown to Halloween:</span>
-      <span class="countdown__timer" id="countdown-timer">--d --h --m --s</span>
-      <span class="countdown__omen" id="countdown-omen"></span>
-    </div>
-  </div>
+a, .btn--outline { color: var(--slime); }
 
-  <!-- =======================================
-       NAVIGATION + TOKEN / BUY ACTION BAR
-       ======================================= -->
-  <header class="nav">
-    <div class="nav__wrap">
-      <a href="/" class="nav__brand">
-        <span class="nav__brand-text">$TREATZ - Own Uptober. Hold the bag. 🍬</span>
-      </a>
+.card{
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 10px 24px rgba(0,0,0,.35), 0 0 24px rgba(57,255,20,.08);
+  border-radius:16px;
+  padding:16px;
+}
 
-      <nav class="nav__links" aria-label="Primary">
-        <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter</a>
-        <a href="#" id="link-telegram"  data-live="false" target="_blank" rel="noopener">Telegram</a>
-        <a href="https://trickortreatsol.tech/whitepaper" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
-      </nav>
-    </div>
+/* Keyboard focus visibility */
+:focus-visible{
+  outline: 3px solid rgba(57,255,20,.85);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.nav__links a:focus-visible,
+.btn:focus-visible{
+  box-shadow: 0 0 0 3px rgba(57,255,20,.35);
+}
 
-    <div class="tokenbar" role="group" aria-label="Token & Buy">
-      <div class="tokenbar__address">
-        <span class="tokenbar__label">Token:</span>
-        <code id="token-address">—</code>
-        <button class="btn btn--ghost" id="btn-copy">Copy</button>
-      </div>
-      <div class="tokenbar__actions">
-        <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
+/* A11y helper */
+.visually-hidden{
+  position:absolute !important;
+  height:1px; width:1px;
+  overflow:hidden; clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap;
+}
 
-        <!-- Wallet Controls -->
-        <div class="wallet">
-          <button class="btn btn--ghost"   id="btn-openwallet" type="button" hidden>Open Wallet</button>
-          <button class="btn btn--primary" id="btn-connect"    type="button">Connect Wallet</button>
+.wallet{ position:relative; display:inline-block; }
+.wallet__menu{
+  position:absolute; top:110%; left:0; min-width:180px;
+  background:rgba(13,13,13,.95); border:1px solid rgba(255,255,255,.1);
+  border-radius:12px; padding:.4rem; box-shadow:0 10px 24px rgba(0,0,0,.35);
+}
+.wallet__menu button{
+  display:block; width:100%; text-align:left; padding:.55rem .7rem;
+  background:transparent; color:#fff; border:none; border-radius:8px; font-weight:700;
+}
+.wallet__menu button:hover{ background:rgba(255,255,255,.08) }
 
-          <!-- Legacy dropdown (unused once modal is present, can keep as fallback) -->
-          <div class="wallet__menu" id="wallet-menu" hidden>
-            <button data-wallet="phantom">Phantom</button>
-            <button data-wallet="solflare">Solflare</button>
-            <button data-wallet="backpack">Backpack</button>
-          </div>
+/* Wallet modal */
+.wm[hidden]{display:none!important}
+.wm{position:fixed;inset:0;z-index:1000}
+.wm__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:saturate(.9) blur(2px)}
+.wm__card{position:relative;max-width:420px;margin:8vh auto;background:#111;color:#fff;border:1px solid #2a2a2a;border-radius:16px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.wm__close{position:absolute;right:10px;top:8px;background:transparent;color:#bbb;border:0;font-size:22px;cursor:pointer}
+.wm__sub{color:#aaa;margin:2px 0 12px}
+.wm__list{display:grid;gap:10px}
+.wm__item{display:flex;align-items:center;justify-content:space-between;width:100%;background:#1a1a1a;border:1px solid #2b2b2b;border-radius:12px;padding:12px 14px;color:#fff;cursor:pointer}
+.wm__item:hover{border-color:#00ffa3}
+.wm__icon{width:22px;height:22px;margin-right:10px;border-radius:6px;display:inline-block;background:#333}
+.wm__status{color:#7bdc9d;margin-left:auto}
+.wm__deeplink{display:inline-block;margin-top:12px;border:1px solid #666;border-radius:10px;padding:8px 10px;color:#fff;text-decoration:none}
+.wm__help{margin-top:10px;color:#aaa;font-size:14px}
+.wm__icon.phantom{background:#7c5cff}
+.wm__icon.solflare{background:#ff5f15}
+.wm__icon.backpack{background:#0ea5e9}
 
-          <!-- Mobile helper: open this site inside Phantom if no provider -->
-          <a class="btn btn--outline" id="btn-open-in-phantom" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
-        </div>
-      </div>
-    </div>
-  </header>
+/* Ensure wallet buttons aren’t under an overlay */
+.tokenbar__actions,.wallet{position:relative;z-index:20}
 
-  <!-- ==========================
-       BACKGROUND ART LAYER
-       ========================== -->
-  <div class="bg" role="img" aria-label="Spooky cosmic candy background"></div>
 
-  <!-- ==========================
-       MAIN CONTENT
-       ========================== -->
-  <main class="main">
+/* =========================================================
+   Top Banner & Global Countdown
+   ========================================================= */
+.brand-banner{
+  background:#0D0D0D;
+  position: sticky; top: 0; z-index: 1002;
+  height: var(--banner-h);
+  box-shadow: 0 2px 0 rgba(0,0,0,.35);
+}
+.brand-banner img{
+  width:100%; height:100%;
+  object-fit: fill; display:block;
+}
 
-    <!-- ============= COIN FLIP ============= -->
-    <section class="section" id="coin-flip" aria-labelledby="coinflip-title">
-      <h2 class="section__title" id="coinflip-title">🎃 Trickz or $TREATZ — Coin Toss</h2>
-      <div class="ticker" id="fomo-ticker" aria-live="polite"></div>
-      <div class="card grid-2">
-        <!-- Form -->
-        <div class="card__col">
-          <form class="form" id="bet-form" autocomplete="off">
-            <label class="label" for="bet-amount">Wager Amount ($TREATZ)</label>
-            <input id="bet-amount" name="amount" type="number" min="0" step="1" placeholder="10,000" inputmode="numeric" />
+/* Countdown sits under the banner and never hides it */
+.countdown{
+  position: sticky;
+  top: var(--banner-h);
+  z-index: 1001;
+  transform: scale(var(--countdown-scale));
+  transform-origin: top center;
+  backdrop-filter: blur(4px);
+  background:#000;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  box-shadow: inset 0 -2px 0 rgba(0,255,163,.15), 0 6px 16px rgba(0,0,0,.25);
+}
 
-            <label class="label">Pick a side</label>
-            <div class="choices" role="radiogroup" aria-label="Coin side">
-              <label class="choice"><input type="radio" name="side" value="TRICK" checked /> TRICK 👻</label>
-              <label class="choice"><input type="radio" name="side" value="TREAT" /> TREATZ 🍬</label>
-            </div>
+/* ensure content below doesn't tuck under the sticky countdown */
+.countdown + .nav{
+  margin-top: calc(var(--countdown-h) * var(--countdown-scale) + 4px);
+}
 
-            <button class="btn btn--primary" type="submit" id="cf-play">Flip that Coin</button>
-            <p class="help" id="edge-line">House edge & on-chain fairness info will appear here.</p>
+.countdown__inner{
+  max-width:1200px;
+  margin:0 auto;
+  font-size: clamp(1.1rem, 2.2vw, 2rem);
+  padding: 0.9rem 1.2rem;
+  min-height: var(--countdown-h);
+  display:flex; gap:.75rem;
+  align-items:center; justify-content:center;
+  flex-wrap:wrap;
+  color:#fff;
+  text-shadow: 0 0 8px rgba(0,255,102,.45);
+}
+.countdown__label{ font-weight:700; letter-spacing:.3px }
+.countdown__timer{
+  font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem;
+  color:var(--slime); border:1px solid rgba(57,255,20,.25);
+  border-radius:8px; box-shadow: 0 0 12px rgba(57,255,20,.35)
+}
+.countdown__omen{ font-size:.95rem; opacity:.9; margin-left:8px; color:#d8c2ff; font-style: italic }
+/* Countdown logo inside the bar */
+.countdown__logo{
+  height: 84px; width: auto; margin-right: .6rem;
+  border-radius: 5px; box-shadow: 0 0 12px rgba(57,255,20,.35);
+}
+@media (max-width: 600px){
+  .countdown__logo{ height: 44px; }
+}
 
-            <!-- Optional: app.js will populate these if present -->
-            <div class="help" id="bet-instructions" style="margin-top:.5rem;">
-              <div><strong>Deposit:</strong> <code id="bet-deposit">—</code></div>
-              <div><strong>Memo:</strong> <code id="bet-memo">—</code></div>
-            </div>
-          </form>
-        </div>
+/* Optional glow under banner */
+.brand-banner::after{
+  content:"";
+  position:absolute; left:0; right:0; bottom:-6px; height:10px;
+  background: radial-gradient(closest-side, rgba(0,255,102,.5), transparent 70%);
+  filter: blur(6px); pointer-events:none;
+}
 
-        <!-- Visual -->
-        <div class="card__col">
-          <div class="cf-display" id="cf-display" aria-live="polite">
-            <div class="coin" id="coin" aria-label="Coin">
-              <div class="coin__face coin__face--front">TRICK</div>
-              <div class="coin__face coin__face--back">TREAT</div>
-            </div>
-            <div class="cf-status" id="cf-status">Ready to flip.</div>
-          </div>
-        </div>
-      </div>
-    </section>
+/* =========================================================
+   Background Art Layer
+   ========================================================= */
+.bg{
+  position:fixed; inset:0;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.75)),
+    url('assets/background.png') center top / cover no-repeat fixed;
+  z-index:-1;
+  filter: saturate(105%);
+}
 
-    <!-- ============= JACKPOT RAFFLE ============= -->
-    <section class="section" id="jackpot" aria-labelledby="jackpot-title">
-      <h2 class="section__title" id="jackpot-title">🕯️ 🎃 Jack'O'Lantern Raffle 🎃</h2>
+/* =========================================================
+   Navigation & Token Action Bar
+   ========================================================= */
+.nav{ position:relative; z-index:5; }
+.nav__wrap{
+  max-width:1200px; margin:12px auto 0; padding:0 16px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+}
+.nav__brand{ display:flex; align-items:center; gap:10px; }
+.nav__brand img{ height:44px; display:block }
+.nav__brand-text{
+  font-family:"Luckiest Guy", cursive; font-size:1.3rem; color:var(--orange);
+  text-shadow:0 0 8px rgba(255,149,0,.4);
+  display:none;
+}
+@media (min-width: 720px){
+  .nav__brand-text{ display:inline }
+}
 
-      <div class="card grid-3">
-        <!-- Stats -->
-        <div class="card__col">
-          <div class="stats">
-            <div>
-              <span class="stat__label">Current Pot</span>
-              <span class="stat__value"><strong id="round-pot">—</strong> $TREATZ</span>
-            </div>
-            <div>
-              <span class="stat__label">Round</span>
-              <span class="stat__value" id="round-id">—</span>
-            </div>
-            <div>
-              <span class="stat__label">Closes In</span>
-              <span class="stat__value" id="round-countdown">—</span>
-            </div>
-            <div>
-              <span class="stat__label">Next Draw Starts In</span>
-              <span class="stat__value" id="round-next-countdown">—</span>
-            </div>
-            <div>
-              <span class="stat__label">Ticket Price</span>
-              <span class="stat__value"><strong id="ticket-price">—</strong> $TREATZ</span>
-            </div>
-          </div>
-          <div class="progress" aria-label="Time remaining">
-            <div class="progress__bar" id="jp-progress" style="width:0%"></div>
-          </div>
-          <p id="raffle-schedule" class="help" style="margin-top:.5rem;"></p>
-        </div>
+.nav__links{ display:flex; align-items:center; gap:10px; }
+.nav__links a{
+  color:#eaeaea; text-decoration:none; font-weight:700; letter-spacing:.2px;
+  padding:.5rem .8rem; border-radius:999px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.08);
+  box-shadow:0 2px 10px rgba(0,0,0,.25);
+}
+.nav__links a:hover{ color:#fff; background:rgba(255,255,255,.1); text-shadow:none }
 
-        <!-- Buy Tickets -->
-        <div class="card__col">
-          <div class="form">
-            <label class="label" for="jp-amount">Buy Tickets</label>
-            <input id="jp-amount" type="number" min="1" step="1" placeholder="1" />
-            <button class="btn btn--primary" id="jp-buy" type="button">Enter Raffle</button>
-            <p class="help">Tickets recorded on-chain. Auto-payout to winner. % burn to incinerator and gone forever.</p>
-          </div>
-        </div>
+.tokenbar{
+  max-width:1200px; margin:10px auto 16px; padding:8px 16px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  background:linear-gradient(180deg, rgba(13,13,13,.85), rgba(13,13,13,.6));
+  border:1px solid var(--card-border); border-radius:14px;
+  box-shadow:var(--shadow)
+}
+.tokenbar__label{ opacity:.85; margin-right:6px }
+.tokenbar__address code{ font-size:.95rem; user-select:all }
+.tokenbar__actions{ display:flex; gap:10px; flex-wrap:wrap }
 
-        <!-- Recent Rounds -->
-        <div class="card__col">
-          <div class="mini-table" aria-live="polite">
-            <div class="mini-table__head">
-              <span>Recent Rounds</span>
-              <button class="btn btn--ghost" id="jp-view-all" type="button">View All</button>
-            </div>
-            <!-- app.js fills this list from /rounds/recent -->
-            <ul class="mini-table__list recent-list" id="recent-rounds"></ul>
-          </div> <!-- ✅ close .mini-table -->
+/* =========================================================
+   Buttons
+   ========================================================= */
+.btn{ cursor:pointer; border:none; padding:.7rem 1rem; border-radius:12px; font-weight:800 }
+.btn--primary{ background:linear-gradient(180deg,var(--orange),var(--orange-hi)); color:#1a0b00 }
+.btn--buy{ background:linear-gradient(90deg,var(--slime),#94DAFF); color:#032316; font-weight:900 }
+.btn--outline{ background:transparent; color:var(--white); border:1px solid var(--white) }
+.btn--ghost{ background:transparent; color:var(--white); opacity:.9 }
+.btn:disabled{ opacity:.6; cursor:not-allowed }
 
-          <!-- Player stats (appears when wallet connected) -->
-          <div id="player-stats" class="card small" hidden style="margin-top:.75rem;">
-            <div><strong>Your tickets (current round):</strong> <span id="ps-tickets">0</span></div>
-            <div><strong>Ticket credit:</strong> <span id="ps-credit">0</span> $TREATZ</div>
-            <div><strong>Total spent:</strong> <span id="ps-spent">0</span> $TREATZ</div>
-            <div><strong>Total winnings:</strong> <span id="ps-won">0</span> $TREATZ</div>
-          </div>
-        </div>
-      </div>
-    </section>
+/* =========================================================
+   Layout & Cards
+   ========================================================= */
+.main{ max-width:1200px; margin:0 auto; padding:24px 16px 80px }
+.section{ margin:28px 0 }
+.section__title{
+  font-family:"Luckiest Guy", cursive; letter-spacing:.5px; font-size:2rem;
+  margin:0 0 12px; text-shadow:0 2px 18px rgba(0,0,0,.35)
+}
 
-    <!-- ============= RAFFLE HISTORY ============= -->
-    <section class="section" id="raffle-history" aria-labelledby="raffle-history-title">
-      <h2 class="section__title" id="raffle-history-title">Raffle History</h2>
-      <div class="card">
-        <input id="history-search" type="text" placeholder="Search round (e.g., R1601)" />
-        <div class="table-wrap" style="margin-top:.5rem;">
-          <table id="history-table">
-            <thead>
-              <tr>
-                <th>Round</th>
-                <th>Pot</th>
-                <th>Winner</th>
-                <th>Payout Tx</th>
-                <th>Proof</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+.grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:16px }
+.grid-3{ display:grid; grid-template-columns:2fr 1fr 1.2fr; gap:16px }
+@media (max-width:900px){ .grid-2,.grid-3{ grid-template-columns:1fr } }
 
-    <!-- ============= ABOUT ============= -->
-    <section class="section" id="about" aria-labelledby="about-title">
-      <h2 class="section__title" id="about-title">About $TREATZ</h2>
-      <div class="card">
-        <p><strong>$TREATZ</strong> is the sweetest Halloween meme coin of Solana — bold, spooky, and made for glorious pumps. Just like trick-or-treating, it’s a dash to fill your bag with candy (and profits). Born from chaos, powered by memes, and dripping with Halloween FOMO — $TREATZ is here to haunt the charts, scare the paper hands, and reward the degens brave enough to grab a bag.</p>
-        <p>Play our <em>Trick or Treat</em> coin toss and the <em>Jackpot Raffle</em>, track burns and winners in real-time, and help us light the lanterns all the way to October 31.</p>
-      </div>
-    </section>
+.label{ display:block; margin:.3rem 0 .35rem; font-weight:700 }
+input[type="number"], input[type="text"]{
+  width:100%; padding:.75rem .9rem; border-radius:12px;
+  border:1px solid var(--card-border); background:#0f0f10; color:var(--white)
+}
+input[type="number"]{ -moz-appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+input::placeholder{ color:#cfcfcf; opacity:.7; }
+.help{ opacity:.8; font-size:.9rem }
 
-    <!-- ============= FOOTER ============= -->
-    <footer class="footer">
-      <p>© 2025 $TREATZ • Spooky season never sleeps.</p>
-    </footer>
-  </main>
+/* =========================================================
+   Radio Choices
+   ========================================================= */
+.choices{ display:flex; gap:12px; margin:.25rem 0 1rem }
+.choice{ display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.06); padding:.5rem .75rem; border-radius:12px; border:1px solid var(--card-border) }
 
-  <!-- ==========================
-       RENDERED FX LAYER + MASCOT
-       ========================== -->
-  <div id="fx-layer" aria-hidden="true"></div>
-  <img id="mascot-floater" alt="Mascot" />
+/* =========================================================
+   Coin Flip — Visual
+   ========================================================= */
+.cf-display{ display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:220px; position:relative }
+.ticker{
+  overflow:hidden; white-space:nowrap;
+  border:1px solid rgba(255,255,255,.08);
+  background:linear-gradient(180deg, rgba(13,13,13,.72), rgba(13,13,13,.5));
+  border-radius:12px; margin:8px auto 0; padding:.5rem .75rem; max-width:1200px;
+  font-weight:700; color:var(--slime);
+}
+.ticker__inner{ display:inline-block; padding-left:100%; animation:ticker 18s linear infinite; }
+@keyframes ticker{ 0%{transform:translateX(0)} 100%{transform:translateX(-100%)} }
 
-  <!-- ==========================
-       WALLET SELECT MODAL
-       ========================== -->
-  <div id="wallet-modal" class="wm" hidden>
-    <div class="wm__backdrop" data-close></div>
-    <div class="wm__card" role="dialog" aria-modal="true" aria-labelledby="wm-title">
-      <button class="wm__close" data-close aria-label="Close">×</button>
-      <h3 id="wm-title">Connect a wallet</h3>
-      <p class="wm__sub">Choose a provider to continue.</p>
-      <div class="wm__list">
-        <button class="wm__item" data-wallet="phantom">
-          <span class="wm__icon phantom"></span> Phantom
-          <small class="wm__status" data-ph-status>Detected</small>
-        </button>
-        <button class="wm__item" data-wallet="solflare">
-          <span class="wm__icon solflare"></span> Solflare
-          <small class="wm__status" data-sf-status>Detected</small>
-        </button>
-        <button class="wm__item" data-wallet="backpack">
-          <span class="wm__icon backpack"></span> Backpack
-          <small class="wm__status" data-bp-status>Detected</small>
-        </button>
-      </div>
-      <a id="btn-open-in-phantom" class="wm__deeplink" href="#" target="_blank" rel="noopener" hidden>
-        Open site in Phantom
-      </a>
-      <div class="wm__help">No wallet? <a href="https://phantom.app/" target="_blank" rel="noopener">Install Phantom</a></div>
-    </div>
-  </div>
+.coin{ position:relative; width:140px; height:140px; perspective:800px }
+.coin__face{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  border-radius:50%; font-weight:900; letter-spacing:.5px;
+  border:3px solid rgba(255,255,255,.25);
+  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%),
+             linear-gradient(180deg, rgba(255,107,0,.8), rgba(255,149,0,.8));
+  backface-visibility:hidden;
+}
+/* Coin flip ticker coloring */
+.ticker .tick-win  { color: var(--slime); font-weight: 800; }
+.ticker .tick-loss { color: #ff4545;     font-weight: 800; }
 
-</body>
-</html>
+.coin__face--back{
+  transform:rotateY(180deg);
+  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%),
+             linear-gradient(180deg, rgba(0,255,163,.8), rgba(148,218,255,.8))
+}
+.coin.spin{ animation:spin 1.2s cubic-bezier(.2,.6,.2,1) 1 }
+@keyframes spin{ 0%{ transform:rotateY(0) } 100%{ transform:rotateY(720deg) } }
+.cf-status{ margin-top:12px; font-weight:700 }
+
+/* Halloween variant styling */
+.coin{
+  border-radius:50%;
+  transform-style: preserve-3d;
+  box-shadow: 0 0 28px rgba(57,255,20,.25), inset 0 0 18px rgba(255,165,0,.35);
+  background: radial-gradient(circle at 50% 40%, #1a0828 0%, #0d0d0d 60%, #000 100%);
+}
+.coin__face{
+  display:grid; place-items:center; font-weight:800;
+  font-family:"Creepster", cursive; letter-spacing:.6px;
+  color: var(--pumpkin); text-shadow: 0 0 8px rgba(57,255,20,.35);
+  border: 2px solid rgba(255,255,255,.08);
+}
+.coin__face--front::after,
+.coin__face--back::after{
+  content:""; position:absolute; inset:-12px;
+  border-radius:50%;
+  background: conic-gradient(from 0deg, rgba(57,255,20,.12), transparent 40%, rgba(255,165,0,.12) 70%, transparent 100%);
+  filter: blur(6px);
+}
+.coin__face--back{ color: var(--slime); text-shadow: 0 0 10px rgba(57,255,20,.6); }
+
+/* subtle slime ring behind coin */
+.cf-display::before{
+  content:""; width:200px; height:200px; border-radius:50%;
+  background: radial-gradient(circle, rgba(57,255,20,.25), transparent 60%);
+  filter: blur(8px);
+  position:absolute; z-index:-1;
+}
+
+/* Respect reduced motion for ticker & coin */
+@media (prefers-reduced-motion: reduce){
+  .ticker__inner{ animation: none; transform: translateX(0); }
+  .coin.spin{ animation: none; }
+}
+
+/* =========================================================
+   TRICK Flash (subtle screen flicker)
+   ========================================================= */
+@keyframes screen-flash {
+  0%   { filter: brightness(1) contrast(1); }
+  20%  { filter: brightness(1.35) contrast(1.2) saturate(1.05); }
+  40%  { filter: brightness(0.92) contrast(1.05); }
+  60%  { filter: brightness(1.18) contrast(1.1); }
+  80%  { filter: brightness(0.98); }
+  100% { filter: brightness(1) contrast(1); }
+}
+
+/* apply when JS adds .flash to <body> */
+body.flash { animation: screen-flash 0.9s ease both; }
+
+/* reduce motion: skip the effect */
+@media (prefers-reduced-motion: reduce){
+  body.flash { animation: none; }
+}
+
+/* =========================================================
+   Jackpot — Stats & Progress
+   ========================================================= */
+.stats{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:10px }
+.stat__label{ display:block; opacity:.85; font-size:.9rem }
+.stat__value{ display:block; font-family:"Luckiest Guy"; font-size:1.35rem }
+
+.progress{
+  height:10px;
+  background: rgba(255,255,255,.06);
+  border:1px solid var(--card-border);
+  border-radius:10px;
+  overflow:hidden;
+  position:relative;
+}
+.progress__bar{
+  height:100%;
+  background: linear-gradient(90deg, #2aff6b, #9bff2a);
+  box-shadow: 0 0 18px rgba(57,255,20,.45);
+}
+.progress__bar::after{
+  content:"";
+  position:absolute; right:-6px; top:-6px; width:22px; height:22px;
+  background: radial-gradient(circle, rgba(57,255,20,.9), rgba(57,255,20,.2) 60%, transparent 70%);
+  border-radius:50%; filter: blur(3px);
+}
+
+.stats .stat__label{ color:#c8c8c8 }
+.stats .stat__value{ color:var(--slime); font-weight:700 }
+
+/* =========================================================
+   Mini Table (Recent Rounds)
+   ========================================================= */
+.mini-table__head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px }
+.mini-table__list{ list-style:none; margin:0; padding:0; max-height:220px; overflow:auto }
+.mini-table__list li{ display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-bottom:1px dashed rgba(255,255,255,.12) }
+.mini-round__pill{ padding:.25rem .5rem; border:1px solid var(--card-border); border-radius:999px; font-size:.85rem; opacity:.9 }
+
+.recent-list { list-style:none; padding:0; margin:0; }
+.recent-list li { display:flex; justify-content:space-between; padding:.5rem .75rem; border-bottom:1px solid rgba(255,255,255,.08); }
+.recent-list li:last-child { border-bottom:none; }
+.muted { opacity:.75; }
+.small { font-size:.875rem; }
+.toast { transition: opacity .25s ease; }
+
+/* About readability */
+#about .card p{ font-size:1.05rem; line-height:1.8; }
+@media (max-width: 600px){ #about .card p{ font-size:1.12rem; line-height:1.85; } }
+
+/* =========================================================
+   $TREATZ FX Layer (falling wrappers/candy/ghosts)
+   ========================================================= */
+#fx-layer{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1200; /* above content, below banner (~1002) */
+}
+
+.fx-piece{
+  position: absolute;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,.5));
+  opacity: .95;
+  animation:
+    treatz-fall var(--dur,6s) linear forwards,
+    treatz-sway 2.6s ease-in-out infinite;
+}
+
+@keyframes treatz-fall {
+  0%   { transform: translate(var(--x,0px), -10%) rotate(var(--r0,0deg)); opacity: 0; }
+  8%   { opacity: .95; }
+  100% { transform: translate(var(--x,0px), 110vh) rotate(var(--r1,360deg)); opacity: .98; }
+}
+@keyframes treatz-sway {
+  0%   { margin-left: -10px; }
+  50%  { margin-left: 10px; }
+  100% { margin-left: -10px; }
+}
+
+#mascot-floater{
+  position:fixed; left:30px; top:30px; width:140px;
+  pointer-events:none; opacity:.9; z-index: 1000;
+}
+
+/* =========================================================
+   Footer
+   ========================================================= */
+.footer{ opacity:.8; text-align:center; margin-top:28px }
