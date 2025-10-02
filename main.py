@@ -13,7 +13,7 @@ from typing import Literal, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from config import settings, (TREATZ_MINT, TOKEN_DECIMALS, GAME_VAULT, GAME_VAULT_ATA, JACKPOT_VAULT, JACKPOT_VAULT_ATA)
+from config import settings
 import db as dbmod
 from db import ensure_schema   # import canonical schema
 
@@ -300,7 +300,7 @@ async def create_bet(body: NewBet):
     )
     await app.state.db.commit()
 
-    deposit = settings.GAME_VAULT
+    deposit = settings.GAME_VAULT_ATA or settings.GAME_VAULT  # prefer ATA
     memo = f"BET:{bet_id}:{body.side}"
     return {"bet_id": bet_id, "server_seed_hash": server_seed_hash, "deposit": deposit, "memo": memo}
 
@@ -466,13 +466,14 @@ async def get_config(include_balances: bool = False):
             max_wager = game_bal // 2
 
     return {
-        
+        "token": {
             "mint": settings.TREATZ_MINT,
             "decimals": getattr(settings, "TOKEN_DECIMALS", 6),
             "ticket_price": settings.TICKET_PRICE,  # base units
         },
         "raffle": {
-            "round_minutes": ROUND_MIN,
+            "round_minutes": ROUND_MIN,             # keep existing key
+            "duration_minutes": ROUND_MIN,          # add to match app.js expectation
             "break_minutes": ROUND_BREAK,
             "splits": {"winner": SPLT_WIN, "dev": SPLT_DEV, "burn": SPLT_BURN},
             "dev_wallet": DEV_WALLET or None,
@@ -496,6 +497,7 @@ async def get_config(include_balances: bool = False):
             "jackpot_vault_balance": jack_bal,            # null unless include_balances=true
         },
     }
+
 
 EXPLORER_BASE = "https://solscan.io/tx/"
 
@@ -612,11 +614,17 @@ async def helius_webhook(request: Request):
             if ev_mint and ev_mint != (settings.TREATZ_MINT or "").lower():
                 continue
 
-        game_vault = (settings.GAME_VAULT or "").lower()
-        jackpot_vault = (settings.JACKPOT_VAULT or "").lower()
+        game_vault_owner    = (settings.GAME_VAULT or "").lower()
+        jackpot_vault_owner = (settings.JACKPOT_VAULT or "").lower()
+        game_vault_ata      = (settings.GAME_VAULT_ATA or "").lower()
+        jackpot_vault_ata   = (settings.JACKPOT_VAULT_ATA or "").lower()
 
+        def _to_matches(dest: str, ata: str, owner: str) -> bool:
+            d = (dest or "").lower()
+            return d == (ata or "") or d == (owner or "")
+            
         # ---------------- Coin flip deposits ----------------
-        if memo.startswith("BET:") and to_addr == game_vault:
+        if memo.startswith("BET:") and _to_matches(to_addr, game_vault_ata, game_vault_owner):
             try:
                 _, bet_id, choice = memo.split(":")
             except Exception:
@@ -678,7 +686,7 @@ async def helius_webhook(request: Request):
                     await app.state.db.commit()
 
         # ---------------- Jackpot entries -------------------
-        if memo.startswith("JP:") and to_addr == jackpot_vault and amt > 0:
+        if memo.startswith("JP:") and _to_matches(to_addr, jackpot_vault_ata, jackpot_vault_owner) and amt > 0:
             parts = memo.split(":")
             if len(parts) >= 2 and parts[1]:
                 round_id = parts[1]
