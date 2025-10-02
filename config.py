@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # =========================================================
     # RPC / Admin
     # =========================================================
-    RPC_URL: str = os.getenv("RPC_URL", "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY")
+    RPC_URL: str = os.getenv("RPC_URL", "https://api.mainnet-beta.solana.com")
     ADMIN_TOKEN: Optional[str] = None
 
     # =========================================================
