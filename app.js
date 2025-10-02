@@ -418,39 +418,29 @@
 
   const menu = document.getElementById("wallet-menu");
   document.getElementById("btn-connect")?.addEventListener("click", async () => {
-    // Already connected → disconnect
     if (PUBKEY) { await disconnectWallet(); return; }
 
-    // Detect available providers
     const hasPhantom  = !!(window.solana?.isPhantom);
     const hasSolflare = !!(window.solflare?.isSolflare);
     const hasBackpack = !!(window.backpack?.solana);
-    const hasAny      = hasPhantom || hasSolflare || hasBackpack;
-
-    // Desktop with no extension → send to install page
-    if (!hasAny && !isMobile()) {
-      window.open("https://phantom.app/", "_blank");
-      return;
-    }
-
-    // Mobile with no provider → deep-link button is visible; nothing else to do
-    if (!hasAny && isMobile()) {
-      updateDeepLinkVisibility();
-      return;
-    }
-
-    // If exactly one provider is present, connect immediately (no menu UX)
     const present = [
       hasPhantom  && "phantom",
       hasSolflare && "solflare",
       hasBackpack && "backpack",
     ].filter(Boolean);
 
-    if (present.length === 1) {
+    if (present.length === 0) {           // no providers → show modal + deep link
+      openWalletModal();
+      updateDeepLinkVisibility();
+      return;
+    }
+    if (present.length === 1) {           // exactly one → connect immediately
       connectWallet(present[0]).catch(console.error);
       return;
     }
-
+    openWalletModal();                     // 2+ → let the user pick
+  });
+  
     // Otherwise let user pick
     if (menu) menu.hidden = !menu.hidden;
   });
