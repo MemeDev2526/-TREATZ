@@ -373,10 +373,17 @@
   });
 
   const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-  const CONNECTION = new solanaWeb3.Connection(
-    (window.TREATZ_CONFIG?.rpcUrl || "https://api.mainnet-beta.solana.com"),
-    "confirmed"
-  );
+
+  // helpers that call backend proxies
+  async function fetchLatestBlockhash() {
+    const r = await jfetch(`${API}/cluster/latest_blockhash`);
+    if (!r?.blockhash) throw new Error("Blockhash unavailable");
+    return r.blockhash;
+  }
+  async function fetchAccountExists(pubkeyStr) {
+    const r = await jfetch(`${API}/accounts/${pubkeyStr}/exists`);
+    return !!r?.exists;
+  }
 
   let WALLET = null;     // provider
   let PUBKEY = null;     // solanaWeb3.PublicKey
@@ -604,8 +611,8 @@
     const ata = await splToken.getAssociatedTokenAddress(
       mintPk, owner, false, splToken.TOKEN_PROGRAM_ID, splToken.ASSOCIATED_TOKEN_PROGRAM_ID
     );
-    const info = await CONNECTION.getAccountInfo(ata);
-    if (!info) {
+    const exists = await fetchAccountExists(ata.toBase58());
+    if (!exists) {
       return {
         ata,
         ix: splToken.createAssociatedTokenAccountInstruction(
@@ -716,7 +723,7 @@
         memoIx(memoStr)
       );
 
-      const { blockhash } = await CONNECTION.getLatestBlockhash("finalized");
+      const blockhash = await fetchLatestBlockhash();
       const tx = new solanaWeb3.Transaction({ feePayer: payer });
       tx.recentBlockhash = blockhash;
       tx.add(...ixs);
