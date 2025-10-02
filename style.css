@@ -22,7 +22,7 @@
   --shadow:0 10px 30px rgba(0,0,0,.45);
 
   /* Layout metrics */
-  --banner-h: 120px;                      /* match banner art height */
+  --banner-h: 100px;                      /* match banner art height */
   --countdown-scale: 1.25;               /* keep your scale */
   --countdown-h: 64px;                   /* visual height of inner row (approx) */
 }
@@ -108,6 +108,9 @@ a, .btn--outline { color: var(--slime); }
 .wm__icon.phantom{background:#7c5cff}
 .wm__icon.solflare{background:#ff5f15}
 .wm__icon.backpack{background:#0ea5e9}
+.wm { display:grid; place-items:center; }
+.wm__card { transform: scale(.98); opacity: 0; transition: transform .15s ease, opacity .15s ease; }
+.wm:not([hidden]) .wm__card { transform: scale(1); opacity: 1; }
 
 /* Ensure wallet buttons aren’t under an overlay */
 .tokenbar__actions,.wallet{position:relative;z-index:20}
@@ -124,7 +127,7 @@ a, .btn--outline { color: var(--slime); }
 }
 .brand-banner img{
   width:100%; height:100%;
-  object-fit: fill; display:block;
+  object-fit: auto; display:block;
 }
 
 /* Countdown sits under the banner and never hides it */
@@ -231,7 +234,7 @@ a, .btn--outline { color: var(--slime); }
 }
 .tokenbar__label{ opacity:.85; margin-right:6px }
 .tokenbar__address code{ font-size:.95rem; user-select:all }
-.tokenbar__actions{ display:flex; gap:10px; flex-wrap:wrap }
+.tokenbar__actions{ position: relative; z-index: 1010; display:flex; gap:10px; flex-wrap:wrap }
 
 /* =========================================================
    Buttons
@@ -265,6 +268,10 @@ input[type="number"], input[type="text"]{
 input[type="number"]{ -moz-appearance: textfield; }
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+input[type="number"]:focus-visible,
+input[type="text"]:focus-visible {
+  box-shadow: 0 0 0 3px rgba(57,255,20,.25), 0 0 0 1px rgba(57,255,20,.8) inset;
+}
 input::placeholder{ color:#cfcfcf; opacity:.7; }
 .help{ opacity:.8; font-size:.9rem }
 
@@ -423,7 +430,7 @@ body.flash { animation: screen-flash 0.9s ease both; }
   inset: 0;
   pointer-events: none;
   overflow: hidden;
-  z-index: 1200; /* above content, below banner (~1002) */
+  z-index: 1000; /* above content, below banner (~1002) */
 }
 
 .fx-piece{
