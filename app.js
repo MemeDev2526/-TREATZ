@@ -168,7 +168,7 @@
     });
   }
   document.addEventListener("DOMContentLoaded", ()=>{
-    setCoinFaces("assets/coin_treatz.jpg", "assets/coin_trickz.jpg");
+    setCoinFaces("assets/coin_treatz.png", "assets/coin_trickz.png");
   });
 
   // Win banner (cute, brief)
