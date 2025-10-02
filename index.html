@@ -56,7 +56,9 @@
 </head>
 <body>
 
-  <audio id="bg-ambient" src="assets/ambient_loop.mp3" preload="auto" loop></audio>
+  <audio id="bg-ambient" preload="auto" playsinline>
+    <source src="assets/ambient.mp3" type="audio/mpeg">
+  </audio>
 
   <!-- ==========================
      TOP BANNER (sticky)
@@ -148,7 +150,7 @@
               <label class="choice"><input type="radio" name="side" value="TREAT" /> TREATZ 🍬</label>
             </div>
 
-            <button class="btn btn--primary" type="submit" id="cf-play">Flip that Coin</button>
+            <button id="cf-play" type="button" class="btn btn--primary">Flip</button>
             <p class="help" id="edge-line">House edge & on-chain fairness info will appear here.</p>
 
             <!-- Optional: app.js will populate these if present -->
