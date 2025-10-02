@@ -341,17 +341,23 @@ async def rounds_current():
 
 @app.get(f"{API}/rounds/recent", response_model=list[RecentRoundResp])
 async def rounds_recent(limit: int = 10):
-    async with app.state.db.execute(
-        "SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT ?",
-        (limit,),
-    ) as cur:
+    # sanitize & clamp the limit before inlining to avoid parameterized LIMIT quirks
+    try:
+        n = max(1, min(100, int(limit)))
+    except Exception:
+        n = 10
+
+    query = f"SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT {n}"
+    async with app.state.db.execute(query) as cur:
         rows = await cur.fetchall()
 
     if not rows:
         rid = await dbmod.kv_get(app.state.db, "current_round_id")
         return [RecentRoundResp(id=rid, pot=0)] if rid else []
 
-    return [RecentRoundResp(id=r[0], pot=r[1]) for r in rows]
+    # ensure integers for pot even if NULL somehow appears
+    return [RecentRoundResp(id=str(r[0]), pot=int(r[1] or 0)) for r in rows]
+
 
 
 # =========================================================
