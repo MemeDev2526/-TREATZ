@@ -9,6 +9,8 @@ import secrets
 import time
 import asyncio
 from datetime import datetime, timedelta
+def _rfc3339(dt: datetime) -> str:
+    return dt.replace(microsecond=0).isoformat() + "Z"
 from typing import Literal, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -190,7 +192,7 @@ async def on_startup():
         finalize_slot = curr_slot + (ROUND_MIN * SLOTS_PER_MIN)
         await app.state.db.execute(
             "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) VALUES(?,?,?,?,?,?,?,?)",
-            (rid, "OPEN", now.isoformat(), closes.isoformat(), srv_hash, secrets.token_hex(8), finalize_slot, 0),
+            (rid, "OPEN", _rfc3339(now), _rfc3339(closes), srv_hash, secrets.token_hex(8), finalize_slot, 0),
         )
         await dbmod.kv_set(app.state.db, "current_round_id", rid)
         await app.state.db.commit()
@@ -351,18 +353,21 @@ async def rounds_current():
         row = await cur.fetchone()
     if not row:
         raise HTTPException(404, "No current round")
-    next_open = (datetime.fromisoformat(row[3]) + timedelta(minutes=ROUND_BREAK)).isoformat()
+    opens_dt = datetime.fromisoformat(row[2])
+    closes_dt = datetime.fromisoformat(row[3])
+    next_open_dt = closes_dt + timedelta(minutes=ROUND_BREAK)
+
     return RoundCurrentResp(
         round_id=row[0],
         status=row[1],
-        opens_at=row[2],
-        closes_at=row[3],
+        opens_at=_rfc3339(opens_dt),
+        closes_at=_rfc3339(closes_dt),
         pot=row[4],
-        next_opens_at=next_open,
+        next_opens_at=_rfc3339(next_open_dt),
         round_minutes=ROUND_MIN,
         break_minutes=ROUND_BREAK,
     )
-
+    
 @app.get(f"{API}/rounds/recent", response_model=list[RecentRoundResp])
 async def rounds_recent(limit: int = 10):
     # sanitize & clamp the limit before inlining to avoid parameterized LIMIT quirks
