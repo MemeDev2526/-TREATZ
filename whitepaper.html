@@ -58,6 +58,15 @@
     .countdown__label{font-weight:700; letter-spacing:.3px}
     .countdown__timer{font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem}
     .countdown__omen{font-size:.95rem; opacity:.9}
+    .countdown__logo {
+      height: 32px;               /* adjust as needed */
+      width: auto;
+      margin-right: .5rem;
+      display: inline-block;
+    }
+    @media (max-width: 480px) {
+      .countdown__logo { height: 24px; }
+    }
 
     /* Stage + Card (hidden until start) */
     .stage{ position:fixed; inset:0; display:grid; place-items:center; pointer-events:none; }
@@ -235,6 +244,7 @@
   <!-- A) COUNTDOWN -->
   <header class="countdown" id="countdown" role="banner" aria-label="Halloween Countdown">
     <div class="countdown__inner">
+      <img class="countdown__logo" src="assets/TREATZ_Logo.png" alt="$TREATZ logo" />
       <span class="countdown__label">⏳ Countdown to Halloween:</span>
       <span class="countdown__timer" id="countdown-timer">--d --h --m --s</span>
       <span class="countdown__omen" id="countdown-omen" aria-live="polite"></span>
