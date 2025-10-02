@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-    
 <head>
   <!-- ========== META ========== -->
   <meta charset="utf-8" />
@@ -17,33 +16,32 @@
 
   <!-- ========== CSS ========== -->
   <link id="treatz-css" rel="stylesheet" href="style.css?v={{ site.github.build_revision }}">
-  <!-- Build ID injected at deploy -->
-  <!-- Config must come BEFORE app.js -->
-  <<script>
-  window.TREATZ_CONFIG = {
-    apiBase: "https://treatz-de1d.onrender.com/api",
-    rpcUrl:  "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY",
-    token: { symbol: "$TREATZ", decimals: 6 },
-    links: {
-      telegram: "https://t.me/trickortreatsol",
-      twitter:  "https://x.com/trickortreatsol?s=21",
-      whitepaper: "https://trickortreatsol.tech/whitepaper"
-    },
-    buyUrl: "#",
-    tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
-    assets: { logo: "assets/TREATZ_Logo.png", mascot: "assets/Mascot.png" }
-  };
-</script>
-<<script>
+
+  <!-- ========== CONFIG (must be before app.js) ========== -->
+  <script>
+    window.TREATZ_CONFIG = {
+      apiBase: "https://treatz-de1d.onrender.com/api",
+      rpcUrl:  "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY",
+      token: { symbol: "$TREATZ", decimals: 6 },
+      links: {
+        telegram: "https://t.me/trickortreatsol",
+        twitter:  "https://x.com/trickortreatsol?s=21",
+        whitepaper: "https://trickortreatsol.tech/whitepaper"
+      },
+      buyUrl: "#",
+      tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
+      assets: { logo: "assets/TREATZ_Logo.png", mascot: "assets/Mascot.png" }
+    };
+  </script>
+  <script>
     window.TREATZ_BUILD = "__BUILD__";
   </script>
 
-
-  <!-- Solana libs (needed by app.js) -->
+  <!-- ========== Solana libs (needed by app.js) ========== -->
   <script src="https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js"></script>
   <script src="https://unpkg.com/@solana/spl-token@0.4.7/dist/index.iife.js"></script>
 
-  <!-- Loader: inserts app.js with ?v=<build> -->
+  <!-- ========== Loader: inserts app.js with ?v=<build> ========== -->
   <script>
     (function(b){
       var l=document.getElementById('treatz-css');
@@ -52,14 +50,13 @@
       document.head.appendChild(s);
     })(window.TREATZ_BUILD || Date.now());
   </script>
-  <!-- Optional: basic favicon hook -->
+  <!-- Optional: favicon -->
   <!-- <link rel="icon" href="assets/favicon.png"> -->
-      <!-- Solana libs for browser (globals: solanaWeb3, splToken) -->
 </head>
 <body>
 
   <audio id="bg-ambient" src="assets/ambient_loop.mp3" preload="auto" loop></audio>
-  
+
   <!-- ==========================
      TOP BANNER (sticky)
      ========================== -->
@@ -67,61 +64,61 @@
     <img src="assets/Banner_Top.png" alt="$TREATZ banner" />
   </div>
 
-
-  <!-- =========================================================
-            GLOBAL COUNTDOWN (kept sticky below banner)
-       ========================================================= -->
-
+  <!-- ==========================
+      GLOBAL COUNTDOWN
+      ========================== -->
   <div class="countdown" id="countdown" aria-live="polite">
-  <div class="countdown__inner">
-    <img id="countdown-logo" class="countdown__logo" src="assets/TREATZ_Logo.png" alt="$TREATZ logo" />
-    <span class="countdown__label">Countdown to Halloween:</span>
-    <span class="countdown__timer" id="countdown-timer">--d --h --m --s</span>
-    <span class="countdown__omen" id="countdown-omen"></span>
+    <div class="countdown__inner">
+      <img id="countdown-logo" class="countdown__logo" src="assets/TREATZ_Logo.png" alt="$TREATZ logo" />
+      <span class="countdown__label">Countdown to Halloween:</span>
+      <span class="countdown__timer" id="countdown-timer">--d --h --m --s</span>
+      <span class="countdown__omen" id="countdown-omen"></span>
+    </div>
   </div>
-</div>
-
 
   <!-- =======================================
        NAVIGATION + TOKEN / BUY ACTION BAR
        ======================================= -->
   <header class="nav">
-  <div class="nav__wrap">    
-    <a href="/" class="nav__brand">
-      <span class="nav__brand-text">$TREATZ - Own Uptober. Hold the bag. 🍬</span>
-    </a>
+    <div class="nav__wrap">
+      <a href="/" class="nav__brand">
+        <span class="nav__brand-text">$TREATZ - Own Uptober. Hold the bag. 🍬</span>
+      </a>
 
-    <nav class="nav__links" aria-label="Primary">
-      <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter</a>
-      <a href="#" id="link-telegram"  data-live="false" target="_blank" rel="noopener">Telegram</a>
-      <a href="https://trickortreatsol.tech/whitepaper" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
-    </nav>
-  </div>
-
-  <div class="tokenbar" role="group" aria-label="Token & Buy">
-    <div class="tokenbar__address">
-      <span class="tokenbar__label">Token:</span>
-      <code id="token-address">—</code>
-      <button class="btn btn--ghost" id="btn-copy">Copy</button>
+      <nav class="nav__links" aria-label="Primary">
+        <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter</a>
+        <a href="#" id="link-telegram"  data-live="false" target="_blank" rel="noopener">Telegram</a>
+        <a href="https://trickortreatsol.tech/whitepaper" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
+      </nav>
     </div>
-    <div class="tokenbar__actions">
-      <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
-      <!-- Wallet Controls -->
-      <div class="wallet">
-        <button class="btn btn--ghost" id="btn-openwallet" type="button">Open Wallet</button>
-        <button class="btn btn--primary" id="btn-connect" type="button">Connect Wallet</button>
-        <div class="wallet__menu" id="wallet-menu" hidden>
-        <button data-wallet="phantom">Phantom</button>
-        <button data-wallet="solflare">Solflare</button>
-          <button data-wallet="backpack">Backpack</button>
+
+    <div class="tokenbar" role="group" aria-label="Token & Buy">
+      <div class="tokenbar__address">
+        <span class="tokenbar__label">Token:</span>
+        <code id="token-address">—</code>
+        <button class="btn btn--ghost" id="btn-copy">Copy</button>
+      </div>
+      <div class="tokenbar__actions">
+        <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
+
+        <!-- Wallet Controls -->
+        <div class="wallet">
+          <button class="btn btn--ghost"   id="btn-openwallet" type="button" hidden>Open Wallet</button>
+          <button class="btn btn--primary" id="btn-connect"    type="button">Connect Wallet</button>
+
+          <!-- Legacy dropdown (unused once modal is present, can keep as fallback) -->
+          <div class="wallet__menu" id="wallet-menu" hidden>
+            <button data-wallet="phantom">Phantom</button>
+            <button data-wallet="solflare">Solflare</button>
+            <button data-wallet="backpack">Backpack</button>
+          </div>
+
+          <!-- Mobile helper: open this site inside Phantom if no provider -->
+          <a class="btn btn--outline" id="btn-open-in-phantom" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
         </div>
-        <!-- Mobile helper: open this site inside Phantom if no provider -->
-        <a class="btn btn--outline" id="btn-open-in-phantom" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
       </div>
     </div>
-  </div>
-</header>
-
+  </header>
 
   <!-- ==========================
        BACKGROUND ART LAYER
@@ -132,7 +129,7 @@
        MAIN CONTENT
        ========================== -->
   <main class="main">
-    
+
     <!-- ============= COIN FLIP ============= -->
     <section class="section" id="coin-flip" aria-labelledby="coinflip-title">
       <h2 class="section__title" id="coinflip-title">🎃 Trickz or $TREATZ — Coin Toss</h2>
@@ -239,29 +236,29 @@
           </div>
         </div>
       </div>
-</section>
+    </section>
 
-<!-- ============= RAFFLE HISTORY ============= -->
-<section class="section" id="raffle-history" aria-labelledby="raffle-history-title">
-  <h2 class="section__title" id="raffle-history-title">Raffle History</h2>
-  <div class="card">
-    <input id="history-search" type="text" placeholder="Search round (e.g., R1601)" />
-    <div class="table-wrap" style="margin-top:.5rem;">
-      <table id="history-table">
-        <thead>
-          <tr>
-            <th>Round</th>
-            <th>Pot</th>
-            <th>Winner</th>
-            <th>Payout Tx</th>
-            <th>Proof</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-</section>
+    <!-- ============= RAFFLE HISTORY ============= -->
+    <section class="section" id="raffle-history" aria-labelledby="raffle-history-title">
+      <h2 class="section__title" id="raffle-history-title">Raffle History</h2>
+      <div class="card">
+        <input id="history-search" type="text" placeholder="Search round (e.g., R1601)" />
+        <div class="table-wrap" style="margin-top:.5rem;">
+          <table id="history-table">
+            <thead>
+              <tr>
+                <th>Round</th>
+                <th>Pot</th>
+                <th>Winner</th>
+                <th>Payout Tx</th>
+                <th>Proof</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
     <!-- ============= ABOUT ============= -->
     <section class="section" id="about" aria-labelledby="about-title">
@@ -282,26 +279,37 @@
        RENDERED FX LAYER + MASCOT
        ========================== -->
   <div id="fx-layer" aria-hidden="true"></div>
-  <!-- Smooth drift/bob mascot -->
   <img id="mascot-floater" alt="Mascot" />
- 
+
   <!-- ==========================
-       CONFIG (MUST LOAD BEFORE app.js)
+       WALLET SELECT MODAL
        ========================== -->
-  <script>
-    window.TREATZ_CONFIG = {
-      apiBase: "https://treatz-de1d.onrender.com/api",  // ← set to your Render URL
-      token: { symbol: "$TREATZ", decimals: 6 },          // SPL mint decimals
-      links: {
-        telegram: "https://t.me/trickortreatsol",
-        twitter: "https://x.com/trickortreatsol?s=21",
-        whitepaper: "https://trickortreatsol.tech/whitepaper"
-      },
-      buyUrl: "#",
-      tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
-      assets: {
-        logo: "assets/TREATZ_Logo.png",
-        mascot: "assets/Mascot.png"
-      }
-    };
-  </script>
+  <div id="wallet-modal" class="wm" hidden>
+    <div class="wm__backdrop" data-close></div>
+    <div class="wm__card" role="dialog" aria-modal="true" aria-labelledby="wm-title">
+      <button class="wm__close" data-close aria-label="Close">×</button>
+      <h3 id="wm-title">Connect a wallet</h3>
+      <p class="wm__sub">Choose a provider to continue.</p>
+      <div class="wm__list">
+        <button class="wm__item" data-wallet="phantom">
+          <span class="wm__icon phantom"></span> Phantom
+          <small class="wm__status" data-ph-status>Detected</small>
+        </button>
+        <button class="wm__item" data-wallet="solflare">
+          <span class="wm__icon solflare"></span> Solflare
+          <small class="wm__status" data-sf-status>Detected</small>
+        </button>
+        <button class="wm__item" data-wallet="backpack">
+          <span class="wm__icon backpack"></span> Backpack
+          <small class="wm__status" data-bp-status>Detected</small>
+        </button>
+      </div>
+      <a id="btn-open-in-phantom" class="wm__deeplink" href="#" target="_blank" rel="noopener" hidden>
+        Open site in Phantom
+      </a>
+      <div class="wm__help">No wallet? <a href="https://phantom.app/" target="_blank" rel="noopener">Install Phantom</a></div>
+    </div>
+  </div>
+
+</body>
+</html>
