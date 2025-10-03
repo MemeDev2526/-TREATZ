@@ -31,46 +31,53 @@
       },
       buyUrl: "#",
       tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
-      assets: { logo: "assets/TREATZ_Logo.png", mascot: "assets/Mascot.png", ambient: "assets/ambient.mp3" }
+      assets: {
+        ambient: "/-TREATZ/assets/ambient.mp3",   // <-- absolute path that actually exists
+        logo: "/-TREATZ/assets/logo.png",
+        mascot: "/-TREATZ/assets/mascot.png"
+      }
     };
     window.__TREATZ_DEBUG = true;</script>
   </script>
 
-  <!-- ========== Solana libs (IIFE) with CDN fallback ========== -->
-<script>
-  (function add(src, id){
-    if (document.getElementById(id)) return;
-    var s=document.createElement('script'); s.src=src; s.id=id; s.crossOrigin="anonymous";
-    document.head.appendChild(s);
-  })("https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js","solana-web3");
-  (function add(src, id){
-    if (document.getElementById(id)) return;
-    var s=document.createElement('script'); s.src=src; s.id=id; s.crossOrigin="anonymous";
-    document.head.appendChild(s);
-  })("https://cdn.jsdelivr.net/npm/@solana/spl-token@0.4.7/dist/index.iife.js","solana-spl");
-</script>
-<!-- Robust app.js boot: wait a bit for globals, but never block -->
-<script>
-  (function boot(){
-    var started=false, t0=Date.now();
-    function start(){
-      if (started) return; started=true;
-      var s=document.createElement('script');
-      s.src = 'app.js?v=' + (window.TREATZ_BUILD || Date.now());
-      s.defer = true;
-      document.body.appendChild(s);
-    }
-    function tick(){
-      // If Solana libs ready, start now
-      if (window.solanaWeb3 && window.splToken) return start();
-      // Failsafe: after 6000ms, start anyway so diagnostics show up
-      if (Date.now() - t0 > 6000) return start();
-      setTimeout(tick, 120);
-    }
-    if (document.readyState !== 'loading') tick();
-    else document.addEventListener('DOMContentLoaded', tick);
-  })();
-</script>
+  <!-- Solana libs (IIFE) with resilient fallbacks -->
+  <script>
+    (function loadSeq(urls, id, ok){
+      if (document.getElementById(id)) return;
+      function next(i){
+        if (i >= urls.length) return;               // give up gracefully
+        var s = document.createElement('script');
+        s.id = id; s.src = urls[i]; s.crossOrigin = "anonymous"; s.defer = true;
+        s.onload = function(){ ok && ok(); };
+        s.onerror = function(){ s.remove(); next(i+1); };
+        document.head.appendChild(s);
+      }
+      next(0);
+    })(
+      [
+        "https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js",
+        "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js"
+      ],
+      "solana-web3",
+      function(){ /* web3 loaded */ }
+    );
+
+    (function(){
+      var tries = [
+        "https://unpkg.com/@solana/spl-token@0.3.7/dist/index.iife.js",
+        "https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.7/dist/index.iife.js"
+      ];
+      (function load(i){
+        if (i >= tries.length) return;
+        var s = document.createElement('script');
+        s.id = "solana-spl"; s.src = tries[i]; s.crossOrigin="anonymous"; s.defer=true;
+        s.onload = function(){ /* spl-token loaded */ };
+        s.onerror = function(){ s.remove(); load(i+1); };
+        document.head.appendChild(s);
+      })(0);
+    })();
+  </script>
+
   <!-- Optional: favicon -->
   <!-- <link rel="icon" href="assets/favicon.png"> -->
 </head>
