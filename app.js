@@ -2,7 +2,6 @@
 (function(){
   if (!window.__TREATZ_DEBUG) return;
 
-  // Visual error overlay
   function showDiag(msg, kind){
     if (!document.body) { document.addEventListener("DOMContentLoaded", () => showDiag(msg, kind)); return; }
     var bar = document.getElementById("__treatz_diag");
@@ -18,19 +17,15 @@
     bar.appendChild(span);
   }
 
-  // Catch silent errors
-  window.addEventListener("error", function(e){ showDiag("JS error: " + (e.message||e.type), "err"); });
-  window.addEventListener("unhandledrejection", function(e){ showDiag("Promise rejection: " + (e.reason && e.reason.message || e.reason), "err"); });
+  window.addEventListener("error", (e)=> showDiag("JS error: " + (e.message||e.type), "err"));
+  window.addEventListener("unhandledrejection", (e)=> showDiag("Promise rejection: " + (e.reason && e.reason.message || e.reason), "err"));
 
-  // Minimal sanity checks after DOM is ready
   document.addEventListener("DOMContentLoaded", async function(){
     try {
       showDiag("Booting diagnostics…");
-      // 1) Verify global libs
       if (!window.solanaWeb3) showDiag("solanaWeb3 (web3.js) not loaded", "err"); else showDiag("web3.js ✓", "ok");
       if (!window.splToken)   showDiag("spl-token IIFE not loaded", "err");      else showDiag("@solana/spl-token ✓", "ok");
 
-      // 2) API base check
       var C = window.TREATZ_CONFIG || {};
       var API = (C.apiBase || "/api").replace(/\/$/, "");
       showDiag("API = " + API);
@@ -43,17 +38,14 @@
         showDiag("API not reachable: " + (e.message || e), "err");
       }
 
-      // 3) Buttons present?
       var btn1 = document.getElementById("btn-connect");
       var btn2 = document.getElementById("btn-connect-2");
       if (!btn1 && !btn2) showDiag("Connect buttons not found in DOM", "err"); else showDiag("Connect buttons present ✓", "ok");
 
-      // 4) Basic click smoke test (won't break existing handlers)
       [btn1, btn2].filter(Boolean).forEach(b=>{
         b.addEventListener("click", function(){ showDiag("Connect button clicked (smoke)"); }, {once:true});
       });
 
-      // 5) Audio element present?
       var a = document.getElementById("bg-ambient");
       if (!a) showDiag("Ambient audio element missing", "err"); else showDiag("Ambient audio tag ✓", "ok");
     } catch (e) {
@@ -61,7 +53,6 @@
     }
   });
 })();
-
 
 /* =========================================================
    $TREATZ — App Logic (clean + organized)
@@ -75,6 +66,14 @@
     hasSolflare: !!window.solflare,
     hasBackpack: !!window.backpack?.solana
   });
+
+  // Guard: alias globals and fail noiselessly if libs are missing
+  const SolanaWeb3 = window.solanaWeb3;
+  const splToken   = window.splToken;
+  if (!SolanaWeb3 || !splToken) {
+    console.error("[TREATZ] Solana libs missing — app will wait for loader.");
+    return;
+  }
 
 /* ────────────────────────────────────────────────────────
    0) Config, Constants, Tiny Helpers
@@ -115,7 +114,6 @@
     return `https://phantom.app/ul/browse/${encodeURIComponent(url)}`;
   };
 
-  // fetch helper (throws on !ok)
   async function jfetch(url, opts) {
     const r = await fetch(url, opts);
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
@@ -123,7 +121,7 @@
   }
 
 /* ────────────────────────────────────────────────────────
-   1) FX: Wrappers / Candy / Ghosts
+   1) FX + UI sugar
    ──────────────────────────────────────────────────────── */
   const fxRoot = (() => {
     let n = document.getElementById("fx-layer");
@@ -218,7 +216,6 @@
   }
   window.playResultFX = playResultFX;
 
-  // Coin faces from images
   function setCoinFaces(treatImg, trickImg) {
     const front = document.querySelector(".coin__face--front");
     const back  = document.querySelector(".coin__face--back");
@@ -236,7 +233,6 @@
     setCoinFaces("assets/coin_treatz.png", "assets/coin_trickz.png");
   });
 
-  // Win banner (cute, brief)
   function showWinBanner(text) {
     const el = document.createElement("div");
     el.textContent = text;
@@ -258,7 +254,7 @@
     const m    = now.getMonth(); // 0..11, Oct = 9
     const d    = now.getDate();
     const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
-    return new Date(year, 9, 31, 23, 59, 59, 0); // local time
+    return new Date(year, 9, 31, 23, 59, 59, 0);
   }
 
   function formatDHMS(ms){
@@ -306,25 +302,23 @@
     }catch(e){ console.error("Countdown init failed", e); }
   }
 
-  // run regardless of script load order
   initHalloweenCountdown();
   document.addEventListener("DOMContentLoaded", initHalloweenCountdown);
   window.addEventListener("load", initHalloweenCountdown);
 
 /* ────────────────────────────────────────────────────────
-   3) Static links, logo/mascot assets, token copy
+   3) Static links, assets, token copy
    ──────────────────────────────────────────────────────── */
   const link = (id, href) => { const el = document.getElementById(id); if (el && href) el.href = href; };
   link("link-telegram",  C.links?.telegram);
   link("link-twitter",   C.links?.twitter);
-  link("link-tiktok",    C.links?.tiktok);      // NEW
+  link("link-tiktok",    C.links?.tiktok);
   link("link-whitepaper",C.links?.whitepaper);
   link("btn-buy",        C.buyUrl);
 
-  // Deep-link button(s): show only on mobile with NO provider and when NOT connected
   const deepLinks = [
     document.getElementById("btn-open-in-phantom"),
-    document.getElementById("btn-open-in-phantom-2"),      // NEW
+    document.getElementById("btn-open-in-phantom-2"),
     document.getElementById("btn-open-in-phantom-modal"),
   ].filter(Boolean);
 
@@ -347,12 +341,8 @@
   const tokenEl = $("#token-address");
   if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
 
-  // Countdown logo + mascot
   const cdLogo  = $("#countdown-logo");
-  if (C.assets?.logo && cdLogo) {
-    cdLogo.src  = C.assets.logo;
-    cdLogo.alt  = "$TREATZ";
-  }
+  if (C.assets?.logo && cdLogo) { cdLogo.src = C.assets.logo; cdLogo.alt = "$TREATZ"; }
 
   const mascotImg = $("#mascot-floater");
   if (mascotImg && C.assets?.mascot) {
@@ -398,10 +388,8 @@
   });
 
 /* ────────────────────────────────────────────────────────
-   4) Wallet plumbing (multi-wallet; Phantom/Solflare/Backpack)
+   4) Wallet plumbing (multi-wallet)
    ──────────────────────────────────────────────────────── */
-
-  // Provider getters (robust to new injection paths)
   function getPhantomProvider(){
     const p = window.phantom?.solana || window.solana;
     return (p && p.isPhantom) ? p : null;
@@ -415,20 +403,18 @@
   const getProviderByName = (name) => {
     name = (name || "").toLowerCase();
     const ph = (window.phantom && window.phantom.solana) || window.solana;
-    if (name === "phantom"  && ph?.isPhantom)        return ph;
+    if (name === "phantom"  && ph?.isPhantom)              return ph;
     if (name === "solflare" && window.solflare?.isSolflare) return window.solflare;
     if (name === "backpack" && window.backpack?.solana)     return window.backpack.solana;
     return null;
   };
 
-  // Simple modal control (matches your HTML/CSS)
   const modal = document.getElementById("wallet-modal");
   function openWalletModal(){ if (modal) modal.hidden = false; }
   function closeWalletModal(){ if (modal) modal.hidden = true; }
   modal?.addEventListener("click", (e)=>{ if (e.target.matches("[data-close], .wm__backdrop")) closeWalletModal(); });
   document.addEventListener("keydown", (e)=>{ if (e.key === "Escape") closeWalletModal(); });
 
-  // Modal list click → connect
   modal?.addEventListener("click", (e)=>{
     const b = e.target.closest(".wm__item[data-wallet]");
     if (!b) return;
@@ -437,9 +423,8 @@
     connectWallet(w).catch(console.error);
   });
 
-  const MEMO_PROGRAM_ID = new solanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+  const MEMO_PROGRAM_ID = new SolanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
-  // helpers that call backend proxies
   async function fetchLatestBlockhash() {
     const r = await jfetch(`${API}/cluster/latest_blockhash`);
     if (!r?.blockhash) throw new Error("Blockhash unavailable");
@@ -450,9 +435,9 @@
     return !!r?.exists;
   }
 
-  let WALLET = null;     // provider
-  let PUBKEY = null;     // solanaWeb3.PublicKey
-  let CONFIG = null;     // /api/config payload
+  let WALLET = null;
+  let PUBKEY = null;
+  let CONFIG = null;
   let DECIMALS = TOKEN.decimals;
   let TEN_POW = 10 ** DECIMALS;
 
@@ -462,17 +447,12 @@
   function onProviderConnect(pk) {
     try {
       const k = pk?.toString?.() || pk?.publicKey?.toString?.() || WALLET?.publicKey?.toString?.();
-      if (k) PUBKEY = new solanaWeb3.PublicKey(k);
+      if (k) PUBKEY = new SolanaWeb3.PublicKey(k);
     } catch {}
     setWalletLabels();
     setTimeout(loadPlayerStats, 400);
   }
-
-  function onProviderDisconnect() {
-    PUBKEY = null;
-    setWalletLabels();
-  }
-
+  function onProviderDisconnect() { PUBKEY = null; setWalletLabels(); }
   function wireProvider(p) {
     try {
       p?.on?.("connect",        (pubkey) => onProviderConnect(pubkey || p.publicKey));
@@ -484,33 +464,27 @@
   async function connectWallet(preferred) {
     if (PUBKEY) return PUBKEY;
 
-    // must be called in direct user gesture; callers should be click handlers
     const order = [preferred, "phantom", "solflare", "backpack"].filter(Boolean);
     for (const name of order) {
       const p = getProviderByName(name);
       if (!p) continue;
 
       let res;
-      try {
-        res = await p.connect({ onlyIfTrusted: false });
-      } catch (e) {
-        // user closed or rejected; try next provider
-        continue;
-      }
+      try { res = await p.connect({ onlyIfTrusted: false }); }
+      catch { continue; }
 
       WALLET = p;
       wireProvider(p);
 
       const got = (res?.publicKey?.toString?.() || res?.publicKey || res || p.publicKey)?.toString?.();
       if (!got) throw new Error("Wallet did not return a public key.");
-      PUBKEY = new solanaWeb3.PublicKey(got);
+      PUBKEY = new SolanaWeb3.PublicKey(got);
 
       setWalletLabels();
       setTimeout(loadPlayerStats, 500);
       return PUBKEY;
     }
 
-    // No provider found → install or deep link
     if (isMobile()) {
       location.href = phantomDeepLinkForThisSite();
       throw new Error("Opening in Phantom…");
@@ -546,49 +520,45 @@
   }
 
   async function ensureConfig() {
-  if (!CONFIG) {
-    try {
-      const r = await jfetch(`${API}/config?include_balances=true`);
-      CONFIG = r;
-      DECIMALS = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6);
-      TEN_POW  = 10 ** DECIMALS;
-    } catch (e) {
-      console.error("Failed to load /config", e);
-      toast("Backend not reachable (/config). Check CORS & Render logs.");
-      throw e;
+    if (!CONFIG) {
+      try {
+        const r = await jfetch(`${API}/config?include_balances=true`);
+        CONFIG = r;
+        DECIMALS = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6);
+        TEN_POW  = 10 ** DECIMALS;
+      } catch (e) {
+        console.error("Failed to load /config", e);
+        toast("Backend not reachable (/config). Check CORS & Render logs.");
+        throw e;
+      }
     }
+    return CONFIG;
   }
-  return CONFIG;
-}
 
-  // PRIMARY connect button (modal-first logic)
   $$("#btn-connect, #btn-connect-2").forEach(btn => btn?.addEventListener("click", async () => {
-  try {
-    if (PUBKEY) { await disconnectWallet(); return; }  // toggle to disconnect
+    try {
+      if (PUBKEY) { await disconnectWallet(); return; }
 
-    const present = [
-      getPhantomProvider()  && "phantom",
-      getSolflareProvider() && "solflare",
-      getBackpackProvider() && "backpack",
-    ].filter(Boolean);
+      const present = [
+        getPhantomProvider()  && "phantom",
+        getSolflareProvider() && "solflare",
+        getBackpackProvider() && "backpack",
+      ].filter(Boolean);
 
-    if (present.length === 1) {
-      await connectWallet(present[0]);
-      return;
+      if (present.length === 1) {
+        await connectWallet(present[0]);
+        return;
+      }
+
+      openWalletModal();
+      updateDeepLinkVisibility();
+
+    } catch (err) {
+      console.error("[btn-connect] error", err);
+      alert(err?.message || "Failed to open wallet.");
     }
+  }));
 
-    // 0 or >1 → show the modal to pick (and to reveal deep-link on mobile)
-    openWalletModal();
-    updateDeepLinkVisibility();
-
-  } catch (err) {
-    console.error("[btn-connect] error", err);
-    alert(err?.message || "Failed to open wallet.");
-  }
-}));
-
-  
-  // (Optional) legacy dropdown fallback (if present in DOM)
   const menu = document.getElementById("wallet-menu");
   menu?.addEventListener("click", (e)=>{
     const b = e.target.closest("button[data-wallet]");
@@ -691,14 +661,11 @@
     const ata = await splToken.getAssociatedTokenAddress(
       mintPk, owner, false, splToken.TOKEN_PROGRAM_ID, splToken.ASSOCIATED_TOKEN_PROGRAM_ID
     );
-  
-    // ask backend (does RPC) instead of browser calling CONNECTION
     let exists = false;
     try {
       const r = await jfetch(`${API}/accounts/${ata.toBase58()}/exists`);
       exists = !!r?.exists;
-    } catch (_) { /* fall through — treat as not existing */ }
-  
+    } catch (_){}
     if (!exists) {
       return {
         ata,
@@ -711,15 +678,15 @@
     return { ata, ix: null };
   }
 
-  const MEMO_PROGRAM_ID_CONST = MEMO_PROGRAM_ID; // alias for clarity
   const memoIx = (memoStr) => {
     const data = new TextEncoder().encode(memoStr);
-    return new solanaWeb3.TransactionInstruction({ programId: MEMO_PROGRAM_ID_CONST, keys: [], data });
+    return new SolanaWeb3.TransactionInstruction({ programId: MEMO_PROGRAM_ID, keys: [], data });
   };
 
 /* ────────────────────────────────────────────────────────
-   7) Coin Flip — place wager (fixed + wired to button)
+   7) Coin Flip — place wager
    ──────────────────────────────────────────────────────── */
+  // Demo spin if literally no wallet is present
   if (!window.solana && !window.phantom) {
     $("#cf-play")?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -731,7 +698,7 @@
       showWinBanner(side === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
     }, { once: true });
   }
-  
+
   async function placeCoinFlip() {
     try {
       await ensureConfig();
@@ -741,7 +708,6 @@
       const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
       if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
   
-      // 1) Create bet on backend (gets deposit ATA + memo)
       const bet = await jfetch(`${API}/bets`, {
         method: "POST",
         headers: { "content-type":"application/json" },
@@ -749,13 +715,11 @@
       });
       const betId = bet.bet_id;
   
-      // show deposit/memo for transparency
       $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
       $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
   
-      // 2) Build SPL transfer + Memo
-      const mintPk = new solanaWeb3.PublicKey(CONFIG.token.mint);
-      const destAta = new solanaWeb3.PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
+      const mintPk = new SolanaWeb3.PublicKey(CONFIG.token.mint);
+      const destAta = new SolanaWeb3.PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
       const payer   = PUBKEY;
   
       const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
@@ -763,33 +727,32 @@
       if (createSrc) ixs.push(createSrc);
       ixs.push(
         splToken.createTransferInstruction(
-          srcAta, destAta, payer, toBaseUnits(amountHuman), [], splToken.TOKEN_PROGRAM_ID),
+          srcAta, destAta, payer, toBaseUnits(amountHuman), [], splToken.TOKEN_PROGRAM_ID
+        ),
         memoIx(bet.memo)
       );
   
-      const bh = await jfetch(`${API}/cluster/latest_blockhash`);
-      const tx = new solanaWeb3.Transaction({ feePayer: payer });
-      tx.recentBlockhash = bh.blockhash;
+      const bh = await fetchLatestBlockhash();
+      const tx = new SolanaWeb3.Transaction({ feePayer: payer });
+      tx.recentBlockhash = bh;
       tx.add(...ixs);
   
-      // 3) Send
       const sigRes = await WALLET.signAndSendTransaction(tx);
       const signature = typeof sigRes === "string" ? sigRes : sigRes?.signature;
       $("#cf-status")?.replaceChildren(document.createTextNode(signature ? `Sent: ${signature.slice(0,10)}…` : "Sent"));
   
-      // 4) Immediate UX (spin/FX) + start polling for settle (via webhook)
       const coin = $("#coin");
       if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
       rainTreatz({ count: 22 });
   
-      pollBetUntilSettle(betId, side).catch(()=>{});
+      pollBetUntilSettle(betId).catch(()=>{});
     } catch (e) {
       console.error(e);
       alert(e.message || "Bet failed.");
     }
   }
   
-  async function pollBetUntilSettle(betId, chosenSide, timeoutMs = 45_000) {
+  async function pollBetUntilSettle(betId, timeoutMs = 45_000) {
     const t0 = Date.now();
     while (Date.now() - t0 < timeoutMs) {
       await new Promise(r=>setTimeout(r, 1500));
@@ -804,15 +767,15 @@
         }
       } catch {}
     }
-    // timeout UX
     $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
   }
-  
-  // Wire the button (type="button")
+
+  // Single authoritative wire-up for the play button
   $("#cf-play")?.addEventListener("click", async (e) => {
     e.preventDefault();
     await placeCoinFlip();
   });
+
 /* ────────────────────────────────────────────────────────
    8) Jackpot — buy tickets + raffle UI
    ──────────────────────────────────────────────────────── */
@@ -829,10 +792,10 @@
       const cur = await jfetch(`${API}/rounds/current`);
       const memoStr = `JP:${cur.round_id}`;
 
-      const mintPk = new solanaWeb3.PublicKey(CONFIG.token.mint);
+      const mintPk = new SolanaWeb3.PublicKey(CONFIG.token.mint);
       const jackAtaStr = CONFIG?.vaults?.jackpot_vault_ata;
       if (!jackAtaStr) throw new Error("Jackpot vault ATA not configured on the server.");
-      const destAta = new solanaWeb3.PublicKey(jackAtaStr);
+      const destAta = new SolanaWeb3.PublicKey(jackAtaStr);
       const payer = PUBKEY;
 
       const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
@@ -843,9 +806,9 @@
         memoIx(memoStr)
       );
 
-      const bh = await jfetch(`${API}/cluster/latest_blockhash`); // backend proxy
-      const tx = new solanaWeb3.Transaction({ feePayer: payer });
-      tx.recentBlockhash = bh.blockhash;
+      const bh = await fetchLatestBlockhash();
+      const tx = new SolanaWeb3.Transaction({ feePayer: payer });
+      tx.recentBlockhash = bh;
       tx.add(...ixs);
 
       const sigRes = await WALLET.signAndSendTransaction(tx);
@@ -879,8 +842,8 @@
 
       const sanitizeISO = (s) => String(s || "")
         .replace(" ", "T")
-        .replace(/\.\d+/, "")   // strip microseconds
-      .replace(/Z?$/, "Z");   // force Z
+        .replace(/\.\d+/, "")
+        .replace(/Z?$/, "Z");
       const opensAt     = new Date(sanitizeISO(round.opens_at));
       const closesAt    = new Date(sanitizeISO(round.closes_at));
       const nextOpensAt = new Date(sanitizeISO(cfg?.timers?.next_opens_at) || (closesAt.getTime() + (cfg?.raffle?.break_minutes||0)*60*1000));
@@ -908,7 +871,6 @@
       };
       tick(); setInterval(tick, 1000);
 
-      // Recent rounds
       const list = $("#recent-rounds");
       async function loadRecent(){
         if (!list) return;
@@ -951,7 +913,7 @@
   })();
 
 /* ────────────────────────────────────────────────────────
-   9) History table, House edge, Misc ambience
+   9) History + edge + ambience
    ──────────────────────────────────────────────────────── */
   async function loadHistory(query=""){
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
@@ -1001,7 +963,6 @@
     const a = document.getElementById("bg-ambient"); 
     if (!a) return;
 
-    // ensure a real src exists (from config or default)
     if (!a.src) {
       const cfgSrc = (window.TREATZ_CONFIG?.assets?.ambient) || a.getAttribute("data-src") || "assets/ambient.mp3";
       a.src = cfgSrc;
@@ -1010,10 +971,9 @@
     a.muted = true; a.volume = 0; a.loop = true;
 
     const start = async ()=>{
-      try { await a.play(); } catch { /* Safari blocks until gesture; we’re inside one */ }
+      try { await a.play(); } catch {}
       a.muted = false;
 
-      // fade in
       let v = 0, tgt = 0.12;
       const fade = () => { v = Math.min(tgt, v + 0.02); a.volume = v; if (v < tgt) requestAnimationFrame(fade); };
       requestAnimationFrame(fade);
