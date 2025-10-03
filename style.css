@@ -5,9 +5,9 @@
   /* Brand palette */
   --orange:#FF6B00;
   --orange-hi:#FF9500;
-  --pumpkin: var(--orange);              /* alias for legacy refs */
+  --pumpkin: var(--orange);
   --witch:#6A00FF;
-  --slime:#39FF14;                       /* neon slime green */
+  --slime:#39FF14; /* neon slime green */
   --jet:#0D0D0D;
   --white:#FFFFFF;
   --gray:#AAAAAA;
@@ -20,11 +20,6 @@
   --card:rgba(13,13,13,.72);
   --card-border:rgba(255,255,255,.12);
   --shadow:0 10px 30px rgba(0,0,0,.45);
-
-  /* Layout metrics */
-  --banner-h: 130px;                      /* match banner art height */
-  --countdown-scale: 1.225;               /* keep your scale */
-  --countdown-h: 64px;                   /* visual height of inner row (approx) */
 }
 
 /* =========================================================
@@ -48,8 +43,7 @@ body{
   text-shadow: 0 0 12px rgba(57,255,20,.25), 0 2px 0 rgba(0,0,0,.6);
 }
 
-.btn--primary, .btn--buy { cursive; }
-
+/* buttons: keep default font; removed invalid 'cursive' property */
 a, .btn--outline { color: var(--slime); }
 
 .card{
@@ -67,9 +61,7 @@ a, .btn--outline { color: var(--slime); }
   border-radius: 8px;
 }
 .nav__links a:focus-visible,
-.btn:focus-visible{
-  box-shadow: 0 0 0 3px rgba(57,255,20,.35);
-}
+.btn:focus-visible{ box-shadow: 0 0 0 3px rgba(57,255,20,.35); }
 
 /* A11y helper */
 .visually-hidden{
@@ -79,6 +71,7 @@ a, .btn--outline { color: var(--slime); }
   white-space: nowrap;
 }
 
+/* Wallet flyout */
 .wallet{ position:relative; display:inline-block; }
 .wallet__menu{
   position:absolute; top:110%; left:0; min-width:180px;
@@ -91,11 +84,11 @@ a, .btn--outline { color: var(--slime); }
 }
 .wallet__menu button:hover{ background:rgba(255,255,255,.08) }
 
-/* Wallet modal */
+/* Wallet modal (kept for later) */
 .wm[hidden]{display:none!important}
-.wm{position:fixed;inset:0;z-index:1000}
+.wm{position:fixed;inset:0;z-index:1000; display:grid; place-items:center;}
 .wm__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:saturate(.9) blur(2px)}
-.wm__card{position:relative;max-width:420px;margin:8vh auto;background:#111;color:#fff;border:1px solid #2a2a2a;border-radius:16px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.wm__card{position:relative;max-width:420px;margin:8vh auto;background:#111;color:#fff;border:1px solid #2a2a2a;border-radius:16px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.5); transform: scale(.98); opacity: 0; transition: transform .15s ease, opacity .15s ease;}
 .wm__close{position:absolute;right:10px;top:8px;background:transparent;color:#bbb;border:0;font-size:22px;cursor:pointer}
 .wm__sub{color:#aaa;margin:2px 0 12px}
 .wm__list{display:grid;gap:10px}
@@ -108,8 +101,6 @@ a, .btn--outline { color: var(--slime); }
 .wm__icon.phantom{background:#7c5cff}
 .wm__icon.solflare{background:#ff5f15}
 .wm__icon.backpack{background:#0ea5e9}
-.wm { display:grid; place-items:center; }
-.wm__card { transform: scale(.98); opacity: 0; transition: transform .15s ease, opacity .15s ease; }
 .wm:not([hidden]) .wm__card { transform: scale(1); opacity: 1; }
 
 /* Ensure wallet buttons aren’t under an overlay */
@@ -119,33 +110,27 @@ a, .btn--outline { color: var(--slime); }
 /* =========================================================
    Top Banner & Global Countdown
    ========================================================= */
+/* Make banner height **auto** to avoid cropping/overlap */
 .brand-banner{
   background:#0D0D0D;
-  position: sticky; top: 0; z-index: 1002;
-  height: var(--banner-h);
+  position: relative;
+  z-index: 1002;
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
 }
 .brand-banner img{
-  width:100%; height:100%;
+  width:100%; height:auto; max-height:220px;
   object-fit: cover; display:block;
 }
 
-/* Countdown sits under the banner and never hides it */
+/* Countdown directly follows banner (not sticky to simplify layout) */
 .countdown{
-  position: sticky;
-  top: var(--banner-h);
+  position: relative;
   z-index: 1001;
-  transform: scale(var(--countdown-scale));
-  transform-origin: top center;
   backdrop-filter: blur(4px);
   background:#000;
+  border-top: 1px solid rgba(255,255,255,.06);
   border-bottom: 1px solid rgba(255,255,255,.08);
   box-shadow: inset 0 -2px 0 rgba(0,255,163,.15), 0 6px 16px rgba(0,0,0,.25);
-}
-
-/* ensure content below doesn't tuck under the sticky countdown */
-.countdown + .nav{
-  margin-top: calc(var(--countdown-h) * var(--countdown-scale) + 4px);
 }
 
 .countdown__inner{
@@ -153,7 +138,7 @@ a, .btn--outline { color: var(--slime); }
   margin:0 auto;
   font-size: clamp(1.1rem, 2.2vw, 2rem);
   padding: 0.9rem 1.2rem;
-  min-height: var(--countdown-h);
+  min-height: 64px;
   display:flex; gap:.75rem;
   align-items:center; justify-content:center;
   flex-wrap:wrap;
@@ -167,16 +152,13 @@ a, .btn--outline { color: var(--slime); }
   border-radius:8px; box-shadow: 0 0 12px rgba(57,255,20,.35)
 }
 .countdown__omen{ font-size:.95rem; opacity:.9; margin-left:8px; color:#d8c2ff; font-style: italic }
-/* Countdown logo inside the bar */
 .countdown__logo{
   height: 84px; width: auto; margin-right: .6rem;
   border-radius: 5px; box-shadow: 0 0 12px rgba(57,255,20,.35);
 }
-@media (max-width: 600px){
-  .countdown__logo{ height: 44px; }
-}
+@media (max-width: 600px){ .countdown__logo{ height: 44px; } }
 
-/* Optional glow under banner */
+/* subtle glow under banner */
 .brand-banner::after{
   content:"";
   position:absolute; left:0; right:0; bottom:-6px; height:10px;
@@ -191,7 +173,7 @@ a, .btn--outline { color: var(--slime); }
   position:fixed; inset:0;
   background:
     linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.75)),
-    url('assets/background.png') center top / cover no-repeat fixed;
+    url('assets/bg_spooky.jpg') center top / cover no-repeat fixed;
   z-index:-1;
   filter: saturate(105%);
 }
@@ -211,9 +193,7 @@ a, .btn--outline { color: var(--slime); }
   text-shadow:0 0 8px rgba(255,149,0,.4);
   display:none;
 }
-@media (min-width: 720px){
-  .nav__brand-text{ display:inline }
-}
+@media (min-width: 720px){ .nav__brand-text{ display:inline } }
 
 .nav__links{ display:flex; align-items:center; gap:10px; }
 .nav__links a{
@@ -285,30 +265,23 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
    Coin Flip — Visual
    ========================================================= */
 .cf-display{ display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:220px; position:relative }
+
+/* SCROLLING TICKER — align with HTML (#ticker-rail) */
 .ticker{
   overflow:hidden; white-space:nowrap;
   border:1px solid rgba(255,255,255,.08);
   background:linear-gradient(180deg, rgba(13,13,13,.72), rgba(13,13,13,.5));
   border-radius:12px; margin:8px auto 0; padding:.5rem .75rem; max-width:1200px;
-  font-weight:700; color:var(--slime);
+  font-weight:700;
 }
-.ticker__inner{ display:inline-block; padding-left:100%; animation:ticker 18s linear infinite; }
+.ticker__rail{ display:inline-block; padding-left:100%; animation:ticker 18s linear infinite; }
 @keyframes ticker{ 0%{transform:translateX(0)} 100%{transform:translateX(-100%)} }
 
-/* Coin flip ticker coloring */
-.ticker .tick-win  { color: var(--slime); font-weight: 800; }
-.ticker .tick-loss { color: #ff4545;     font-weight: 800; }
+/* Ticker text colors (both variants supported) */
+.ticker .tick-win, .ticker .win  { color: var(--slime); font-weight: 800; }
+.ticker .tick-loss, .ticker .loss{ color: #ff4545;     font-weight: 800; }
 
-.coin__face--back{
-  transform:rotateY(180deg);
-  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%),
-             linear-gradient(180deg, rgba(0,255,163,.8), rgba(148,218,255,.8))
-}
-.coin.spin{ animation:spin 1.2s cubic-bezier(.2,.6,.2,1) 1 }
-@keyframes spin{ 0%{ transform:rotateY(0) } 100%{ transform:rotateY(720deg) } }
-.cf-status{ margin-top:12px; font-weight:700 }
-
-/* Halloween variant styling */
+/* Coin visuals */
 .coin{
   position:relative; width:140px; height:140px;
   perspective:800px;
@@ -318,22 +291,22 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
   background: radial-gradient(circle at 50% 40%, #1a0828 0%, #0d0d0d 60%, #000 100%);
 }
 .coin__face{
-  position:absolute; inset:0;
-  display:grid; place-items:center;
+  position:absolute; inset:0; display:grid; place-items:center;
   font-weight:800; font-family:"Creepster", cursive; letter-spacing:.6px;
   color: var(--pumpkin);
   text-shadow: 0 0 8px rgba(57,255,20,.35);
   border: 2px solid rgba(255,255,255,.08);
   backface-visibility:hidden;
 }
-.coin__face--front::after,
-.coin__face--back::after{
-  content:""; position:absolute; inset:-12px;
-  border-radius:50%;
-  background: conic-gradient(from 0deg, rgba(57,255,20,.12), transparent 40%, rgba(255,165,0,.12) 70%, transparent 100%);
-  filter: blur(6px);
+.coin__face--back{
+  transform:rotateY(180deg);
+  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%),
+             linear-gradient(180deg, rgba(0,255,163,.8), rgba(148,218,255,.8));
+  color: var(--slime); text-shadow: 0 0 10px rgba(57,255,20,.6);
 }
-.coin__face--back{ color: var(--slime); text-shadow: 0 0 10px rgba(57,255,20,.6); }
+.coin.spin{ animation:spin 1.2s cubic-bezier(.2,.6,.2,1) 1 }
+@keyframes spin{ 0%{ transform:rotateY(0) } 100%{ transform:rotateY(720deg) } }
+.cf-status{ margin-top:12px; font-weight:700 }
 
 /* subtle slime ring behind coin */
 .cf-display::before{
@@ -343,9 +316,9 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
   position:absolute; z-index:-1;
 }
 
-/* Respect reduced motion for ticker & coin */
+/* Respect reduced motion */
 @media (prefers-reduced-motion: reduce){
-  .ticker__inner{ animation: none; transform: translateX(0); }
+  .ticker__rail{ animation: none; transform: translateX(0); }
   .coin.spin{ animation: none; }
 }
 
@@ -360,14 +333,8 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
   80%  { filter: brightness(0.98); }
   100% { filter: brightness(1) contrast(1); }
 }
-
-/* apply when JS adds .flash to <body> */
 body.flash { animation: screen-flash 0.9s ease both; }
-
-/* reduce motion: skip the effect */
-@media (prefers-reduced-motion: reduce){
-  body.flash { animation: none; }
-}
+@media (prefers-reduced-motion: reduce){ body.flash { animation: none; } }
 
 /* =========================================================
    Jackpot — Stats & Progress
@@ -422,23 +389,14 @@ body.flash { animation: screen-flash 0.9s ease both; }
    $TREATZ FX Layer (falling wrappers/candy/ghosts)
    ========================================================= */
 #fx-layer{
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 1000; /* above content, below banner (~1002) */
+  position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1000;
 }
-
 .fx-piece{
-  position: absolute;
-  will-change: transform, opacity;
+  position: absolute; will-change: transform, opacity;
   filter: drop-shadow(0 4px 10px rgba(0,0,0,.5));
   opacity: .95;
-  animation:
-    treatz-fall var(--dur,6s) linear forwards,
-    treatz-sway 2.6s ease-in-out infinite;
+  animation: treatz-fall var(--dur,6s) linear forwards, treatz-sway 2.6s ease-in-out infinite;
 }
-
 @keyframes treatz-fall {
   0%   { transform: translate(var(--x,0px), -10%) rotate(var(--r0,0deg)); opacity: 0; }
   8%   { opacity: .95; }
