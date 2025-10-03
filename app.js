@@ -883,14 +883,13 @@
           const recent = await jfetch(`${API}/rounds/recent?limit=10`);
           list.innerHTML = "";
           recent.forEach(r=>{
-            const id  = r.round_id ?? r.id;
-            const pot = (Number(r.pot||0)/TEN_POW).toLocaleString();
             const li = document.createElement("li");
             li.className = "mini-table__row";
+            const potHuman = (Number(r.pot||0)/TEN_POW).toLocaleString();
             li.innerHTML = `
-              <span>#${id}</span>
-              <span>${pot}</span>
-              <button class="btn btn--ghost" data-r="${id}">Proof</button>
+              <span>#${r.id}</span>
+              <span>${potHuman}</span>
+              <button class="btn btn--ghost" data-r="${r.id}">Proof</button>
             `;
             list.appendChild(li);
           });
