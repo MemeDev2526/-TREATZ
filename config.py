@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     # =========================================================
     HMAC_SECRET: Optional[str] = os.getenv("HMAC_SECRET")
     HELIUS_SIGNATURE_HEADER: Optional[str] = os.getenv("HELIUS_SIGNATURE_HEADER")
+    HELIUS_WEBHOOK_URL: Optional[str] = os.getenv("HELIUS_WEBHOOK_URL")  # where Helius POSTs
+    ADMIN_TOKEN: Optional[str] = os.getenv("ADMIN_TOKEN")
 
     # =========================================================
     # Database
