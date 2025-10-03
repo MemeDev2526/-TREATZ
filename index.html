@@ -19,6 +19,7 @@
 
   <!-- ========== CONFIG (must be before app.js) ========== -->
   <script>
+    window.__TREATZ_DEBUG = true;         // MUST be set before app.js loads
     window.TREATZ_BUILD = "__BUILD__";
     window.TREATZ_CONFIG = {
       apiBase: "https://treatz-de1d.onrender.com/api",
@@ -42,50 +43,66 @@
 
   <!-- Solana libs (IIFE) with resilient fallbacks -->
   <script>
-    (function loadSeq(urls, id, ok){
-      if (document.getElementById(id)) return;
+    // load web3.js
+    (function loadSeq(urls, id, done){
+      if (document.getElementById(id)) return done && done();
       function next(i){
-        if (i >= urls.length) return;               // give up gracefully
+        if (i >= urls.length) return;              // give up silently
         var s = document.createElement('script');
         s.id = id; s.src = urls[i]; s.crossOrigin = "anonymous"; s.defer = true;
-        s.onload = function(){ ok && ok(); };
+        s.onload = function(){ done && done(); };
         s.onerror = function(){ s.remove(); next(i+1); };
         document.head.appendChild(s);
       }
       next(0);
-    })(
-      [
-        "https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js",
-        "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js"
-      ],
-      "solana-web3",
-      function(){ /* web3 loaded */ }
-    );
+    })([
+      "https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js",
+      "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js"
+    ], "solana-web3");
 
-    (function(){
-      var tries = [
-        "https://unpkg.com/@solana/spl-token@0.3.7/dist/index.iife.js",
-        "https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.7/dist/index.iife.js"
-      ];
-      (function load(i){
-        if (i >= tries.length) return;
+    // load spl-token (use 0.3.7 which publishes an IIFE)
+    (function loadSeq(urls, id, done){
+      if (document.getElementById(id)) return done && done();
+      function next(i){
+        if (i >= urls.length) return;
         var s = document.createElement('script');
-        s.id = "solana-spl"; s.src = tries[i]; s.crossOrigin="anonymous"; s.defer=true;
-        s.onload = function(){ /* spl-token loaded */ };
-        s.onerror = function(){ s.remove(); load(i+1); };
+        s.id = id; s.src = urls[i]; s.crossOrigin = "anonymous"; s.defer = true;
+        s.onload = function(){ done && done(); };
+        s.onerror = function(){ s.remove(); next(i+1); };
         document.head.appendChild(s);
-      })(0);
+      }
+      next(0);
+    })([
+      "https://unpkg.com/@solana/spl-token@0.3.7/dist/index.iife.js",
+      "https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.7/dist/index.iife.js"
+    ], "solana-spl");
+  </script>
+  <script>
+    // Wait for both libs, then load app.js
+    (function waitAndBoot(){
+      var tries = 0;
+      function ready(){
+        return !!(window.solanaWeb3 && window.splToken);
+      }
+      function boot(){
+        var s = document.createElement('script');
+        s.src = "app.js?v=" + (window.TREATZ_BUILD || Date.now());
+        s.defer = true;
+        document.body.appendChild(s);
+      }
+      (function tick(){
+        if (ready()) return boot();
+        if (++tries > 200) return boot(); // boot anyway after ~10s
+        setTimeout(tick, 50);
+      })();
     })();
   </script>
-
   <!-- Optional: favicon -->
   <!-- <link rel="icon" href="assets/favicon.png"> -->
 </head>
 <body>
 
-  <audio id="bg-ambient" preload="auto" playsinline muted>
-    <source src="assets/ambient.mp3" type="audio/mpeg">
-  </audio>
+  <audio id="bg-ambient" data-src="/-TREATZ/assets/ambient.mp3"></audio>
 
   <!-- ==========================
      TOP BANNER (sticky)
