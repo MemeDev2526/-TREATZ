@@ -55,42 +55,41 @@
 })();
 
 /* =========================================================
-   $TREATZ — App Logic (reorganized & guarded)
+   $TREATZ — App Logic (clean + organized)
    ========================================================= */
 (function () {
   "use strict";
 
-  // Feature flags (leave true; they are hard-guarded to not crash if libs/wallet missing)
-  const FEATURE_WALLET       = true;
-  const FEATURE_ONCHAIN_BET  = true;
-  const FEATURE_JP_PURCHASE  = true;
+  console.log("TREATZ app boot", {
+    build: window.TREATZ_BUILD,
+    hasPhantom: !!(window.phantom?.solana || window.solana),
+    hasSolflare: !!window.solflare,
+    hasBackpack: !!window.backpack?.solana
+  });
 
-  // Alias globals (may be undefined — we guard later)
+  // ---- Solana libs (may be undefined; UI must still run) ----
   const SolanaWeb3 = window.solanaWeb3;
   const splToken   = window.splToken;
 
   /* ────────────────────────────────────────────────────────
-     0) Config, global state, helpers (declare early!)
+     0) Config, Global State, Tiny Helpers
      ──────────────────────────────────────────────────────── */
   const C        = window.TREATZ_CONFIG || {};
   const API      = (C.apiBase || "/api").replace(/\/$/, "");
   const TOKEN    = C.token || { symbol: "$TREATZ", decimals: 6 };
 
-  // Wallet-related state MUST exist before any function uses them (avoid TDZ)
-  let WALLET   = null;
-  let PUBKEY   = null;
-  let CONFIG   = null;
-  let DECIMALS = Number(TOKEN.decimals || 6);
+  // IMPORTANT: declare shared state EARLY to avoid TDZ
+  let WALLET = null;
+  let PUBKEY = null;
+  let CONFIG = null;
+  let DECIMALS = TOKEN.decimals;
   let TEN_POW  = 10 ** DECIMALS;
-
-  // Memo program (only if web3 available)
-  const MEMO_PROGRAM_ID = SolanaWeb3 ? new SolanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") : null;
 
   const $  = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const pow10 = (n) => Math.pow(10, n);
 
-  const fmtUnits = (units, decimals = DECIMALS) => {
+  const fmtUnits = (units, decimals = TOKEN.decimals) => {
     if (units == null) return "—";
     const t = Number(units) / pow10(decimals);
     return t >= 1 ? t.toFixed(2) : t.toFixed(4);
@@ -123,18 +122,11 @@
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   }
-  async function jfetchStrict(url, opts){
+  async function jfetchStrict(url, opts){ // used in raffle/history init
     const r = await fetch(url, opts);
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   }
-
-  console.log("TREATZ app boot", {
-    build: window.TREATZ_BUILD,
-    hasPhantom: !!(window.phantom?.solana || window.solana),
-    hasSolflare: !!window.solflare,
-    hasBackpack: !!window.backpack?.solana
-  });
 
   /* ────────────────────────────────────────────────────────
      1) FX + UI sugar
@@ -270,8 +262,7 @@
     const m    = now.getMonth(); // 0..11, Oct = 9
     const d    = now.getDate();
     const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
-    // Count down to Oct 31 23:59:59 local
-    return new Date(year, 9, 31, 23, 59, 59, 0);
+    return new Date(year, 9, 31, 0, 0, 0, 0);
   }
 
   function formatDHMS(ms){
@@ -321,13 +312,14 @@
       window.__treatz_cd_omen  = setInterval(rotate, 12000);
     }catch(e){ console.error("Countdown init failed", e); }
   }
+
   initHalloweenCountdown();
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) initHalloweenCountdown();
   });
 
   /* ────────────────────────────────────────────────────────
-     3) Static links, assets, copy, mascot float
+     3) Static links, assets, token copy
      ──────────────────────────────────────────────────────── */
   const link = (id, href) => { const el = document.getElementById(id); if (el && href) el.href = href; };
   link("link-telegram",  C.links?.telegram);
@@ -336,12 +328,46 @@
   link("link-whitepaper",C.links?.whitepaper);
   link("btn-buy",        C.buyUrl);
 
+  const deepLinks = [
+    document.getElementById("btn-open-in-phantom"),
+    document.getElementById("btn-open-in-phantom-2"),
+    document.getElementById("btn-open-in-phantom-modal"),
+  ].filter(Boolean);
+
+  function getPhantomProvider(){
+    const p = window.phantom?.solana || window.solana;
+    return (p && p.isPhantom) ? p : null;
+  }
+  function getSolflareProvider(){
+    return (window.solflare && window.solflare.isSolflare) ? window.solflare : null;
+  }
+  function getBackpackProvider(){
+    return window.backpack?.solana || null;
+  }
+
+  function updateDeepLinkVisibility() {
+    if (!deepLinks.length) return;
+    const href = phantomDeepLinkForThisSite();
+    const hasProvider = !!(getPhantomProvider() || getSolflareProvider() || getBackpackProvider());
+    const shouldShow = isMobile() && !hasProvider && !PUBKEY;
+
+    for (const a of deepLinks) {
+      a.href = href;
+      a.style.display = shouldShow ? "inline-block" : "none";
+      if (a.hasAttribute("hidden")) a.hidden = !shouldShow;
+    }
+  }
+  updateDeepLinkVisibility();
+  document.addEventListener("DOMContentLoaded", updateDeepLinkVisibility);
+  window.addEventListener("load", updateDeepLinkVisibility);
+
   const tokenEl = $("#token-address");
   if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
 
   const cdLogo  = $("#countdown-logo");
   if (C.assets?.logo && cdLogo) { cdLogo.src = C.assets.logo; cdLogo.alt = "$TREATZ"; }
 
+  // Mascot float
   const mascotImg = $("#mascot-floater");
   if (mascotImg && C.assets?.mascot) {
     mascotImg.src = C.assets.mascot;
@@ -386,22 +412,12 @@
   });
 
   /* ────────────────────────────────────────────────────────
-     4) Wallet plumbing (kept, but hard-guarded)
+     4) Wallet plumbing (kept, but never blocks UI)
      ──────────────────────────────────────────────────────── */
-  function getPhantomProvider(){
-    const p = window.phantom?.solana || window.solana;
-    return (p && p.isPhantom) ? p : null;
-  }
-  function getSolflareProvider(){
-    return (window.solflare && window.solflare.isSolflare) ? window.solflare : null;
-  }
-  function getBackpackProvider(){
-    return window.backpack?.solana || null;
-  }
   const getProviderByName = (name) => {
     name = (name || "").toLowerCase();
     const ph = (window.phantom && window.phantom.solana) || window.solana;
-    if (name === "phantom"  && ph?.isPhantom)               return ph;
+    if (name === "phantom"  && ph?.isPhantom)              return ph;
     if (name === "solflare" && window.solflare?.isSolflare) return window.solflare;
     if (name === "backpack" && window.backpack?.solana)     return window.backpack.solana;
     return null;
@@ -417,9 +433,27 @@
     if (!b) return;
     const w = b.getAttribute("data-wallet");
     closeWalletModal();
-    if (!FEATURE_WALLET) return;
     connectWallet(w).catch(console.error);
   });
+
+  const MEMO_PROGRAM_ID = (SolanaWeb3
+    ? new SolanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
+    : null
+  );
+
+  async function fetchLatestBlockhash() {
+    const r = await jfetch(`${API}/cluster/latest_blockhash`);
+    if (!r?.blockhash) throw new Error("Blockhash unavailable");
+    return r.blockhash;
+  }
+
+  async function fetchAccountExists(pubkeyStr) {
+    const r = await jfetch(`${API}/accounts/${pubkeyStr}/exists`);
+    return !!r?.exists;
+  }
+
+  const toBaseUnits   = (human) => Math.floor(Number(human) * TEN_POW);
+  const fromBaseUnits = (base)  => Number(base) / TEN_POW;
 
   function onProviderConnect(pk) {
     try {
@@ -439,8 +473,7 @@
   }
 
   async function connectWallet(preferred) {
-    if (!FEATURE_WALLET) throw new Error("Wallet disabled");
-    if (!SolanaWeb3) throw new Error("web3 not loaded");
+    if (!SolanaWeb3) { toast("Wallet libs not loaded."); return; }
     if (PUBKEY) return PUBKEY;
 
     const order = [preferred, "phantom", "solflare", "backpack"].filter(Boolean);
@@ -456,7 +489,7 @@
       wireProvider(p);
 
       const got = (res?.publicKey?.toString?.() || res?.publicKey || res || p.publicKey)?.toString?.();
-      if (!got || !SolanaWeb3) throw new Error("Wallet did not return a public key.");
+      if (!got) throw new Error("Wallet did not return a public key.");
       PUBKEY = new SolanaWeb3.PublicKey(got);
 
       setWalletLabels();
@@ -482,66 +515,20 @@
   function setWalletLabels() {
     const connectBtns = $$("#btn-connect, #btn-connect-2");
     const openBtns    = $$("#btn-openwallet, #btn-openwallet-2");
-  
     if (PUBKEY) {
       const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
       connectBtns.forEach(b => b && (b.textContent = "Disconnect"));
-      openBtns.forEach(b => {
-        if (!b) return;
-        b.textContent = `Wallet (${short})`;
-        b.hidden = false;
-      });
+      openBtns.forEach(b => { if (b){ b.textContent = `Wallet (${short})`; b.hidden = false; }});
     } else {
       connectBtns.forEach(b => b && (b.textContent = "Connect Wallet"));
       openBtns.forEach(b => b && (b.hidden = true));
     }
+    updateDeepLinkVisibility();
   }
-
-  $$("#btn-connect, #btn-connect-2").forEach(btn => btn?.addEventListener("click", async () => {
-    try {
-      if (!FEATURE_WALLET) { toast("Wallet disabled for now"); return; }
-      if (PUBKEY) { await disconnectWallet(); return; }
-
-      const present = [
-        getPhantomProvider()  && "phantom",
-        getSolflareProvider() && "solflare",
-        getBackpackProvider() && "backpack",
-      ].filter(Boolean);
-
-      if (present.length === 1) {
-        await connectWallet(present[0]);
-        return;
-      }
-
-      openWalletModal();
-    } catch (err) {
-      console.error("[btn-connect] error", err);
-      alert(err?.message || "Failed to open wallet.");
-    }
-  }));
-
-  const menu = document.getElementById("wallet-menu");
-  menu?.addEventListener("click", (e)=>{
-    const b = e.target.closest("button[data-wallet]");
-    if (!b) return;
-    const w = b.getAttribute("data-wallet");
-    menu.hidden = true;
-    if (!FEATURE_WALLET) return;
-    connectWallet(w).catch(err=>console.error(err));
-  });
-
-  $$("#btn-openwallet, #btn-openwallet-2").forEach(btn => btn?.addEventListener("click", async ()=>{
-    try {
-      if (!FEATURE_WALLET) { toast("Wallet disabled for now"); return; }
-      if (!PUBKEY) { await connectWallet("phantom"); return; }
-      const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
-      alert(`Connected: ${short}`);
-    } catch (e) { console.error(e); }
-  }));
   setWalletLabels();
 
   /* ────────────────────────────────────────────────────────
-     5) Scrolling Ticker (mock wins/losses)
+     5) Ticker + Player Stats
      ──────────────────────────────────────────────────────── */
   (function initCoinFlipTicker(){
     const el = document.getElementById("fomo-ticker");
@@ -575,7 +562,7 @@
     function render(){
       el.innerHTML = "";
       const inner = document.createElement("div");
-      inner.className = "ticker__inner";
+      inner.className = "ticker__inner"; // IMPORTANT: matches CSS animation selector
       inner.innerHTML = buildBatch(28) + " • ";
       el.appendChild(inner);
     }
@@ -584,34 +571,19 @@
     setInterval(render, 25000);
   })();
 
-  /* Player stats (kept; harmless if not connected) */
-  async function ensureConfig() {
-    if (!CONFIG) {
-      const r = await jfetch(`${API}/config?include_balances=true`);
-      CONFIG   = r;
-      DECIMALS = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6);
-      TEN_POW  = 10 ** DECIMALS;
-    }
-    return CONFIG;
-  }
-
   async function loadPlayerStats(){
     const panel = document.getElementById("player-stats");
-    if (!panel) return;
-    if (!PUBKEY) { panel.hidden = true; return; }
+    if (!panel || !PUBKEY) { if (panel) panel.hidden = true; return; }
 
     try{
       await ensureConfig();
-
       const cur = await jfetch(`${API}/rounds/current`);
       const entries = await jfetch(`${API}/rounds/${cur.round_id}/entries`).catch(()=>[]);
-
       const me = String(PUBKEY.toBase58()).toLowerCase();
       const you = (entries || []).filter(e=>{
         const u = (e.user || e.user_pubkey || e.address || "").toString().toLowerCase();
         return u === me;
       });
-      
       const yourTickets = you.reduce((s,e)=> s + Number(e.tickets||0), 0);
 
       let credit = 0, spent = 0, won = 0;
@@ -624,17 +596,16 @@
       $("#ps-credit") ?.replaceChildren(document.createTextNode((credit / TEN_POW).toLocaleString()));
       $("#ps-spent")  ?.replaceChildren(document.createTextNode((spent  / TEN_POW).toLocaleString()));
       $("#ps-won")    ?.replaceChildren(document.createTextNode((won    / TEN_POW).toLocaleString()));
-
       panel.hidden = false;
     }catch(e){ console.error("loadPlayerStats", e); }
   }
   setInterval(loadPlayerStats, 15000);
 
   /* ────────────────────────────────────────────────────────
-     6) SPL Helpers (guarded behind libs)
+     6) SPL Helpers (ATA + Memo) — guarded
      ──────────────────────────────────────────────────────── */
   async function getOrCreateATA(owner, mintPk, payer) {
-    if (!splToken) throw new Error("spl-token not loaded");
+    if (!splToken) throw new Error("SPL Token lib missing");
     const ata = await splToken.getAssociatedTokenAddress(
       mintPk, owner, false, splToken.TOKEN_PROGRAM_ID, splToken.ASSOCIATED_TOKEN_PROGRAM_ID
     );
@@ -662,156 +633,38 @@
   };
 
   /* ────────────────────────────────────────────────────────
-     7) Coin Flip — UX spin (always), on-chain bet (flagged)
+     7) Coin Flip — demo animation (no backend required)
      ──────────────────────────────────────────────────────── */
   $("#cf-play")?.addEventListener("click", async (e) => {
     e.preventDefault();
 
-    // Always spin the coin for UX
+    // Spin animation
     const coin = $("#coin");
     if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
 
-    // If we aren't doing on-chain bet now, show local result after a moment
-    if (!FEATURE_ONCHAIN_BET || !FEATURE_WALLET) {
-      const form = document.getElementById("bet-form");
-      const side = (new FormData(form)).get("side") || "TRICK";
-      setTimeout(() => {
-        const landedTreat = Math.random() < 0.5;
-        const landed = landedTreat ? "TREAT" : "TRICK";
-        if (coin) coin.style.transform = landedTreat ? "rotateY(180deg)" : "rotateY(0deg)";
-        playResultFX(landed);
-        showWinBanner(landed === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
-        $("#cf-status")?.replaceChildren(document.createTextNode(landed === "TREAT" ? "WIN!" : "LOSS"));
-      }, 1150);
-      return;
-    }
+    // Visual result after spin duration
+    const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
+    setTimeout(() => {
+      const landedTreat = Math.random() < 0.5;
+      const landed = landedTreat ? "TREAT" : "TRICK";
 
-    // On-chain route (requires wallet/libs and backend /bets)
-    try {
-      await ensureConfig();
-      if (!PUBKEY) await connectWallet("phantom");
-      if (!SolanaWeb3 || !splToken) throw new Error("Solana libs missing");
+      // End-state orientation (optional)
+      if (coin) coin.style.transform = landedTreat ? "rotateY(180deg)" : "rotateY(0deg)";
 
-      const amountHuman = Number(document.getElementById("bet-amount").value || "0");
-      const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
-      if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
-
-      const bet = await jfetch(`${API}/bets`, {
-        method: "POST",
-        headers: { "content-type":"application/json" },
-        body: JSON.stringify({ amount: Math.floor(amountHuman * TEN_POW), side })
-      });
-      const betId = bet.bet_id;
-
-      $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
-      $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
-
-      const mintPk = new SolanaWeb3.PublicKey(CONFIG.token.mint);
-      const destAta = new SolanaWeb3.PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
-      const payer   = PUBKEY;
-
-      const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
-      const ixs = [];
-      if (createSrc) ixs.push(createSrc);
-      ixs.push(
-        splToken.createTransferInstruction(
-          srcAta, destAta, payer, Math.floor(amountHuman * TEN_POW), [], splToken.TOKEN_PROGRAM_ID
-        ),
-        memoIx(bet.memo)
-      );
-
-      const bh = await jfetch(`${API}/cluster/latest_blockhash`);
-      const tx = new SolanaWeb3.Transaction({ feePayer: payer, recentBlockhash: bh.blockhash });
-      tx.add(...ixs);
-
-      const sigRes = await WALLET.signAndSendTransaction(tx);
-      const signature = typeof sigRes === "string" ? sigRes : sigRes?.signature;
-      $("#cf-status")?.replaceChildren(document.createTextNode(signature ? `Sent: ${signature.slice(0,10)}…` : "Sent"));
-
-      // UX spin already triggered; add celebratory rain
-      rainTreatz({ count: 22 });
-
-      // Poll backend for settlement
-      await (async function pollBetUntilSettle(timeoutMs = 45_000) {
-        const t0 = Date.now();
-        while (Date.now() - t0 < timeoutMs) {
-          await new Promise(r=>setTimeout(r, 1500));
-          try {
-            const b = await jfetch(`${API}/bets/${betId}`);
-            if ((b.status || "").toUpperCase() === "SETTLED") {
-              const win = !!b.win;
-              playResultFX(win ? "TREAT" : "TRICK");
-              showWinBanner(win ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
-              $("#cf-status")?.replaceChildren(document.createTextNode(win ? "WIN!" : "LOSS"));
-              return;
-            }
-          } catch {}
-        }
-        $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
-      })();
-
-    } catch (e) {
-      console.error(e);
-      alert(e.message || "Bet failed.");
-    }
+      playResultFX(landed);
+      showWinBanner(landed === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
+      $("#cf-status")?.replaceChildren(document.createTextNode(landed === "TREAT" ? "WIN!" : "LOSS"));
+    }, 1150);
   });
 
   /* ────────────────────────────────────────────────────────
-     8) Jackpot — buy tickets (flag) + raffle UI (always)
+     8) Jackpot — UI (driven by your backend schedule)
      ──────────────────────────────────────────────────────── */
-  document.getElementById("jp-buy")?.addEventListener("click", async ()=>{
-    if (!FEATURE_JP_PURCHASE || !FEATURE_WALLET) {
-      toast("Ticket purchases will unlock with wallet wiring.");
-      return;
-    }
-    try {
-      await ensureConfig();
-      if (!PUBKEY) await connectWallet("phantom");
-      if (!SolanaWeb3 || !splToken) throw new Error("Solana libs missing");
-
-      const nTickets = Math.max(1, Number(document.getElementById("jp-amount").value || "1"));
-      const ticketPriceBase = Number(CONFIG?.token?.ticket_price || 0);
-      if (!ticketPriceBase) throw new Error("Ticket price unavailable.");
-      const amountBase = nTickets * ticketPriceBase;
-
-      const cur = await jfetch(`${API}/rounds/current`);
-      const memoStr = `JP:${cur.round_id}`;
-
-      const mintPk = new SolanaWeb3.PublicKey(CONFIG.token.mint);
-      const jackAtaStr = CONFIG?.vaults?.jackpot_vault_ata;
-      if (!jackAtaStr) throw new Error("Jackpot vault ATA not configured on the server.");
-      const destAta = new SolanaWeb3.PublicKey(jackAtaStr);
-      const payer = PUBKEY;
-
-      const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
-      const ixs = [];
-      if (createSrc) ixs.push(createSrc);
-      ixs.push(
-        splToken.createTransferInstruction(srcAta, destAta, payer, amountBase, [], splToken.TOKEN_PROGRAM_ID),
-        memoIx(memoStr)
-      );
-
-      const bh = await jfetch(`${API}/cluster/latest_blockhash`);
-      const tx = new SolanaWeb3.Transaction({ feePayer: payer, recentBlockhash: bh.blockhash });
-      tx.add(...ixs);
-
-      const sigRes = await WALLET.signAndSendTransaction(tx);
-      const signature = typeof sigRes === "string" ? sigRes : sigRes?.signature;
-      toast(`Tickets purchased! Tx: ${signature ? signature.slice(0,8) + "…" : "pending"}`);
-    } catch (e) {
-      console.error(e);
-      alert(e.message || "Ticket purchase failed.");
-    }
-  });
-
   (async function initRaffleUI(){
     const errOut = (where, message) => {
       console.error(`[raffle:${where}]`, message);
       const schedule = document.getElementById("raffle-schedule");
-      if (schedule) {
-        schedule.textContent = `⚠️ ${message}`;
-        schedule.style.color = "#ff9b9b";
-      }
+      if (schedule) { schedule.textContent = `⚠️ ${message}`; schedule.style.color = "#ff9b9b"; }
     };
 
     try {
@@ -824,13 +677,13 @@
       const durationMin = Number(cfg?.raffle?.duration_minutes ?? 10);
       const breakMin    = Number(cfg?.raffle?.break_minutes ?? 2);
 
-      // 2) Set ticket price if present
+      // 2) Ticket price (if provided)
       const priceBase = Number(cfg?.token?.ticket_price ?? 0);
       if (priceBase && document.getElementById("ticket-price")) {
         document.getElementById("ticket-price").textContent = (priceBase / TEN_POW).toLocaleString();
       }
 
-      // 3) Load current round (backend schedule is canonical)
+      // 3) Current round from backend
       const round = await jfetchStrict(`${API}/rounds/current`);
       const elPot   = document.getElementById("round-pot");
       const elId    = document.getElementById("round-id");
@@ -839,6 +692,7 @@
       const elProg  = document.getElementById("jp-progress");
       const schedEl = document.getElementById("raffle-schedule");
 
+      // Normalize timestamps (backend is source of truth)
       const iso = (s)=> String(s||"").replace(" ", "T").replace(/\.\d+/, "").replace(/Z?$/, "Z");
       const opensAt  = new Date(iso(round.opens_at));
       const closesAt = new Date(iso(round.closes_at));
@@ -847,11 +701,7 @@
 
       if (elId)  elId.textContent  = round.round_id || round.id || "—";
       if (elPot) elPot.textContent = (Number(round.pot||0) / TEN_POW).toLocaleString();
-
-      if (schedEl) {
-        schedEl.textContent = `Each round: ${durationMin} min • Break: ${breakMin} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
-        schedEl.style.color = "";
-      }
+      if (schedEl) schedEl.textContent = `Each round: ${durationMin} min • Break: ${breakMin} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
 
       const fmtClock = (ms)=>{ if (ms<0) ms=0; const s=Math.floor(ms/1000);
         const h=String(Math.floor((s%86400)/3600)).padStart(2,"0");
@@ -871,7 +721,7 @@
       };
       tick(); setInterval(tick, 1000);
 
-      // 5) Recent rounds list
+      // 5) Recent rounds
       const list = document.getElementById("recent-rounds");
       document.getElementById("jp-view-all")?.addEventListener("click", () => {
         document.getElementById("raffle-history")?.scrollIntoView({ behavior: "smooth" });
@@ -890,11 +740,8 @@
             if (typeof r.tickets !== "undefined") meta.push(`${r.tickets} tix`);
             if (typeof r.wallets !== "undefined") meta.push(`${r.wallets} wallets`);
             const metaStr = meta.length ? `<span class="muted small">${meta.join(" • ")}</span>` : "";
-
-            li.innerHTML = `
-              <span><b>${r.id || r.round_id}</b> • ${potHuman} ${TOKEN.symbol}</span>
-              ${metaStr}
-            `;
+            const rid = r.id || r.round_id || "?";
+            li.innerHTML = `<span><b>${rid}</b> • ${potHuman} ${TOKEN.symbol}</span> ${metaStr}`;
             list.appendChild(li);
           }
           if (!recent.length) list.innerHTML = `<li class="muted">No recent rounds.</li>`;
@@ -912,29 +759,36 @@
   })();
 
   /* ────────────────────────────────────────────────────────
-     9) History + house edge + ambience
+     9) History + edge + ambience
      ──────────────────────────────────────────────────────── */
+  async function ensureConfig() {
+    if (!CONFIG) {
+      const r = await jfetch(`${API}/config?include_balances=true`);
+      CONFIG = r;
+      DECIMALS = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6);
+      TEN_POW  = 10 ** DECIMALS;
+    }
+    return CONFIG;
+  }
+
   async function loadHistory(query=""){
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
 
     try {
-      await ensureConfig();
       const recent = await jfetchStrict(`${API}/rounds/recent?limit=10`);
       const items = (query && /^R?\d+$/i.test(query))
-        ? recent.filter(x => String(x.id || x.round_id).toUpperCase() === query.toUpperCase().replace(/^R/i,"R"))
+        ? recent.filter(x => String(x.id || x.round_id).toUpperCase() === query.toUpperCase())
         : recent;
 
       const rows = [];
       for (const r of items){
         let w = null;
-        try { w = await jfetchStrict(`${API}/rounds/${r.id || r.round_id}/winner`); } catch (e) { /* per-row failure tolerated */ }
-
+        try { w = await jfetchStrict(`${API}/rounds/${r.id || r.round_id}/winner`); } catch (e) {}
         const potHuman = (Number(r.pot||0)/TEN_POW).toLocaleString();
-        const winner   = w?.winner ? (w.winner.slice(0,4)+"…"+w.winner.slice(-4)) : "—";
+        const winner   = w?.winner ? w.winner : "—";
         const payout   = w?.payout_sig || "—";
         const proof    = (w?.server_seed_hash||"-").slice(0,10) + "…";
-
         rows.push(`<tr>
           <td>#${r.id || r.round_id}</td>
           <td>${potHuman} ${TOKEN.symbol}</td>
@@ -943,7 +797,6 @@
           <td>${proof}</td>
         </tr>`);
       }
-
       tbody.innerHTML = rows.join("") || `<tr><td colspan="5" class="muted">No history.</td></tr>`;
     } catch(e){
       console.error(e);
@@ -954,7 +807,7 @@
   loadHistory();
 
   (async()=>{
-    try {
+    try{
       await ensureConfig();
       if (CONFIG?.raffle?.splits) {
         const s = CONFIG.raffle.splits;
@@ -962,13 +815,13 @@
         const el = document.getElementById("edge-line");
         if (el) el.textContent = `House edge: ${(bps/100).toFixed(2)}%`;
       }
-    } catch(e) {}
+    }catch(e){ /* non-fatal */ }
   })();
 
   async function announceLastWinner(){
     try {
       const recent = await jfetch(`${API}/rounds/recent?limit=1`);
-      const rid = recent?.[0]?.id || recent?.[0]?.round_id; if (!rid) return;
+      const rid = (recent?.[0]?.id || recent?.[0]?.round_id); if (!rid) return;
       const w = await jfetch(`${API}/rounds/${rid}/winner`);
       if (w?.winner){
         toast(`Winner: ${w.winner.slice(0,4)}… — Pot ${fmtUnits(w.pot, DECIMALS)} ${TOKEN.symbol}`);
