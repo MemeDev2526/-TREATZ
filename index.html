@@ -40,7 +40,7 @@
     };
     window.__TREATZ_DEBUG = true;</script>
  
-  <!-- Solana libs (IIFE) with resilient fallbacks -->
+ <!-- Solana libs (IIFE) with resilient fallbacks) -->
   <script>
     // load web3.js
     (function loadSeq(urls, id, done){
@@ -48,7 +48,10 @@
       function next(i){
         if (i >= urls.length) return;              // give up silently
         var s = document.createElement('script');
-        s.id = id; s.src = urls[i]; s.crossOrigin = "anonymous"; s.defer = true;
+        s.id = id;
+        s.src = urls[i];
+        s.async = false;                           // preserve order if multiple scripts
+        // NOTE: do NOT set s.crossOrigin here
         s.onload = function(){ done && done(); };
         s.onerror = function(){ s.remove(); next(i+1); };
         document.head.appendChild(s);
@@ -65,7 +68,10 @@
       function next(i){
         if (i >= urls.length) return;
         var s = document.createElement('script');
-        s.id = id; s.src = urls[i]; s.crossOrigin = "anonymous"; s.defer = true;
+        s.id = id;
+        s.src = urls[i];
+        s.async = false;                           // preserve order
+        // NOTE: do NOT set s.crossOrigin here
         s.onload = function(){ done && done(); };
         s.onerror = function(){ s.remove(); next(i+1); };
         document.head.appendChild(s);
