@@ -611,7 +611,14 @@
     const ata = await splToken.getAssociatedTokenAddress(
       mintPk, owner, false, splToken.TOKEN_PROGRAM_ID, splToken.ASSOCIATED_TOKEN_PROGRAM_ID
     );
-    const exists = await fetchAccountExists(ata.toBase58());
+  
+    // ask backend (does RPC) instead of browser calling CONNECTION
+    let exists = false;
+    try {
+      const r = await jfetch(`${API}/accounts/${ata.toBase58()}/exists`);
+      exists = !!r?.exists;
+    } catch (_) { /* fall through — treat as not existing */ }
+  
     if (!exists) {
       return {
         ata,
@@ -723,9 +730,9 @@
         memoIx(memoStr)
       );
 
-      const blockhash = await fetchLatestBlockhash();
+      const bh = await jfetch(`${API}/cluster/latest_blockhash`); // backend proxy
       const tx = new solanaWeb3.Transaction({ feePayer: payer });
-      tx.recentBlockhash = blockhash;
+      tx.recentBlockhash = bh.blockhash;
       tx.add(...ixs);
 
       const sigRes = await WALLET.signAndSendTransaction(tx);
