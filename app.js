@@ -638,68 +638,100 @@
   };
 
 /* ────────────────────────────────────────────────────────
-   7) Coin Flip — place wager
+   7) Coin Flip — place wager (fixed + wired to button)
    ──────────────────────────────────────────────────────── */
-  document.getElementById("bet-form")?.addEventListener("submit", async (e)=>{
-    e.preventDefault();
+  if (!window.solana && !window.phantom) {
+    $("#cf-play")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      const coin = $("#coin"); if (!coin) return;
+      coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin");
+      rainTreatz({ count: 18 });
+      const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
+      playResultFX(side);
+      showWinBanner(side === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
+    }, { once: true });
+  }
+  
+  async function placeCoinFlip() {
     try {
       await ensureConfig();
       if (!PUBKEY) await connectWallet("phantom");
   
       const amountHuman = Number(document.getElementById("bet-amount").value || "0");
-      const side = (new FormData(e.target).get("side") || "TRICK").toString();
+      const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
       if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
   
+      // 1) Create bet on backend (gets deposit ATA + memo)
       const bet = await jfetch(`${API}/bets`, {
         method: "POST",
         headers: { "content-type":"application/json" },
         body: JSON.stringify({ amount: toBaseUnits(amountHuman), side })
       });
-
-      const betId = bet.bet_id; // NEW: keep for polling
+      const betId = bet.bet_id;
   
-      $("#bet-deposit").textContent = bet.deposit;
-      $("#bet-memo").textContent    = bet.memo;
+      // show deposit/memo for transparency
+      $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
+      $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
   
+      // 2) Build SPL transfer + Memo
       const mintPk = new solanaWeb3.PublicKey(CONFIG.token.mint);
-      const gameAtaStr = CONFIG?.vaults?.game_vault_ata;
-      if (!gameAtaStr) throw new Error("Game vault ATA not configured on the server.");
-      const destAta = new solanaWeb3.PublicKey(gameAtaStr);
-      const payer = PUBKEY;
+      const destAta = new solanaWeb3.PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
+      const payer   = PUBKEY;
   
       const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
       ixs.push(
-        splToken.createTransferInstruction(
-          srcAta, destAta, payer, toBaseUnits(amountHuman), [], splToken.TOKEN_PROGRAM_ID
-        ),
+        splToken.createTransferInstruction(srcAta, destAta, payer, toBaseUnits(amountHuman), [], splToken.TOKEN_PROGRAM_ID),
         memoIx(bet.memo)
       );
-
-   (
-
-  // Visual spin + FX button
-  $("#cf-play")?.addEventListener("click", (e) => {
+  
+      const bh = await jfetch(`${API}/cluster/latest_blockhash`);
+      const tx = new solanaWeb3.Transaction({ feePayer: payer });
+      tx.recentBlockhash = bh.blockhash;
+      tx.add(...ixs);
+  
+      // 3) Send
+      const sigRes = await WALLET.signAndSendTransaction(tx);
+      const signature = typeof sigRes === "string" ? sigRes : sigRes?.signature;
+      $("#cf-status")?.replaceChildren(document.createTextNode(signature ? `Sent: ${signature.slice(0,10)}…` : "Sent"));
+  
+      // 4) Immediate UX (spin/FX) + start polling for settle (via webhook)
+      const coin = $("#coin");
+      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+      rainTreatz({ count: 22 });
+  
+      pollBetUntilSettle(betId, side).catch(()=>{});
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Bet failed.");
+    }
+  }
+  
+  async function pollBetUntilSettle(betId, chosenSide, timeoutMs = 45_000) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+      await new Promise(r=>setTimeout(r, 1500));
+      try {
+        const b = await jfetch(`${API}/bets/${betId}`);
+        if ((b.status || "").toUpperCase() === "SETTLED") {
+          const win = !!b.win;
+          playResultFX(win ? "TREAT" : "TRICK");
+          showWinBanner(win ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
+          $("#cf-status")?.replaceChildren(document.createTextNode(win ? "WIN!" : "LOSS"));
+          return;
+        }
+      } catch {}
+    }
+    // timeout UX
+    $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
+  }
+  
+  // Wire the button (type="button")
+  $("#cf-play")?.addEventListener("click", async (e) => {
     e.preventDefault();
-    e.stopPropagation();
-
-    const coin = $("#coin"); if (!coin) return;
-    coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin");
-    rainTreatz({ count: 22 });
-    setTimeout(() => {
-      const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
-      playResultFX(side);
-      const msg = side === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…";
-      showWinBanner(msg);
-    }, 1120);
+    await placeCoinFlip();
   });
-
-  // NEW: neutralize dead "#" anchors globally
-  document.querySelectorAll('a[href="#"]').forEach(a =>
-    a.addEventListener("click", ev => ev.preventDefault())
-  );
-
 /* ────────────────────────────────────────────────────────
    8) Jackpot — buy tickets + raffle UI
    ──────────────────────────────────────────────────────── */
