@@ -70,10 +70,8 @@
   // Guard: alias globals and fail noiselessly if libs are missing
   const SolanaWeb3 = window.solanaWeb3;
   const splToken   = window.splToken;
-  if (!SolanaWeb3 || !splToken) {
-    console.error("[TREATZ] Solana libs missing — app will wait for loader.");
-    return;
-  }
+  // Keep running the UI even if wallet libs aren’t loaded.
+  // Gate wallet-only features later with WALLET_ENABLED && Solana libs checks.
 
 /* ────────────────────────────────────────────────────────
    0) Config, Constants, Tiny Helpers
@@ -254,7 +252,7 @@
     const m    = now.getMonth(); // 0..11, Oct = 9
     const d    = now.getDate();
     const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
-    return new Date(year, 9, 31, 23, 59, 59, 0);
+    return new Date(year, 9, 31, 0, 0, 0, 0);
   }
 
   function formatDHMS(ms){
@@ -273,11 +271,14 @@
 
       const omens = [
         "The wrappers rustle. Something’s awake.",
+        "Beware the TRICKZ… crave the TREATZ.",
         "Candy fog thickens… footsteps in the mist.",
         "Lanterns flicker. The ritual nears.",
         "Whispers from the vault… tickets scratch.",
+        "Hungry ghosts eye your bag.",
         "A second game stirs beneath the moon.",
         "The cauldron hums. Keys turn in the dark.",
+        "A sweet pump draws near.",
         "Don’t blink. The jackpot watches back.",
         "Another door may open before midnight…"
       ];
@@ -612,11 +613,14 @@
   }
 
   function render(){
-    el.innerHTML = "";
-    const inner = document.createElement("div");
-    inner.className = "ticker__inner";
-    inner.innerHTML = buildBatch(28) + " • ";
-    el.appendChild(inner);
+    let rail = document.getElementById("ticker-rail");
+    if (!rail) {
+      rail = document.createElement("div");
+      rail.id = "ticker-rail";
+      rail.className = "ticker__rail";
+      el.appendChild(rail);
+    }
+    rail.innerHTML = buildBatch(28) + " • ";
   }
 
   render();
@@ -691,17 +695,36 @@
    7) Coin Flip — place wager
    ──────────────────────────────────────────────────────── */
     $("#cf-play")?.addEventListener("click", async (e) => {
-    e.preventDefault();
-    if (!PUBKEY) {
-       // local demo spin for instant feedback
-      const coin = $("#coin"); if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
-      rainTreatz({ count: 18 });
-      const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
-      playResultFX(side);
-      showWinBanner(side === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
-    }
-    await placeCoinFlip();
-  });
+      e.preventDefault();
+
+      // Spin animation
+      const coin = $("#coin");
+      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+
+      // Simulate result visually after spin duration
+      const form = document.getElementById("bet-form");
+      const side = (new FormData(form)).get("side") || "TRICK";
+
+      setTimeout(() => {
+        // 50/50 result
+        const landedTreat = Math.random() < 0.5;
+        const landed = landedTreat ? "TREAT" : "TRICK";
+
+        // Orient the coin end-state
+        if (coin) coin.style.transform = landedTreat ? "rotateY(180deg)" : "rotateY(0deg)";
+
+        // FX + banner
+        playResultFX(landed);
+        showWinBanner(landed === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
+
+        // Optional status text
+        $("#cf-status")?.replaceChildren(document.createTextNode(
+          landed === "TREAT" ? "WIN!" : "LOSS"
+        ));
+      }, 1150);
+
+      // No backend call for now.
+    });
 
   async function placeCoinFlip() {
     try {
@@ -819,126 +842,159 @@
   });
 
   (async function initRaffleUI(){
-    try {
-      const cfg = await jfetch(`${API}/config?include_balances=true`);
-      CONFIG = cfg; DECIMALS = Number(cfg?.token?.decimals || 6); TEN_POW = 10 ** DECIMALS;
+  const errOut = (where, message) => {
+    console.error(`[raffle:${where}]`, message);
+    const schedule = document.getElementById("raffle-schedule");
+    if (schedule) {
+      schedule.textContent = `⚠️ ${message}`;
+      schedule.style.color = "#ff9b9b";
+    }
+  };
 
-      const priceBase = Number(cfg?.token?.ticket_price || 0);
-      const elTicket = $("#ticket-price");
-      if (elTicket) elTicket.textContent = (priceBase / TEN_POW).toLocaleString();
+  try {
+    // 1) Load config from backend
+    const cfg = await jfetchStrict(`${API}/config?include_balances=true`);
+    CONFIG   = cfg;
+    const decimals = Number(cfg?.token?.decimals ?? 6);
+    DECIMALS = decimals;
+    TEN_POW  = 10 ** DECIMALS;
 
-      const round = await jfetch(`${API}/rounds/current`);
+    const durationMin = Number(cfg?.raffle?.duration_minutes ?? 10);
+    const breakMin    = Number(cfg?.raffle?.break_minutes ?? 2);
 
-      const elPot   = $("#round-pot");
-      const elId    = $("#round-id");
-      const elClose = $("#round-countdown");
-      const elNext  = $("#round-next-countdown");
-      const elProg  = $("#jp-progress");
+    // 2) Set ticket price if present
+    const priceBase = Number(cfg?.token?.ticket_price ?? 0);
+    if (priceBase && document.getElementById("ticket-price")) {
+      document.getElementById("ticket-price").textContent = (priceBase / TEN_POW).toLocaleString();
+    }
 
-      if (elId)  elId.textContent  = round.round_id;
-      if (elPot) elPot.textContent = (Number(round.pot||0) / TEN_POW).toLocaleString();
+    // 3) Load current round
+    const round = await jfetchStrict(`${API}/rounds/current`);
+    const elPot   = document.getElementById("round-pot");
+    const elId    = document.getElementById("round-id");
+    const elClose = document.getElementById("round-countdown");
+    const elNext  = document.getElementById("round-next-countdown");
+    const elProg  = document.getElementById("jp-progress");
+    const schedEl = document.getElementById("raffle-schedule");
 
-      const sanitizeISO = (s) => String(s || "")
-        .replace(" ", "T")
-        .replace(/\.\d+/, "")
-        .replace(/Z?$/, "Z");
-      const opensAt     = new Date(sanitizeISO(round.opens_at));
-      const closesAt    = new Date(sanitizeISO(round.closes_at));
-      const nextVal = cfg?.timers?.next_opens_at
-        ? sanitizeISO(cfg.timers.next_opens_at)
-        : (closesAt.getTime() + (cfg?.raffle?.break_minutes||0)*60*1000);
-      const nextOpensAt = new Date(nextVal);
-      const schedEl = document.getElementById("raffle-schedule");
-      if (schedEl) {
-        const mins = Number(cfg?.raffle?.duration_minutes || 0);
-        const brk  = Number(cfg?.raffle?.break_minutes || 0);
-        schedEl.textContent = `Each round: ${mins} min • Break: ${brk} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
+    // Normalize ISO timestamps (backend owns true schedule)
+    const iso = (s)=> String(s||"").replace(" ", "T").replace(/\.\d+/, "").replace(/Z?$/, "Z");
+    const opensAt  = new Date(iso(round.opens_at));
+    const closesAt = new Date(iso(round.closes_at));
+
+    // Prefer backend-provided next open time if you expose it. Fallback to computed (duration + break).
+    const nextOpenIso = cfg?.timers?.next_opens_at ? iso(cfg.timers.next_opens_at) : null;
+    const nextOpensAt = nextOpenIso ? new Date(nextOpenIso) : new Date(closesAt.getTime() + breakMin * 60 * 1000);
+
+    if (elId)  elId.textContent  = round.round_id;
+    if (elPot) elPot.textContent = (Number(round.pot||0) / TEN_POW).toLocaleString();
+
+    if (schedEl) {
+      schedEl.textContent = `Each round: ${durationMin} min • Break: ${breakMin} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
+    }
+
+    const fmtClock = (ms)=>{ if (ms<0) ms=0; const s=Math.floor(ms/1000);
+      const h=String(Math.floor((s%86400)/3600)).padStart(2,"0");
+      const m=String(Math.floor((s%3600)/60)).padStart(2,"0");
+      const sec=String(s%60).padStart(2,"0"); return `${h}:${m}:${sec}`; };
+    const clamp01 = (x)=> Math.max(0, Math.min(1, x));
+
+    // 4) Live countdown/progress driven by backend times
+    const tick = ()=>{
+      const now = new Date();
+      if (elClose) elClose.textContent = fmtClock(closesAt - now);
+      if (elNext)  elNext.textContent  = fmtClock(nextOpensAt - now);
+      if (elProg) {
+        const total = closesAt - opensAt;
+        const pct = clamp01((now - opensAt) / (total || 1)) * 100;
+        elProg.style.width = `${pct}%`;
       }
-      const fmt = (ms)=>{ if (ms<0) ms=0; const s=Math.floor(ms/1000);
-        const h=String(Math.floor((s%86400)/3600)).padStart(2,"0");
-        const m=String(Math.floor((s%3600)/60)).padStart(2,"0");
-        const sec=String(s%60).padStart(2,"0"); return `${h}:${m}:${sec}`; };
-      const clamp01 = (x)=> Math.max(0, Math.min(1, x));
+    };
+    tick(); setInterval(tick, 1000);
 
-      const tick = ()=>{
-        const now = new Date();
-        if (elClose) elClose.textContent = fmt(closesAt - now);
-        if (elNext)  elNext.textContent  = fmt(nextOpensAt - now);
-        if (elProg) {
-          const total = closesAt - opensAt;
-          const pct = clamp01((now - opensAt) / (total || 1)) * 100;
-          elProg.style.width = `${pct}%`;
-        }
-      };
-      tick(); setInterval(tick, 1000);
-
-      const list = $("#recent-rounds");
-      document.getElementById("jp-view-all")?.addEventListener("click", () => {
+    // 5) Recent rounds list
+    const list = document.getElementById("recent-rounds");
+    document.getElementById("jp-view-all")?.addEventListener("click", () => {
       document.getElementById("raffle-history")?.scrollIntoView({ behavior: "smooth" });
     });
-      async function loadRecent(){
-        if (!list) return;
-        list.innerHTML = `<li class="muted">Loading…</li>`;
-        try {
-          const recent = await jfetch(`${API}/rounds/recent?limit=10`);
-          list.innerHTML = "";
-          recent.forEach(r=>{
-            const li = document.createElement("li");
-            li.className = "mini-table__row";
-            const potHuman = (Number(r.pot||0)/TEN_POW).toLocaleString();
-            li.innerHTML = `
-              <span>#${r.id}</span>
-              <span>${potHuman}</span>
-              <button class="btn btn--ghost" data-r="${r.id}">Proof</button>
-            `;
-            list.appendChild(li);
-          });
-        } catch { list.innerHTML = `<li class="muted">Failed to load.</li>`; }
+
+    async function loadRecent(){
+      if (!list) return;
+      list.innerHTML = `<li class="muted">Loading…</li>`;
+      try {
+        const recent = await jfetchStrict(`${API}/rounds/recent?limit=6`);
+        list.innerHTML = "";
+        for (const r of recent) {
+          const li = document.createElement("li");
+          const potHuman = (Number(r.pot||0)/TEN_POW).toLocaleString();
+          // If your endpoint returns tickets/wallets, show them; else omit gracefully.
+          const meta = [];
+          if (typeof r.tickets !== "undefined") meta.push(`${r.tickets} tix`);
+          if (typeof r.wallets !== "undefined") meta.push(`${r.wallets} wallets`);
+          const metaStr = meta.length ? `<span class="muted small">${meta.join(" • ")}</span>` : "";
+
+          li.innerHTML = `
+            <span><b>${r.id}</b> • ${potHuman} ${TOKEN.symbol}</span>
+            ${metaStr}
+          `;
+          list.appendChild(li);
+        }
+        if (!recent.length) list.innerHTML = `<li class="muted">No recent rounds.</li>`;
+      } catch (e) {
+        console.error(e);
+        list.innerHTML = `<li class="muted">Failed to load recent rounds.</li>`;
       }
-      await loadRecent();
-      setInterval(loadRecent, 30000);
+    }
+    await loadRecent();
+    setInterval(loadRecent, 30000);
 
-      list?.addEventListener("click", async (ev)=>{
-        const target = ev.target.closest("button[data-r]");
-        if (!target) return;
-        const rid = target.getAttribute("data-r");
-        const p = await jfetch(`${API}/rounds/${rid}/winner`);
-        const msg = [
-          `Round: ${p.round_id}`,
-          `Winner: ${p.winner ? p.winner.slice(0,4)+"…"+p.winner.slice(-4) : "TBD"}`,
-          `Pot: ${(Number(p.pot||0)/TEN_POW).toLocaleString()} $TREATZ`,
-          `SeedHash: ${p.server_seed_hash || "-"}`,
-          `Reveal: ${p.server_seed_reveal ? p.server_seed_reveal.slice(0,10)+"…" : "-"}`,
-          `Entropy: ${p.entropy || "-"}`,
-          `Tx: ${p.payout_sig || "-"}`,
-        ].join("\n");
-        alert(msg);
-      });
-    } catch (e) { console.error("initRaffleUI", e); }
-  })();
+  } catch (e) {
+    errOut("init", e.message || e);
+  }
+})();
 
+  async function jfetchStrict(url, opts){
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
 /* ────────────────────────────────────────────────────────
    9) History + edge + ambience
    ──────────────────────────────────────────────────────── */
   async function loadHistory(query=""){
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
+
     try {
-      const base = await jfetch(`${API}/rounds/recent?limit=10`);
-      const ids  = (query && /^R\d+$/i.test(query)) ? base.filter(x=>x.id===query) : base;
+      const recent = await jfetchStrict(`${API}/rounds/recent?limit=10`);
+      const items = (query && /^R\d+$/i.test(query))
+        ? recent.filter(x => String(x.id).toUpperCase() === query.toUpperCase())
+        : recent;
+
       const rows = [];
-      for (const r of ids){
-        const w = await jfetch(`${API}/rounds/${r.id}/winner`).catch(()=>null);
+      for (const r of items){
+        let w = null;
+        try { w = await jfetchStrict(`${API}/rounds/${r.id}/winner`); } catch (e) { /* per-row failure tolerated */ }
+
+        const potHuman = (Number(r.pot||0)/TEN_POW).toLocaleString();
+        const winner   = w?.winner ? w.winner : "—";
+        const payout   = w?.payout_sig || "—";
+        const proof    = (w?.server_seed_hash||"-").slice(0,10) + "…";
+
         rows.push(`<tr>
           <td>#${r.id}</td>
-          <td>${fmtUnits(r.pot, DECIMALS)} ${TOKEN.symbol}</td>
-          <td>${w?.winner ? w.winner.slice(0,4)+"…"+w.winner.slice(-4) : "—"}</td>
-          <td>${w?.payout_sig||"—"}</td>
-          <td>${(w?.server_seed_hash||"-").slice(0,10)}…</td>
+          <td>${potHuman} ${TOKEN.symbol}</td>
+          <td>${winner}</td>
+          <td>${payout}</td>
+          <td>${proof}</td>
         </tr>`);
       }
-      tbody.innerHTML = rows.join("") || `<tr><td colspan="5">No history.</td></tr>`;
-    } catch(e){ console.error(e); }
+
+      tbody.innerHTML = rows.join("") || `<tr><td colspan="5" class="muted">No history.</td></tr>`;
+    } catch(e){
+      console.error(e);
+      tbody.innerHTML = `<tr><td colspan="5" class="muted">Failed to load history from backend.</td></tr>`;
+    }
   }
   document.getElementById("history-search")?.addEventListener("change",(e)=>loadHistory(e.target.value.trim()));
   loadHistory();
