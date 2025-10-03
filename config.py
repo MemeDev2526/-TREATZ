@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     ADMIN_TOKEN: Optional[str] = os.getenv("ADMIN_TOKEN")
     WEBHOOK_SHARED_SECRET: Optional[str] = os.getenv("WEBHOOK_SHARED_SECRET")  # or = None
     WEBHOOK_VERIFY_MODE: str = os.getenv('WEBHOOK_VERIFY_MODE', 'header')
-    WEBHOOK_HEADER_NAME = os.getenv("WEBHOOK_HEADER_NAME")
+    WEBHOOK_HEADER_NAME: str = os.getenv('WEBHOOK_HEADER_NAME', 'X-Helius-Auth')
 
     # =========================================================
     # Database
