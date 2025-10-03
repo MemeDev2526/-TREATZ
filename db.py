@@ -1,3 +1,5 @@
+# db.py
+
 """
 $TREATZ — db.py
 Canonical schema + BOTH async (aiosqlite) and sync (sqlite3) helpers.
