@@ -136,21 +136,17 @@ async def _rpc_get_blockhash(slot: int) -> Optional[str]:
         return None
         
 async def _rpc_account_exists(pubkey_str: str) -> bool:
-    """Return True if an account exists (non-null), False otherwise."""
     try:
         async with AsyncClient(RPC_URL) as c:
-            # accept either str or Pubkey
             try:
                 from solders.pubkey import Pubkey
                 key = Pubkey.from_string(pubkey_str)
             except Exception:
                 key = pubkey_str
             r = await c.get_account_info(key, commitment="confirmed")
-            # solders style: r.value is None or Account
             val = getattr(r, "value", None)
             if val is not None:
                 return True
-            # dict style
             if isinstance(r, dict):
                 v = ((r.get("result") or {}).get("value"))
                 return v is not None
