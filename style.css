@@ -42,13 +42,13 @@ body{
 }
 
 .section__title, .nav__brand, h1, h2.display {
-  font-family: "Creepster", "Luckiest Guy", cursive;
+  font-family: "Creepster", cursive;
   letter-spacing:.5px;
   color: var(--pumpkin);
   text-shadow: 0 0 12px rgba(57,255,20,.25), 0 2px 0 rgba(0,0,0,.6);
 }
 
-.btn--primary, .btn--buy { font-family: "Luckiest Guy", cursive; }
+.btn--primary, .btn--buy { cursive; }
 
 a, .btn--outline { color: var(--slime); }
 
@@ -127,7 +127,7 @@ a, .btn--outline { color: var(--slime); }
 }
 .brand-banner img{
   width:100%; height:100%;
-  object-fit: auto; display:block;
+  object-fit: cover; display:block;
 }
 
 /* Countdown sits under the banner and never hides it */
@@ -162,7 +162,7 @@ a, .btn--outline { color: var(--slime); }
 }
 .countdown__label{ font-weight:700; letter-spacing:.3px }
 .countdown__timer{
-  font-family:"Luckiest Guy", cursive; font-size:1.25rem; padding:0 .25rem;
+  font-family:"Creepster", cursive; font-size:1.25rem; padding:0 .25rem;
   color:var(--slime); border:1px solid rgba(57,255,20,.25);
   border-radius:8px; box-shadow: 0 0 12px rgba(57,255,20,.35)
 }
@@ -207,7 +207,7 @@ a, .btn--outline { color: var(--slime); }
 .nav__brand{ display:flex; align-items:center; gap:10px; }
 .nav__brand img{ height:44px; display:block }
 .nav__brand-text{
-  font-family:"Luckiest Guy", cursive; font-size:1.3rem; color:var(--orange);
+  font-size:1.3rem; color:var(--orange);
   text-shadow:0 0 8px rgba(255,149,0,.4);
   display:none;
 }
@@ -252,7 +252,7 @@ a, .btn--outline { color: var(--slime); }
 .main{ max-width:1200px; margin:0 auto; padding:24px 16px 80px }
 .section{ margin:28px 0 }
 .section__title{
-  font-family:"Luckiest Guy", cursive; letter-spacing:.5px; font-size:2rem;
+  letter-spacing:.5px; font-size:2rem;
   margin:0 0 12px; text-shadow:0 2px 18px rgba(0,0,0,.35)
 }
 
@@ -295,15 +295,6 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
 .ticker__inner{ display:inline-block; padding-left:100%; animation:ticker 18s linear infinite; }
 @keyframes ticker{ 0%{transform:translateX(0)} 100%{transform:translateX(-100%)} }
 
-.coin{ position:relative; width:140px; height:140px; perspective:800px }
-.coin__face{
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  border-radius:50%; font-weight:900; letter-spacing:.5px;
-  border:3px solid rgba(255,255,255,.25);
-  background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%),
-             linear-gradient(180deg, rgba(255,107,0,.8), rgba(255,149,0,.8));
-  backface-visibility:hidden;
-}
 /* Coin flip ticker coloring */
 .ticker .tick-win  { color: var(--slime); font-weight: 800; }
 .ticker .tick-loss { color: #ff4545;     font-weight: 800; }
@@ -319,16 +310,21 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
 
 /* Halloween variant styling */
 .coin{
+  position:relative; width:140px; height:140px;
+  perspective:800px;
   border-radius:50%;
   transform-style: preserve-3d;
   box-shadow: 0 0 28px rgba(57,255,20,.25), inset 0 0 18px rgba(255,165,0,.35);
   background: radial-gradient(circle at 50% 40%, #1a0828 0%, #0d0d0d 60%, #000 100%);
 }
 .coin__face{
-  display:grid; place-items:center; font-weight:800;
-  font-family:"Creepster", cursive; letter-spacing:.6px;
-  color: var(--pumpkin); text-shadow: 0 0 8px rgba(57,255,20,.35);
+  position:absolute; inset:0;
+  display:grid; place-items:center;
+  font-weight:800; font-family:"Creepster", cursive; letter-spacing:.6px;
+  color: var(--pumpkin);
+  text-shadow: 0 0 8px rgba(57,255,20,.35);
   border: 2px solid rgba(255,255,255,.08);
+  backface-visibility:hidden;
 }
 .coin__face--front::after,
 .coin__face--back::after{
@@ -378,7 +374,7 @@ body.flash { animation: screen-flash 0.9s ease both; }
    ========================================================= */
 .stats{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:10px }
 .stat__label{ display:block; opacity:.85; font-size:.9rem }
-.stat__value{ display:block; font-family:"Luckiest Guy"; font-size:1.35rem }
+.stat__value{ display:block; font-family:"Creepster"; font-size:1.35rem }
 
 .progress{
   height:10px;
@@ -395,7 +391,7 @@ body.flash { animation: screen-flash 0.9s ease both; }
 }
 .progress__bar::after{
   content:"";
-  position:absolute; right:-6px; top:-6px; width:22px; height:22px;
+  position:relative; right:-6px; top:-6px; width:22px; height:22px;
   background: radial-gradient(circle, rgba(57,255,20,.9), rgba(57,255,20,.2) 60%, transparent 70%);
   border-radius:50%; filter: blur(3px);
 }
