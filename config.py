@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # let pydantic also read from your .env if present (optional)
-    model_config = SettingsConfigDict(env_file='-TREATZ.env', env_prefix='', extra='ignore')
+    model_config = SettingsConfigDict(env_file='.TREATZ.env', env_prefix='', extra='ignore'
 
     # =========================================================
     # API
@@ -20,8 +20,7 @@ class Settings(BaseSettings):
     # RPC / Admin
     # =========================================================
     RPC_URL: str = os.getenv("RPC_URL", "https://api.mainnet-beta.solana.com")
-    ADMIN_TOKEN: Optional[str] = None
-
+    
     # =========================================================
     # Vaults (public keys as strings)
     # =========================================================
@@ -68,6 +67,9 @@ class Settings(BaseSettings):
     HELIUS_SIGNATURE_HEADER: Optional[str] = os.getenv("HELIUS_SIGNATURE_HEADER")
     HELIUS_WEBHOOK_URL: Optional[str] = os.getenv("HELIUS_WEBHOOK_URL")  # where Helius POSTs
     ADMIN_TOKEN: Optional[str] = os.getenv("ADMIN_TOKEN")
+    WEBHOOK_SHARED_SECRET = os.getenv("WEBHOOK_SHARED_SECRET")
+    WEBHOOK_VERIFY_MODE = os.getenv("WEBHOOK_VERIFY_MODE")
+    WEBHOOK_HEADER_NAME = os.getenv("WEBHOOK_HEADER_NAME")
 
     # =========================================================
     # Database
