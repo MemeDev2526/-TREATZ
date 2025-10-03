@@ -64,6 +64,7 @@ app.add_middleware(
         "https://trickortreatsol.tech",
         "https://memedev2526.github.io",
         "https://memedev2526.github.io/-TREATZ",
+        "https://treatz-de1d.onrender.com",
         "http://localhost:5173",
         "http://127.0.0.1:8000",
         "http://localhost:8000",
