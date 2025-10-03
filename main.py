@@ -841,7 +841,8 @@ async def helius_webhook(request: Request):
             except Exception:
                 await app.state.db.rollback()
                 raise
-     return {"ok": True}
+    # <-- make sure this return is indented to the same level as 'for ev in events:' (inside the function, outside the loop)
+    return {"ok": True}
 
 # =========================================================
 # Admin Helpers (simple, no auth — secure behind network!)
