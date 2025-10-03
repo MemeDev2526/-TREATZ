@@ -682,7 +682,8 @@
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
       ixs.push(
-        splToken.createTransferInstruction(srcAta, destAta, payer, toBaseUnits(amountHuman), [], splToken.TOKEN_PROGRAM_ID),
+        splToken.createTransferInstruction(
+          srcAta, destAta, payer, toBaseUnits(amountHuman), [], splToken.TOKEN_PROGRAM_ID),
         memoIx(bet.memo)
       );
   
