@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     HELIUS_WEBHOOK_URL: Optional[str] = os.getenv("HELIUS_WEBHOOK_URL")  # where Helius POSTs
     ADMIN_TOKEN: Optional[str] = os.getenv("ADMIN_TOKEN")
     WEBHOOK_SHARED_SECRET: Optional[str] = os.getenv("WEBHOOK_SHARED_SECRET")  # or = None
-    WEBHOOK_VERIFY_MODE: Literal['header', 'shared', 'none'] = os.getenv('WEBHOOK_VERIFY_MODE', 'header')
+    WEBHOOK_VERIFY_MODE: str = os.getenv('WEBHOOK_VERIFY_MODE', 'header')
     WEBHOOK_HEADER_NAME = os.getenv("WEBHOOK_HEADER_NAME")
 
     # =========================================================
