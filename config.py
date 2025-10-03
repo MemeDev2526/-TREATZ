@@ -9,7 +9,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # let pydantic also read from your .env if present (optional)
-    model_config = SettingsConfigDict(env_file='.TREATZ.env', env_prefix='', extra='ignore'
+    model_config = SettingsConfigDict(
+        env_file=".TREATZ.env",  # or ".env" if that’s what you use on Render
+        env_prefix="",
+        extra="ignore",
+    )
 
     # =========================================================
     # API
