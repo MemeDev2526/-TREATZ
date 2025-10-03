@@ -40,29 +40,28 @@
     };
     window.__TREATZ_DEBUG = true;</script>
  
- <!-- Solana libs (IIFE) with resilient fallbacks -->
+ <!-- Solana libs (IIFE) -->
   <script>
-    // load web3.js
+    // web3.js
     (function loadSeq(urls, id, done){
       if (document.getElementById(id)) return done && done();
       function next(i){
-        if (i >= urls.length) return;              // give up silently
+        if (i >= urls.length) return;
         var s = document.createElement('script');
         s.id = id;
         s.src = urls[i];
-        s.async = false;                           // important for predictable execution
-        // DO NOT set s.crossOrigin or s.defer on CDN scripts
+        s.async = false;               // keep order
         s.onload = function(){ done && done(); };
         s.onerror = function(){ s.remove(); next(i+1); };
         document.head.appendChild(s);
       }
       next(0);
     })([
-      "https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js",
-      "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js"
+      "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js",
+      "https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js"
     ], "solana-web3");
-
-    // load spl-token (0.3.7 is the version that publishes an IIFE)
+  
+    // spl-token (0.3.7 has the IIFE)
     (function loadSeq(urls, id, done){
       if (document.getElementById(id)) return done && done();
       function next(i){
@@ -77,10 +76,16 @@
       }
       next(0);
     })([
-      "https://unpkg.com/@solana/spl-token@0.3.7/dist/index.iife.js",
-      "https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.7/dist/index.iife.js"
+      "https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.7/dist/index.iife.js",
+      "https://unpkg.com/@solana/spl-token@0.3.7/dist/index.iife.js"
     ], "solana-spl");
   </script>
+
+<!-- Alias whatever the IIFEs export to the names app.js expects -->
+<script>
+  window.solanaWeb3 = window.solanaWeb3 || window.solana || window.Web3Solana;
+  window.splToken   = window.splToken   || window.spl    || window.spl_token;
+</script>
 
   <!-- Map whatever the IIFEs export to the names app.js expects -->
   <script>
@@ -200,10 +205,10 @@
             <label class="label" for="bet-amount">Wager Amount ($TREATZ)</label>
             <input id="bet-amount" name="amount" type="number" min="0" step="1" placeholder="10,000" inputmode="numeric" />
 
-            <label class="label">Pick a side</label>
-            <div class="choices" role="radiogroup" aria-label="Coin side">
-              <label class="choice"><input type="radio" name="side" value="TRICK" checked /> TRICKZ 👻</label>
-              <label class="choice"><input type="radio" name="side" value="TREAT" /> TREATZ 🍬</label>
+            <span class="label" id="side-label">Pick a side</span>
+            <div class="choices" role="radiogroup" aria-labelledby="side-label">
+              <label class="choice"><input type="radio" name="side" value="TRICK" checked> TRICKZ 👻</label>
+              <label class="choice"><input type="radio" name="side" value="TREAT"> TREATZ 🍬</label>
             </div>
 
             <button id="cf-play" type="submit" class="btn btn--primary">Flip</button>
