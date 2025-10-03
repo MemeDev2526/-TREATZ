@@ -1,3 +1,4 @@
+#config.py
 """
 $TREATZ — Config
 Centralized environment + constants, powered by pydantic-settings.
