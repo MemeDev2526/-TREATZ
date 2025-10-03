@@ -38,19 +38,39 @@
     window.TREATZ_BUILD = "__BUILD__";
   </script>
 
-  <!-- ========== Solana libs (needed by app.js) ========== -->
-  <script src="https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js"></script>
-  <script src="https://unpkg.com/@solana/spl-token@0.4.7/dist/index.iife.js"></script>
+  <!-- ========== Solana libs (IIFE) with CDN fallback ========== -->
+<script>
+  (function add(src, id){
+    if (document.getElementById(id)) return;
+    var s=document.createElement('script'); s.src=src; s.id=id; s.crossOrigin="anonymous";
+    document.head.appendChild(s);
+  })("https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js","solana-web3");
+  (function add(src, id){
+    if (document.getElementById(id)) return;
+    var s=document.createElement('script'); s.src=src; s.id=id; s.crossOrigin="anonymous";
+    document.head.appendChild(s);
+  })("https://cdn.jsdelivr.net/npm/@solana/spl-token@0.4.7/dist/index.iife.js","solana-spl");
+</script>
 
-  <!-- ========== Loader: inserts app.js with ?v=<build> ========== -->
-  <script>
-    (function(b){
-      var l=document.getElementById('treatz-css');
-      if (l && !/\?v=/.test(l.href)) l.href='style.css?v='+b;
-      var s=document.createElement('script'); s.defer=true; s.src='app.js?v='+b;
+<!-- ========== Safe loader: wait for globals, then load app.js ========== -->
+<script>
+  (function boot(b){
+    var css=document.getElementById('treatz-css');
+    if (css && !/\?v=/.test(css.href)) css.href='style.css?v='+b;
+
+    function haveLibs(){ return !!(window.solanaWeb3 && window.splToken); }
+    function loadApp(){
+      var s=document.createElement('script');
+      s.defer=true; s.src='app.js?v='+b;
       document.head.appendChild(s);
-    })(window.TREATZ_BUILD || Date.now());
-  </script>
+    }
+    (function wait(){
+      if (haveLibs()) return loadApp();
+      setTimeout(wait, 40);
+    })();
+  })(window.TREATZ_BUILD || Date.now());
+</script>
+
   <!-- Optional: favicon -->
   <!-- <link rel="icon" href="assets/favicon.png"> -->
 </head>
