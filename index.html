@@ -40,7 +40,7 @@
     };
     window.__TREATZ_DEBUG = true;</script>
  
- <!-- Solana libs (IIFE) with resilient fallbacks) -->
+ <!-- Solana libs (IIFE) with resilient fallbacks -->
   <script>
     // load web3.js
     (function loadSeq(urls, id, done){
@@ -50,8 +50,8 @@
         var s = document.createElement('script');
         s.id = id;
         s.src = urls[i];
-        s.async = false;                           // preserve order if multiple scripts
-        // NOTE: do NOT set s.crossOrigin here
+        s.async = false;                           // important for predictable execution
+        // DO NOT set s.crossOrigin or s.defer on CDN scripts
         s.onload = function(){ done && done(); };
         s.onerror = function(){ s.remove(); next(i+1); };
         document.head.appendChild(s);
@@ -62,7 +62,7 @@
       "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js"
     ], "solana-web3");
 
-    // load spl-token (use 0.3.7 which publishes an IIFE)
+    // load spl-token (0.3.7 is the version that publishes an IIFE)
     (function loadSeq(urls, id, done){
       if (document.getElementById(id)) return done && done();
       function next(i){
@@ -70,8 +70,7 @@
         var s = document.createElement('script');
         s.id = id;
         s.src = urls[i];
-        s.async = false;                           // preserve order
-        // NOTE: do NOT set s.crossOrigin here
+        s.async = false;
         s.onload = function(){ done && done(); };
         s.onerror = function(){ s.remove(); next(i+1); };
         document.head.appendChild(s);
@@ -82,8 +81,14 @@
       "https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.7/dist/index.iife.js"
     ], "solana-spl");
   </script>
+
+  <!-- Map whatever the IIFEs export to the names app.js expects -->
   <script>
-    // Wait for both libs, then load app.js
+    window.solanaWeb3 = window.solanaWeb3 || window.solana || window.Web3Solana;
+    window.splToken   = window.splToken   || window.spl    || window.spl_token;
+  </script>
+
+  <script>
     (function waitAndBoot(){
       var tries = 0;
       function ready(){
@@ -92,17 +97,17 @@
       function boot(){
         var s = document.createElement('script');
         s.src = "app.js?v=" + (window.TREATZ_BUILD || Date.now());
-        // 'defer' doesn't work for dynamically inserted scripts; just rely on onload order
-        (document.body || document.head).appendChild(s);   // ✅ safe
+        // dynamic scripts load async; that’s fine once libs exist
+        (document.body || document.head).appendChild(s);
       }
-
       (function tick(){
         if (ready()) return boot();
-        if (++tries > 200) return boot(); // boot anyway after ~10s
+        if (++tries > 200) return boot(); // fallback after ~10s
         setTimeout(tick, 50);
       })();
     })();
   </script>
+
   <!-- Optional: favicon -->
   <!-- <link rel="icon" href="assets/favicon.png"> -->
 </head>
