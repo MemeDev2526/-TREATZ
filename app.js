@@ -55,36 +55,42 @@
 })();
 
 /* =========================================================
-   $TREATZ — App Logic (clean + organized)
+   $TREATZ — App Logic (reorganized & guarded)
    ========================================================= */
 (function () {
   "use strict";
 
-  console.log("TREATZ app boot", {
-    build: window.TREATZ_BUILD,
-    hasPhantom: !!(window.phantom?.solana || window.solana),
-    hasSolflare: !!window.solflare,
-    hasBackpack: !!window.backpack?.solana
-  });
+  // Feature flags (leave true; they are hard-guarded to not crash if libs/wallet missing)
+  const FEATURE_WALLET       = true;
+  const FEATURE_ONCHAIN_BET  = true;
+  const FEATURE_JP_PURCHASE  = true;
 
-  // Guard: alias globals and fail noiselessly if libs are missing
+  // Alias globals (may be undefined — we guard later)
   const SolanaWeb3 = window.solanaWeb3;
   const splToken   = window.splToken;
-  // Keep running the UI even if wallet libs aren’t loaded.
-  // Gate wallet-only features later with WALLET_ENABLED && Solana libs checks.
 
-/* ────────────────────────────────────────────────────────
-   0) Config, Constants, Tiny Helpers
-   ──────────────────────────────────────────────────────── */
+  /* ────────────────────────────────────────────────────────
+     0) Config, global state, helpers (declare early!)
+     ──────────────────────────────────────────────────────── */
   const C        = window.TREATZ_CONFIG || {};
   const API      = (C.apiBase || "/api").replace(/\/$/, "");
   const TOKEN    = C.token || { symbol: "$TREATZ", decimals: 6 };
+
+  // Wallet-related state MUST exist before any function uses them (avoid TDZ)
+  let WALLET   = null;
+  let PUBKEY   = null;
+  let CONFIG   = null;
+  let DECIMALS = Number(TOKEN.decimals || 6);
+  let TEN_POW  = 10 ** DECIMALS;
+
+  // Memo program (only if web3 available)
+  const MEMO_PROGRAM_ID = SolanaWeb3 ? new SolanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") : null;
 
   const $  = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const pow10 = (n) => Math.pow(10, n);
 
-  const fmtUnits = (units, decimals = TOKEN.decimals) => {
+  const fmtUnits = (units, decimals = DECIMALS) => {
     if (units == null) return "—";
     const t = Number(units) / pow10(decimals);
     return t >= 1 ? t.toFixed(2) : t.toFixed(4);
@@ -117,10 +123,22 @@
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   }
+  async function jfetchStrict(url, opts){
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return r.json();
+  }
 
-/* ────────────────────────────────────────────────────────
-   1) FX + UI sugar
-   ──────────────────────────────────────────────────────── */
+  console.log("TREATZ app boot", {
+    build: window.TREATZ_BUILD,
+    hasPhantom: !!(window.phantom?.solana || window.solana),
+    hasSolflare: !!window.solflare,
+    hasBackpack: !!window.backpack?.solana
+  });
+
+  /* ────────────────────────────────────────────────────────
+     1) FX + UI sugar
+     ──────────────────────────────────────────────────────── */
   const fxRoot = (() => {
     let n = document.getElementById("fx-layer");
     if (!n) { n = document.createElement("div"); n.id = "fx-layer"; document.body.appendChild(n); }
@@ -244,15 +262,16 @@
     setTimeout(()=>{ el.style.opacity="0"; el.style.transition="opacity .35s"; setTimeout(()=>el.remove(), 400); }, 1800);
   }
 
-/* ────────────────────────────────────────────────────────
-   2) Countdown (Halloween)
-   ──────────────────────────────────────────────────────── */
+  /* ────────────────────────────────────────────────────────
+     2) Countdown (Halloween)
+     ──────────────────────────────────────────────────────── */
   function nextHalloween() {
     const now  = new Date();
     const m    = now.getMonth(); // 0..11, Oct = 9
     const d    = now.getDate();
     const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
-    return new Date(year, 9, 31, 0, 0, 0, 0);
+    // Count down to Oct 31 23:59:59 local
+    return new Date(year, 9, 31, 23, 59, 59, 0);
   }
 
   function formatDHMS(ms){
@@ -302,15 +321,14 @@
       window.__treatz_cd_omen  = setInterval(rotate, 12000);
     }catch(e){ console.error("Countdown init failed", e); }
   }
-
   initHalloweenCountdown();
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) initHalloweenCountdown();
   });
 
-/* ────────────────────────────────────────────────────────
-   3) Static links, assets, token copy
-   ──────────────────────────────────────────────────────── */
+  /* ────────────────────────────────────────────────────────
+     3) Static links, assets, copy, mascot float
+     ──────────────────────────────────────────────────────── */
   const link = (id, href) => { const el = document.getElementById(id); if (el && href) el.href = href; };
   link("link-telegram",  C.links?.telegram);
   link("link-twitter",   C.links?.twitter);
@@ -318,28 +336,6 @@
   link("link-whitepaper",C.links?.whitepaper);
   link("btn-buy",        C.buyUrl);
 
-  const deepLinks = [
-    document.getElementById("btn-open-in-phantom"),
-    document.getElementById("btn-open-in-phantom-2"),
-    document.getElementById("btn-open-in-phantom-modal"),
-  ].filter(Boolean);
-
-  function updateDeepLinkVisibility() {
-    if (!deepLinks.length) return;
-    const href = phantomDeepLinkForThisSite();
-    const hasProvider = !!(getPhantomProvider() || getSolflareProvider() || getBackpackProvider());
-    const shouldShow = isMobile() && !hasProvider && !PUBKEY;
-
-    for (const a of deepLinks) {
-      a.href = href;
-      a.style.display = shouldShow ? "inline-block" : "none";
-      if (a.hasAttribute("hidden")) a.hidden = !shouldShow;
-    }
-  }
-  updateDeepLinkVisibility();
-  document.addEventListener("DOMContentLoaded", updateDeepLinkVisibility);
-  window.addEventListener("load", updateDeepLinkVisibility);
- 
   const tokenEl = $("#token-address");
   if (tokenEl) tokenEl.textContent = C.tokenAddress || "—";
 
@@ -389,9 +385,9 @@
     );
   });
 
-/* ────────────────────────────────────────────────────────
-   4) Wallet plumbing (multi-wallet)
-   ──────────────────────────────────────────────────────── */
+  /* ────────────────────────────────────────────────────────
+     4) Wallet plumbing (kept, but hard-guarded)
+     ──────────────────────────────────────────────────────── */
   function getPhantomProvider(){
     const p = window.phantom?.solana || window.solana;
     return (p && p.isPhantom) ? p : null;
@@ -405,7 +401,7 @@
   const getProviderByName = (name) => {
     name = (name || "").toLowerCase();
     const ph = (window.phantom && window.phantom.solana) || window.solana;
-    if (name === "phantom"  && ph?.isPhantom)              return ph;
+    if (name === "phantom"  && ph?.isPhantom)               return ph;
     if (name === "solflare" && window.solflare?.isSolflare) return window.solflare;
     if (name === "backpack" && window.backpack?.solana)     return window.backpack.solana;
     return null;
@@ -416,40 +412,19 @@
   function closeWalletModal(){ if (modal) modal.hidden = true; }
   modal?.addEventListener("click", (e)=>{ if (e.target.matches("[data-close], .wm__backdrop")) closeWalletModal(); });
   document.addEventListener("keydown", (e)=>{ if (e.key === "Escape") closeWalletModal(); });
-
   modal?.addEventListener("click", (e)=>{
     const b = e.target.closest(".wm__item[data-wallet]");
     if (!b) return;
     const w = b.getAttribute("data-wallet");
     closeWalletModal();
+    if (!FEATURE_WALLET) return;
     connectWallet(w).catch(console.error);
   });
-
-  const MEMO_PROGRAM_ID = new SolanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-
-  async function fetchLatestBlockhash() {
-    const r = await jfetch(`${API}/cluster/latest_blockhash`);
-    if (!r?.blockhash) throw new Error("Blockhash unavailable");
-    return r.blockhash;
-  }
-  async function fetchAccountExists(pubkeyStr) {
-    const r = await jfetch(`${API}/accounts/${pubkeyStr}/exists`);
-    return !!r?.exists;
-  }
-
-  let WALLET = null;
-  let PUBKEY = null;
-  let CONFIG = null;
-  let DECIMALS = TOKEN.decimals;
-  let TEN_POW = 10 ** DECIMALS;
-
-  const toBaseUnits   = (human) => Math.floor(Number(human) * TEN_POW);
-  const fromBaseUnits = (base)  => Number(base) / TEN_POW;
 
   function onProviderConnect(pk) {
     try {
       const k = pk?.toString?.() || pk?.publicKey?.toString?.() || WALLET?.publicKey?.toString?.();
-      if (k) PUBKEY = new SolanaWeb3.PublicKey(k);
+      if (k && SolanaWeb3) PUBKEY = new SolanaWeb3.PublicKey(k);
     } catch {}
     setWalletLabels();
     setTimeout(loadPlayerStats, 400);
@@ -464,6 +439,8 @@
   }
 
   async function connectWallet(preferred) {
+    if (!FEATURE_WALLET) throw new Error("Wallet disabled");
+    if (!SolanaWeb3) throw new Error("web3 not loaded");
     if (PUBKEY) return PUBKEY;
 
     const order = [preferred, "phantom", "solflare", "backpack"].filter(Boolean);
@@ -479,7 +456,7 @@
       wireProvider(p);
 
       const got = (res?.publicKey?.toString?.() || res?.publicKey || res || p.publicKey)?.toString?.();
-      if (!got) throw new Error("Wallet did not return a public key.");
+      if (!got || !SolanaWeb3) throw new Error("Wallet did not return a public key.");
       PUBKEY = new SolanaWeb3.PublicKey(got);
 
       setWalletLabels();
@@ -518,27 +495,11 @@
       connectBtns.forEach(b => b && (b.textContent = "Connect Wallet"));
       openBtns.forEach(b => b && (b.hidden = true));
     }
-    updateDeepLinkVisibility();
-  }
-
-  async function ensureConfig() {
-    if (!CONFIG) {
-      try {
-        const r = await jfetch(`${API}/config?include_balances=true`);
-        CONFIG = r;
-        DECIMALS = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6);
-        TEN_POW  = 10 ** DECIMALS;
-      } catch (e) {
-        console.error("Failed to load /config", e);
-        toast("Backend not reachable (/config). Check CORS & Render logs.");
-        throw e;
-      }
-    }
-    return CONFIG;
   }
 
   $$("#btn-connect, #btn-connect-2").forEach(btn => btn?.addEventListener("click", async () => {
     try {
+      if (!FEATURE_WALLET) { toast("Wallet disabled for now"); return; }
       if (PUBKEY) { await disconnectWallet(); return; }
 
       const present = [
@@ -553,8 +514,6 @@
       }
 
       openWalletModal();
-      updateDeepLinkVisibility();
-
     } catch (err) {
       console.error("[btn-connect] error", err);
       alert(err?.message || "Failed to open wallet.");
@@ -567,65 +526,74 @@
     if (!b) return;
     const w = b.getAttribute("data-wallet");
     menu.hidden = true;
+    if (!FEATURE_WALLET) return;
     connectWallet(w).catch(err=>console.error(err));
   });
 
   $$("#btn-openwallet, #btn-openwallet-2").forEach(btn => btn?.addEventListener("click", async ()=>{
     try {
+      if (!FEATURE_WALLET) { toast("Wallet disabled for now"); return; }
       if (!PUBKEY) { await connectWallet("phantom"); return; }
       const short = PUBKEY.toBase58().slice(0,4)+"…"+PUBKEY.toBase58().slice(-4);
       alert(`Connected: ${short}`);
     } catch (e) { console.error(e); }
   }));
-  
   setWalletLabels();
- 
-/* ────────────────────────────────────────────────────────
-   5) Ticker + Player Stats
-   ──────────────────────────────────────────────────────── */
-(function initCoinFlipTicker(){
-  const el = document.getElementById("fomo-ticker");
-  if (!el) return;
 
-  const ALPH = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-  const randFrom = (arr) => arr[randInt(0, arr.length - 1)];
-  const randWallet = () => {
-    const n = () => Array.from({length:4}, ()=> randFrom(ALPH)).join("");
-    return `${n()}…${n()}`;
-  };
-  const fmt = (n) => n.toLocaleString();
+  /* ────────────────────────────────────────────────────────
+     5) Scrolling Ticker (mock wins/losses)
+     ──────────────────────────────────────────────────────── */
+  (function initCoinFlipTicker(){
+    const el = document.getElementById("fomo-ticker");
+    if (!el) return;
 
-  function makeLine(){
-    const who = randWallet();
-    const isWin = Math.random() < 0.58;
-    const amount = [5_000, 10_000, 25_000, 50_000, 75_000, 100_000, 150_000, 250_000, 500_000][randInt(0,8)];
-    const verb = isWin ? "won" : "lost";
-    const emoji = isWin ? "🎉" : "💀";
-    const cls = isWin ? "tick-win" : "tick-loss";
-    return `<span class="${cls}">${who} ${verb} ${fmt(amount)} $TREATZ ${emoji}</span>`;
-  }
+    const ALPH = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const randFrom = (arr) => arr[randInt(0, arr.length - 1)];
+    const randWallet = () => {
+      const n = () => Array.from({length:4}, ()=> randFrom(ALPH)).join("");
+      return `${n()}…${n()}`;
+    };
+    const fmt = (n) => n.toLocaleString();
 
-  function buildBatch(len=30){
-    const lines = [];
-    for (let i=0;i<len;i++) lines.push(makeLine());
-    return lines.concat(lines.slice(0,5)).join(" • ");
-  }
-
-  function render(){
-    let rail = document.getElementById("ticker-rail");
-    if (!rail) {
-      rail = document.createElement("div");
-      rail.id = "ticker-rail";
-      rail.className = "ticker__rail";
-      el.appendChild(rail);
+    function makeLine(){
+      const who = randWallet();
+      const isWin = Math.random() < 0.58;
+      const amount = [5_000, 10_000, 25_000, 50_000, 75_000, 100_000, 150_000, 250_000, 500_000][randInt(0,8)];
+      const verb = isWin ? "won" : "lost";
+      const emoji = isWin ? "🎉" : "💀";
+      const cls = isWin ? "tick-win" : "tick-loss";
+      return `<span class="${cls}">${who} ${verb} ${fmt(amount)} $TREATZ ${emoji}</span>`;
     }
-    rail.innerHTML = buildBatch(28) + " • ";
-  }
 
-  render();
-  setInterval(render, 25000);
-})();
+    function buildBatch(len=30){
+      const lines = [];
+      for (let i=0;i<len;i++) lines.push(makeLine());
+      return lines.concat(lines.slice(0,5)).join(" • ");
+    }
+
+    function render(){
+      el.innerHTML = "";
+      const inner = document.createElement("div");
+      inner.className = "ticker__inner";
+      inner.innerHTML = buildBatch(28) + " • ";
+      el.appendChild(inner);
+    }
+
+    render();
+    setInterval(render, 25000);
+  })();
+
+  /* Player stats (kept; harmless if not connected) */
+  async function ensureConfig() {
+    if (!CONFIG) {
+      const r = await jfetch(`${API}/config?include_balances=true`);
+      CONFIG   = r;
+      DECIMALS = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6);
+      TEN_POW  = 10 ** DECIMALS;
+    }
+    return CONFIG;
+  }
 
   async function loadPlayerStats(){
     const panel = document.getElementById("player-stats");
@@ -662,10 +630,11 @@
   }
   setInterval(loadPlayerStats, 15000);
 
-/* ────────────────────────────────────────────────────────
-   6) SPL Helpers (ATA + Memo)
-   ──────────────────────────────────────────────────────── */
+  /* ────────────────────────────────────────────────────────
+     6) SPL Helpers (guarded behind libs)
+     ──────────────────────────────────────────────────────── */
   async function getOrCreateATA(owner, mintPk, payer) {
+    if (!splToken) throw new Error("spl-token not loaded");
     const ata = await splToken.getAssociatedTokenAddress(
       mintPk, owner, false, splToken.TOKEN_PROGRAM_ID, splToken.ASSOCIATED_TOKEN_PROGRAM_ID
     );
@@ -687,123 +656,118 @@
   }
 
   const memoIx = (memoStr) => {
+    if (!SolanaWeb3 || !MEMO_PROGRAM_ID) throw new Error("Memo program unavailable");
     const data = new TextEncoder().encode(memoStr);
     return new SolanaWeb3.TransactionInstruction({ programId: MEMO_PROGRAM_ID, keys: [], data });
   };
 
-/* ────────────────────────────────────────────────────────
-   7) Coin Flip — place wager
-   ──────────────────────────────────────────────────────── */
-    $("#cf-play")?.addEventListener("click", async (e) => {
-      e.preventDefault();
+  /* ────────────────────────────────────────────────────────
+     7) Coin Flip — UX spin (always), on-chain bet (flagged)
+     ──────────────────────────────────────────────────────── */
+  $("#cf-play")?.addEventListener("click", async (e) => {
+    e.preventDefault();
 
-      // Spin animation
-      const coin = $("#coin");
-      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+    // Always spin the coin for UX
+    const coin = $("#coin");
+    if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
 
-      // Simulate result visually after spin duration
+    // If we aren't doing on-chain bet now, show local result after a moment
+    if (!FEATURE_ONCHAIN_BET || !FEATURE_WALLET) {
       const form = document.getElementById("bet-form");
       const side = (new FormData(form)).get("side") || "TRICK";
-
       setTimeout(() => {
-        // 50/50 result
         const landedTreat = Math.random() < 0.5;
         const landed = landedTreat ? "TREAT" : "TRICK";
-
-        // Orient the coin end-state
         if (coin) coin.style.transform = landedTreat ? "rotateY(180deg)" : "rotateY(0deg)";
-
-        // FX + banner
         playResultFX(landed);
         showWinBanner(landed === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
-
-        // Optional status text
-        $("#cf-status")?.replaceChildren(document.createTextNode(
-          landed === "TREAT" ? "WIN!" : "LOSS"
-        ));
+        $("#cf-status")?.replaceChildren(document.createTextNode(landed === "TREAT" ? "WIN!" : "LOSS"));
       }, 1150);
+      return;
+    }
 
-      // No backend call for now.
-    });
-
-  async function placeCoinFlip() {
+    // On-chain route (requires wallet/libs and backend /bets)
     try {
       await ensureConfig();
       if (!PUBKEY) await connectWallet("phantom");
-  
+      if (!SolanaWeb3 || !splToken) throw new Error("Solana libs missing");
+
       const amountHuman = Number(document.getElementById("bet-amount").value || "0");
       const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
       if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
-  
+
       const bet = await jfetch(`${API}/bets`, {
         method: "POST",
         headers: { "content-type":"application/json" },
-        body: JSON.stringify({ amount: toBaseUnits(amountHuman), side })
+        body: JSON.stringify({ amount: Math.floor(amountHuman * TEN_POW), side })
       });
       const betId = bet.bet_id;
-  
+
       $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
       $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
-  
+
       const mintPk = new SolanaWeb3.PublicKey(CONFIG.token.mint);
       const destAta = new SolanaWeb3.PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
       const payer   = PUBKEY;
-  
+
       const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
       ixs.push(
         splToken.createTransferInstruction(
-          srcAta, destAta, payer, toBaseUnits(amountHuman), [], splToken.TOKEN_PROGRAM_ID
+          srcAta, destAta, payer, Math.floor(amountHuman * TEN_POW), [], splToken.TOKEN_PROGRAM_ID
         ),
         memoIx(bet.memo)
       );
-  
-      const bh = await fetchLatestBlockhash();
-      const tx = new SolanaWeb3.Transaction({ feePayer: payer });
-      tx.recentBlockhash = bh;
+
+      const bh = await jfetch(`${API}/cluster/latest_blockhash`);
+      const tx = new SolanaWeb3.Transaction({ feePayer: payer, recentBlockhash: bh.blockhash });
       tx.add(...ixs);
-  
+
       const sigRes = await WALLET.signAndSendTransaction(tx);
       const signature = typeof sigRes === "string" ? sigRes : sigRes?.signature;
       $("#cf-status")?.replaceChildren(document.createTextNode(signature ? `Sent: ${signature.slice(0,10)}…` : "Sent"));
-  
-      const coin = $("#coin");
-      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+
+      // UX spin already triggered; add celebratory rain
       rainTreatz({ count: 22 });
-  
-      pollBetUntilSettle(betId).catch(()=>{});
+
+      // Poll backend for settlement
+      await (async function pollBetUntilSettle(timeoutMs = 45_000) {
+        const t0 = Date.now();
+        while (Date.now() - t0 < timeoutMs) {
+          await new Promise(r=>setTimeout(r, 1500));
+          try {
+            const b = await jfetch(`${API}/bets/${betId}`);
+            if ((b.status || "").toUpperCase() === "SETTLED") {
+              const win = !!b.win;
+              playResultFX(win ? "TREAT" : "TRICK");
+              showWinBanner(win ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
+              $("#cf-status")?.replaceChildren(document.createTextNode(win ? "WIN!" : "LOSS"));
+              return;
+            }
+          } catch {}
+        }
+        $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
+      })();
+
     } catch (e) {
       console.error(e);
       alert(e.message || "Bet failed.");
     }
-  }
-  
-  async function pollBetUntilSettle(betId, timeoutMs = 45_000) {
-    const t0 = Date.now();
-    while (Date.now() - t0 < timeoutMs) {
-      await new Promise(r=>setTimeout(r, 1500));
-      try {
-        const b = await jfetch(`${API}/bets/${betId}`);
-        if ((b.status || "").toUpperCase() === "SETTLED") {
-          const win = !!b.win;
-          playResultFX(win ? "TREAT" : "TRICK");
-          showWinBanner(win ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
-          $("#cf-status")?.replaceChildren(document.createTextNode(win ? "WIN!" : "LOSS"));
-          return;
-        }
-      } catch {}
-    }
-    $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
-  }
+  });
 
-/* ────────────────────────────────────────────────────────
-   8) Jackpot — buy tickets + raffle UI
-   ──────────────────────────────────────────────────────── */
+  /* ────────────────────────────────────────────────────────
+     8) Jackpot — buy tickets (flag) + raffle UI (always)
+     ──────────────────────────────────────────────────────── */
   document.getElementById("jp-buy")?.addEventListener("click", async ()=>{
+    if (!FEATURE_JP_PURCHASE || !FEATURE_WALLET) {
+      toast("Ticket purchases will unlock with wallet wiring.");
+      return;
+    }
     try {
       await ensureConfig();
       if (!PUBKEY) await connectWallet("phantom");
+      if (!SolanaWeb3 || !splToken) throw new Error("Solana libs missing");
 
       const nTickets = Math.max(1, Number(document.getElementById("jp-amount").value || "1"));
       const ticketPriceBase = Number(CONFIG?.token?.ticket_price || 0);
@@ -827,9 +791,8 @@
         memoIx(memoStr)
       );
 
-      const bh = await fetchLatestBlockhash();
-      const tx = new SolanaWeb3.Transaction({ feePayer: payer });
-      tx.recentBlockhash = bh;
+      const bh = await jfetch(`${API}/cluster/latest_blockhash`);
+      const tx = new SolanaWeb3.Transaction({ feePayer: payer, recentBlockhash: bh.blockhash });
       tx.add(...ixs);
 
       const sigRes = await WALLET.signAndSendTransaction(tx);
@@ -842,147 +805,138 @@
   });
 
   (async function initRaffleUI(){
-  const errOut = (where, message) => {
-    console.error(`[raffle:${where}]`, message);
-    const schedule = document.getElementById("raffle-schedule");
-    if (schedule) {
-      schedule.textContent = `⚠️ ${message}`;
-      schedule.style.color = "#ff9b9b";
-    }
-  };
-
-  try {
-    // 1) Load config from backend
-    const cfg = await jfetchStrict(`${API}/config?include_balances=true`);
-    CONFIG   = cfg;
-    const decimals = Number(cfg?.token?.decimals ?? 6);
-    DECIMALS = decimals;
-    TEN_POW  = 10 ** DECIMALS;
-
-    const durationMin = Number(cfg?.raffle?.duration_minutes ?? 10);
-    const breakMin    = Number(cfg?.raffle?.break_minutes ?? 2);
-
-    // 2) Set ticket price if present
-    const priceBase = Number(cfg?.token?.ticket_price ?? 0);
-    if (priceBase && document.getElementById("ticket-price")) {
-      document.getElementById("ticket-price").textContent = (priceBase / TEN_POW).toLocaleString();
-    }
-
-    // 3) Load current round
-    const round = await jfetchStrict(`${API}/rounds/current`);
-    const elPot   = document.getElementById("round-pot");
-    const elId    = document.getElementById("round-id");
-    const elClose = document.getElementById("round-countdown");
-    const elNext  = document.getElementById("round-next-countdown");
-    const elProg  = document.getElementById("jp-progress");
-    const schedEl = document.getElementById("raffle-schedule");
-
-    // Normalize ISO timestamps (backend owns true schedule)
-    const iso = (s)=> String(s||"").replace(" ", "T").replace(/\.\d+/, "").replace(/Z?$/, "Z");
-    const opensAt  = new Date(iso(round.opens_at));
-    const closesAt = new Date(iso(round.closes_at));
-
-    // Prefer backend-provided next open time if you expose it. Fallback to computed (duration + break).
-    const nextOpenIso = cfg?.timers?.next_opens_at ? iso(cfg.timers.next_opens_at) : null;
-    const nextOpensAt = nextOpenIso ? new Date(nextOpenIso) : new Date(closesAt.getTime() + breakMin * 60 * 1000);
-
-    if (elId)  elId.textContent  = round.round_id;
-    if (elPot) elPot.textContent = (Number(round.pot||0) / TEN_POW).toLocaleString();
-
-    if (schedEl) {
-      schedEl.textContent = `Each round: ${durationMin} min • Break: ${breakMin} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
-    }
-
-    const fmtClock = (ms)=>{ if (ms<0) ms=0; const s=Math.floor(ms/1000);
-      const h=String(Math.floor((s%86400)/3600)).padStart(2,"0");
-      const m=String(Math.floor((s%3600)/60)).padStart(2,"0");
-      const sec=String(s%60).padStart(2,"0"); return `${h}:${m}:${sec}`; };
-    const clamp01 = (x)=> Math.max(0, Math.min(1, x));
-
-    // 4) Live countdown/progress driven by backend times
-    const tick = ()=>{
-      const now = new Date();
-      if (elClose) elClose.textContent = fmtClock(closesAt - now);
-      if (elNext)  elNext.textContent  = fmtClock(nextOpensAt - now);
-      if (elProg) {
-        const total = closesAt - opensAt;
-        const pct = clamp01((now - opensAt) / (total || 1)) * 100;
-        elProg.style.width = `${pct}%`;
+    const errOut = (where, message) => {
+      console.error(`[raffle:${where}]`, message);
+      const schedule = document.getElementById("raffle-schedule");
+      if (schedule) {
+        schedule.textContent = `⚠️ ${message}`;
+        schedule.style.color = "#ff9b9b";
       }
     };
-    tick(); setInterval(tick, 1000);
 
-    // 5) Recent rounds list
-    const list = document.getElementById("recent-rounds");
-    document.getElementById("jp-view-all")?.addEventListener("click", () => {
-      document.getElementById("raffle-history")?.scrollIntoView({ behavior: "smooth" });
-    });
+    try {
+      // 1) Load config from backend
+      const cfg = await jfetchStrict(`${API}/config?include_balances=true`);
+      CONFIG   = cfg;
+      DECIMALS = Number(cfg?.token?.decimals ?? 6);
+      TEN_POW  = 10 ** DECIMALS;
 
-    async function loadRecent(){
-      if (!list) return;
-      list.innerHTML = `<li class="muted">Loading…</li>`;
-      try {
-        const recent = await jfetchStrict(`${API}/rounds/recent?limit=6`);
-        list.innerHTML = "";
-        for (const r of recent) {
-          const li = document.createElement("li");
-          const potHuman = (Number(r.pot||0)/TEN_POW).toLocaleString();
-          // If your endpoint returns tickets/wallets, show them; else omit gracefully.
-          const meta = [];
-          if (typeof r.tickets !== "undefined") meta.push(`${r.tickets} tix`);
-          if (typeof r.wallets !== "undefined") meta.push(`${r.wallets} wallets`);
-          const metaStr = meta.length ? `<span class="muted small">${meta.join(" • ")}</span>` : "";
+      const durationMin = Number(cfg?.raffle?.duration_minutes ?? 10);
+      const breakMin    = Number(cfg?.raffle?.break_minutes ?? 2);
 
-          li.innerHTML = `
-            <span><b>${r.id}</b> • ${potHuman} ${TOKEN.symbol}</span>
-            ${metaStr}
-          `;
-          list.appendChild(li);
-        }
-        if (!recent.length) list.innerHTML = `<li class="muted">No recent rounds.</li>`;
-      } catch (e) {
-        console.error(e);
-        list.innerHTML = `<li class="muted">Failed to load recent rounds.</li>`;
+      // 2) Set ticket price if present
+      const priceBase = Number(cfg?.token?.ticket_price ?? 0);
+      if (priceBase && document.getElementById("ticket-price")) {
+        document.getElementById("ticket-price").textContent = (priceBase / TEN_POW).toLocaleString();
       }
+
+      // 3) Load current round (backend schedule is canonical)
+      const round = await jfetchStrict(`${API}/rounds/current`);
+      const elPot   = document.getElementById("round-pot");
+      const elId    = document.getElementById("round-id");
+      const elClose = document.getElementById("round-countdown");
+      const elNext  = document.getElementById("round-next-countdown");
+      const elProg  = document.getElementById("jp-progress");
+      const schedEl = document.getElementById("raffle-schedule");
+
+      const iso = (s)=> String(s||"").replace(" ", "T").replace(/\.\d+/, "").replace(/Z?$/, "Z");
+      const opensAt  = new Date(iso(round.opens_at));
+      const closesAt = new Date(iso(round.closes_at));
+      const nextOpenIso = cfg?.timers?.next_opens_at ? iso(cfg.timers.next_opens_at) : null;
+      const nextOpensAt = nextOpenIso ? new Date(nextOpenIso) : new Date(closesAt.getTime() + breakMin * 60 * 1000);
+
+      if (elId)  elId.textContent  = round.round_id || round.id || "—";
+      if (elPot) elPot.textContent = (Number(round.pot||0) / TEN_POW).toLocaleString();
+
+      if (schedEl) {
+        schedEl.textContent = `Each round: ${durationMin} min • Break: ${breakMin} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
+        schedEl.style.color = "";
+      }
+
+      const fmtClock = (ms)=>{ if (ms<0) ms=0; const s=Math.floor(ms/1000);
+        const h=String(Math.floor((s%86400)/3600)).padStart(2,"0");
+        const m=String(Math.floor((s%3600)/60)).padStart(2,"0");
+        const sec=String(s%60).padStart(2,"0"); return `${h}:${m}:${sec}`; };
+      const clamp01 = (x)=> Math.max(0, Math.min(1, x));
+
+      const tick = ()=>{
+        const now = new Date();
+        if (elClose) elClose.textContent = fmtClock(closesAt - now);
+        if (elNext)  elNext.textContent  = fmtClock(nextOpensAt - now);
+        if (elProg) {
+          const total = closesAt - opensAt;
+          const pct = clamp01((now - opensAt) / (total || 1)) * 100;
+          elProg.style.width = `${pct}%`;
+        }
+      };
+      tick(); setInterval(tick, 1000);
+
+      // 5) Recent rounds list
+      const list = document.getElementById("recent-rounds");
+      document.getElementById("jp-view-all")?.addEventListener("click", () => {
+        document.getElementById("raffle-history")?.scrollIntoView({ behavior: "smooth" });
+      });
+
+      async function loadRecent(){
+        if (!list) return;
+        list.innerHTML = `<li class="muted">Loading…</li>`;
+        try {
+          const recent = await jfetchStrict(`${API}/rounds/recent?limit=6`);
+          list.innerHTML = "";
+          for (const r of recent) {
+            const li = document.createElement("li");
+            const potHuman = (Number(r.pot||0)/TEN_POW).toLocaleString();
+            const meta = [];
+            if (typeof r.tickets !== "undefined") meta.push(`${r.tickets} tix`);
+            if (typeof r.wallets !== "undefined") meta.push(`${r.wallets} wallets`);
+            const metaStr = meta.length ? `<span class="muted small">${meta.join(" • ")}</span>` : "";
+
+            li.innerHTML = `
+              <span><b>${r.id || r.round_id}</b> • ${potHuman} ${TOKEN.symbol}</span>
+              ${metaStr}
+            `;
+            list.appendChild(li);
+          }
+          if (!recent.length) list.innerHTML = `<li class="muted">No recent rounds.</li>`;
+        } catch (e) {
+          console.error(e);
+          list.innerHTML = `<li class="muted">Failed to load recent rounds.</li>`;
+        }
+      }
+      await loadRecent();
+      setInterval(loadRecent, 30000);
+
+    } catch (e) {
+      errOut("init", e.message || e);
     }
-    await loadRecent();
-    setInterval(loadRecent, 30000);
+  })();
 
-  } catch (e) {
-    errOut("init", e.message || e);
-  }
-})();
-
-  async function jfetchStrict(url, opts){
-  const r = await fetch(url, opts);
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-  return r.json();
-}
-/* ────────────────────────────────────────────────────────
-   9) History + edge + ambience
-   ──────────────────────────────────────────────────────── */
+  /* ────────────────────────────────────────────────────────
+     9) History + house edge + ambience
+     ──────────────────────────────────────────────────────── */
   async function loadHistory(query=""){
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
 
     try {
+      await ensureConfig();
       const recent = await jfetchStrict(`${API}/rounds/recent?limit=10`);
-      const items = (query && /^R\d+$/i.test(query))
-        ? recent.filter(x => String(x.id).toUpperCase() === query.toUpperCase())
+      const items = (query && /^R?\d+$/i.test(query))
+        ? recent.filter(x => String(x.id || x.round_id).toUpperCase() === query.toUpperCase().replace(/^R/i,"R"))
         : recent;
 
       const rows = [];
       for (const r of items){
         let w = null;
-        try { w = await jfetchStrict(`${API}/rounds/${r.id}/winner`); } catch (e) { /* per-row failure tolerated */ }
+        try { w = await jfetchStrict(`${API}/rounds/${r.id || r.round_id}/winner`); } catch (e) { /* per-row failure tolerated */ }
 
         const potHuman = (Number(r.pot||0)/TEN_POW).toLocaleString();
-        const winner   = w?.winner ? w.winner : "—";
+        const winner   = w?.winner ? (w.winner.slice(0,4)+"…"+w.winner.slice(-4)) : "—";
         const payout   = w?.payout_sig || "—";
         const proof    = (w?.server_seed_hash||"-").slice(0,10) + "…";
 
         rows.push(`<tr>
-          <td>#${r.id}</td>
+          <td>#${r.id || r.round_id}</td>
           <td>${potHuman} ${TOKEN.symbol}</td>
           <td>${winner}</td>
           <td>${payout}</td>
@@ -1000,19 +954,21 @@
   loadHistory();
 
   (async()=>{
-    await ensureConfig();
-    if (CONFIG?.raffle?.splits) {
-      const s = CONFIG.raffle.splits;
-      const bps = 10000 - (s.winner + s.dev + s.burn);
-      const el = document.getElementById("edge-line");
-      if (el) el.textContent = `House edge: ${(bps/100).toFixed(2)}%`;
-    }
+    try {
+      await ensureConfig();
+      if (CONFIG?.raffle?.splits) {
+        const s = CONFIG.raffle.splits;
+        const bps = 10000 - (Number(s.winner||0) + Number(s.dev||0) + Number(s.burn||0));
+        const el = document.getElementById("edge-line");
+        if (el) el.textContent = `House edge: ${(bps/100).toFixed(2)}%`;
+      }
+    } catch(e) {}
   })();
 
   async function announceLastWinner(){
     try {
       const recent = await jfetch(`${API}/rounds/recent?limit=1`);
-      const rid = recent?.[0]?.id; if (!rid) return;
+      const rid = recent?.[0]?.id || recent?.[0]?.round_id; if (!rid) return;
       const w = await jfetch(`${API}/rounds/${rid}/winner`);
       if (w?.winner){
         toast(`Winner: ${w.winner.slice(0,4)}… — Pot ${fmtUnits(w.pot, DECIMALS)} ${TOKEN.symbol}`);
