@@ -33,14 +33,13 @@
       buyUrl: "#",
       tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
       assets: {
-        ambient: "/-TREATZ/assets/ambient.mp3",   // <-- absolute path that actually exists
-        logo: "/-TREATZ/assets/logo.png",
-        mascot: "/-TREATZ/assets/mascot.png"
+        ambient: "/assets/ambient_loop.mp3",   // <-- absolute path that actually exists
+        logo: "/assets/TREATZ_Logo.png",
+        mascot: "/assets/Mascot.png"
       }
     };
     window.__TREATZ_DEBUG = true;</script>
-  </script>
-
+ 
   <!-- Solana libs (IIFE) with resilient fallbacks -->
   <script>
     // load web3.js
@@ -87,9 +86,10 @@
       function boot(){
         var s = document.createElement('script');
         s.src = "app.js?v=" + (window.TREATZ_BUILD || Date.now());
-        s.defer = true;
-        document.body.appendChild(s);
+        // 'defer' doesn't work for dynamically inserted scripts; just rely on onload order
+        (document.body || document.head).appendChild(s);   // ✅ safe
       }
+
       (function tick(){
         if (ready()) return boot();
         if (++tries > 200) return boot(); // boot anyway after ~10s
@@ -102,7 +102,7 @@
 </head>
 <body>
 
-  <audio id="bg-ambient" data-src="/-TREATZ/assets/ambient.mp3"></audio>
+  <audio id="bg-ambient" data-src="/assets/ambient_loop.mp3"></audio>
 
   <!-- ==========================
      TOP BANNER (sticky)
@@ -172,8 +172,8 @@
           <!-- Inline wallet controls for the game area -->
           <div class="card__col">
             <div class="wallet wallet--inline">
-              <button class="btn btn--ghost"   id="btn-openwallet-2" type="button" hidden>Open Wallet</button>
-              <button class="btn btn--primary" id="btn-connect-2"    type="button">Connect Wallet</button>
+              <button class="btn btn--ghost"   id="btn-openwallet" type="button" hidden>Open Wallet</button>
+              <button class="btn btn--primary" id="btn-connect"    type="button">Connect Wallet</button>
 
               <div class="wallet__menu" id="wallet-menu-2" hidden>
                 <button data-wallet="phantom">Phantom</button>
