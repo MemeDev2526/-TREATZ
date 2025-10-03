@@ -4,22 +4,22 @@
   <!-- ========== META ========== -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>$TREATZ — The Sweetest Halloween Meme Coin on Solana</title>
+  <title>$TREATZ — The Official Halloween Candy of Solana</title>
   <meta name="description" content="$TREATZ — Trick-or-Treat coin toss & Jackpot Raffle. Spooky season on Solana." />
   <meta name="theme-color" content="#0D0D0D" />
 
-  <!-- ========== FONTS ========== -->
+  <!-- ========== FONTS (unchanged) ========== -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
 
-  <!-- ========== CSS ========== -->
+  <!-- ========== CSS (keep external or inline later) ========== -->
   <link id="treatz-css" rel="stylesheet" href="style.css?v={{ site.github.build_revision }}">
 
-  <!-- ========== CONFIG (must be before app.js) ========== -->
+  <!-- ========== CONFIG (kept as-is so app.js can read) ========== -->
   <script>
-    window.__TREATZ_DEBUG = true;         // MUST be set before app.js loads
+    window.__TREATZ_DEBUG = true;
     window.TREATZ_BUILD = "__BUILD__";
     window.TREATZ_CONFIG = {
       apiBase: "https://treatz-de1d.onrender.com/api",
@@ -33,125 +33,45 @@
       buyUrl: "#",
       tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
       assets: {
-        ambient: "/assets/ambient_loop.mp3",   // <-- absolute path that actually exists
+        ambient: "/assets/ambient_loop.mp3",
         logo: "/assets/TREATZ_Logo.png",
         mascot: "/assets/Mascot.png"
       }
     };
-    window.__TREATZ_DEBUG = true;</script>
- 
- <!-- Solana libs (IIFE) -->
-  <script>
-    // web3.js
-    (function loadSeq(urls, id, done){
-      if (document.getElementById(id)) return done && done();
-      function next(i){
-        if (i >= urls.length) return;
-        var s = document.createElement('script');
-        s.id = id;
-        s.src = urls[i];
-        s.async = false;               // keep order
-        s.onload = function(){ done && done(); };
-        s.onerror = function(){ s.remove(); next(i+1); };
-        document.head.appendChild(s);
-      }
-      next(0);
-    })([
-      "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js",
-      "https://unpkg.com/@solana/web3.js@1.95.7/lib/index.iife.min.js"
-    ], "solana-web3");
-  
-    // spl-token (0.3.7 has the IIFE)
-    (function loadSeq(urls, id, done){
-      if (document.getElementById(id)) return done && done();
-      function next(i){
-        if (i >= urls.length) return;
-        var s = document.createElement('script');
-        s.id = id;
-        s.src = urls[i];
-        s.async = false;
-        s.onload = function(){ done && done(); };
-        s.onerror = function(){ s.remove(); next(i+1); };
-        document.head.appendChild(s);
-      }
-      next(0);
-    })([
-      "https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.7/dist/index.iife.js",
-      "https://unpkg.com/@solana/spl-token@0.3.7/dist/index.iife.js"
-    ], "solana-spl");
   </script>
-
-<!-- Alias whatever the IIFEs export to the names app.js expects -->
-<script>
-  window.solanaWeb3 = window.solanaWeb3 || window.solana || window.Web3Solana;
-  window.splToken   = window.splToken   || window.spl    || window.spl_token;
-</script>
-
-  <!-- Map whatever the IIFEs export to the names app.js expects -->
-  <script>
-    window.solanaWeb3 = window.solanaWeb3 || window.solana || window.Web3Solana;
-    window.splToken   = window.splToken   || window.spl    || window.spl_token;
-  </script>
-
-  <script>
-    (function waitAndBoot(){
-      var tries = 0;
-      function ready(){
-        return !!(window.solanaWeb3 && window.splToken);
-      }
-      function boot(){
-        var s = document.createElement('script');
-        s.src = "app.js?v=" + (window.TREATZ_BUILD || Date.now());
-        // dynamic scripts load async; that’s fine once libs exist
-        (document.body || document.head).appendChild(s);
-      }
-      (function tick(){
-        if (ready()) return boot();
-        if (++tries > 200) return boot(); // fallback after ~10s
-        setTimeout(tick, 50);
-      })();
-    })();
-  </script>
-
-  <!-- Optional: favicon -->
-  <!-- <link rel="icon" href="assets/favicon.png"> -->
 </head>
 <body>
 
+  <!-- (FX) Ambient music + toggle lives elsewhere; this is just the element -->
   <audio id="bg-ambient" data-src="/assets/ambient_loop.mp3"></audio>
 
-  <!-- ==========================
-     TOP BANNER (sticky)
-     ========================== -->
+  <!-- 1) TOP BANNER -->
   <div class="brand-banner">
     <img src="assets/Banner_Top.png" alt="$TREATZ banner" />
   </div>
 
-  <!-- ==========================
-      GLOBAL COUNTDOWN
-      ========================== -->
+  <!-- 2) HALLOWEEN COUNTDOWN BANNER -->
   <div class="countdown" id="countdown" aria-live="polite">
     <div class="countdown__inner">
       <img id="countdown-logo" class="countdown__logo" src="assets/TREATZ_Logo.png" alt="$TREATZ logo" />
       <span class="countdown__label">Countdown to Halloween:</span>
       <span class="countdown__timer" id="countdown-timer">--d --h --m --s</span>
+    </div>
+    <div class="countdown__inner">
       <span class="countdown__omen" id="countdown-omen"></span>
     </div>
   </div>
 
-  <!-- =======================================
-       NAVIGATION + TOKEN / BUY ACTION BAR
-       ======================================= -->
+  <!-- 3) NAV BAR + 4) TOKEN ADDRESS BAR -->
   <header class="nav">
     <div class="nav__wrap">
       <a href="/" class="nav__brand">
-        <span class="nav__brand-text">$TREATZ - Own Uptober. Hold the bag. 🍬</span>
+        <span class="nav__brand-text">$TREATZ - The Official Halloween Candy of Solana</span>
       </a>
-
       <nav class="nav__links" aria-label="Primary">
-        <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter</a>
+        <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter / X</a>
         <a href="#" id="link-telegram"  target="_blank" rel="noopener">Telegram</a>
-        <a href="#" id="link-tiktok"   target="_blank" rel="noopener">TikTok</a>
+        <a href="#" id="link-tiktok"    target="_blank" rel="noopener">TikTok</a>
         <a href="#" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
       </nav>
     </div>
@@ -160,7 +80,7 @@
       <div class="tokenbar__address">
         <span class="tokenbar__label">Token:</span>
         <code id="token-address">—</code>
-        <button class="btn btn--ghost" id="btn-copy">Copy</button>
+        <button class="btn btn--ghost" id="btn-copy" type="button">Copy</button>
       </div>
       <div class="tokenbar__actions">
         <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
@@ -168,39 +88,33 @@
     </div>
   </header>
 
-  <!-- ==========================
-       BACKGROUND ART LAYER
-       ========================== -->
+  <!-- Background art layer -->
   <div class="bg" role="img" aria-label="Spooky cosmic candy background"></div>
 
-  <!-- ==========================
-       MAIN CONTENT
-       ========================== -->
   <main class="main">
 
-    <!-- ============= COIN FLIP ============= -->
+    <!-- 5) COIN TOSS HEADER -->
     <section class="section" id="coin-flip" aria-labelledby="coinflip-title">
       <h2 class="section__title" id="coinflip-title">🎃 Trickz or $TREATZ — Coin Toss</h2>
-      <div class="ticker" id="fomo-ticker" aria-live="polite"></div>
-      <div class="card grid-2">
-        <!-- Form -->
+
+      <!-- 6) SCROLLING MOCK WINS/LOSSES BANNER -->
+      <div class="ticker" id="fomo-ticker" aria-live="polite">
+        <div class="ticker__rail" id="ticker-rail"></div>
+      </div>
+
+      <div class="card grid-2" style="margin-top:.9rem">
+        <!-- LEFT: FORM + 7) CONNECT (disabled for now) -->
         <div class="card__col">
-          <!-- Inline wallet controls for the game area -->
-          <div class="card__col">
-            <div class="wallet wallet--inline">
-              <button class="btn btn--ghost"   id="btn-openwallet" type="button" hidden>Open Wallet</button>
-              <button class="btn btn--primary" id="btn-connect"    type="button">Connect Wallet</button>
-
-              <div class="wallet__menu" id="wallet-menu-2" hidden>
-                <button data-wallet="phantom">Phantom</button>
-                <button data-wallet="solflare">Solflare</button>
-                <button data-wallet="backpack">Backpack</button>
-              </div>
-
-              <a class="btn btn--outline" id="btn-open-in-phantom-2" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
-            </div>
+          <div class="help" style="margin-bottom:.5rem;">
+            <strong>Fairness:</strong> Seed commit/reveal • Multiplier <b id="cf-mult">2x</b> • Vault coverage <b id="vault-amount">—</b> $TREATZ
+            <br><em id="cf-biggest">Biggest win: —</em>
           </div>
 
+          <div class="wallet wallet--inline" style="margin:.4rem 0 .6rem">
+            <button class="btn btn--primary" id="btn-connect" type="button" disabled title="Coming soon">Connect Wallet (coming soon)</button>
+          </div>
+
+          <!-- 8) GAME UI CARD AREA (form) -->
           <form class="form" id="bet-form" autocomplete="off">
             <label class="label" for="bet-amount">Wager Amount ($TREATZ)</label>
             <input id="bet-amount" name="amount" type="number" min="0" step="1" placeholder="10,000" inputmode="numeric" />
@@ -211,19 +125,11 @@
               <label class="choice"><input type="radio" name="side" value="TREAT"> TREATZ 🍬</label>
             </div>
 
-            <button id="cf-play" type="submit" class="btn btn--primary">Flip</button>
-            <script>
-              // Guarantees the Flip button always submits the form.
-              (function(){
-                var b=document.getElementById("cf-play");
-                var f=document.getElementById("bet-form");
-                if(b && f){ b.addEventListener("click", function(){ try{ f.requestSubmit(); }catch(_){ f.submit(); } }); }
-              })();
-            </script>
-            
-            <p class="help" id="edge-line">House edge & on-chain fairness info will appear here.</p>
+            <button id="cf-play" type="submit" class="btn btn--primary">Flip Now</button>
 
-            <!-- Optional: app.js will populate these if present -->
+            <p class="help" id="edge-line">House edge & on-chain fairness info appears here.</p>
+
+            <!-- Optional fields app.js may populate -->
             <div class="help" id="bet-instructions" style="margin-top:.5rem;">
               <div><strong>Deposit:</strong> <code id="bet-deposit">—</code></div>
               <div><strong>Memo:</strong> <code id="bet-memo">—</code></div>
@@ -231,7 +137,7 @@
           </form>
         </div>
 
-        <!-- Visual -->
+        <!-- RIGHT: COIN + STATUS (FX will hook to #fx-layer) -->
         <div class="card__col">
           <div class="cf-display" id="cf-display" aria-live="polite">
             <div class="coin" id="coin" aria-label="Coin">
@@ -244,89 +150,62 @@
       </div>
     </section>
 
-    <!-- ============= JACKPOT RAFFLE ============= -->
+    <!-- 9) JACKPOT HEADER -->
     <section class="section" id="jackpot" aria-labelledby="jackpot-title">
-      <h2 class="section__title" id="jackpot-title">🕯️ 🎃 Jack'O'Lantern Raffle 🎃</h2>
+      <h2 class="section__title" id="jackpot-title">🕯️ 🎃 Jack'O'Lantern Jackpot Raffle 🎃</h2>
 
       <div class="card grid-3">
-        <!-- Stats -->
+        <!-- 11) STATS BOX -->
         <div class="card__col">
           <div class="stats">
-            <div>
-              <span class="stat__label">Current Pot</span>
-              <span class="stat__value"><strong id="round-pot">—</strong> $TREATZ</span>
-            </div>
-            <div>
-              <span class="stat__label">Round</span>
-              <span class="stat__value" id="round-id">—</span>
-            </div>
-            <div>
-              <span class="stat__label">Closes In</span>
-              <span class="stat__value" id="round-countdown">—</span>
-            </div>
-            <div>
-              <span class="stat__label">Next Draw Starts In</span>
-              <span class="stat__value" id="round-next-countdown">—</span>
-            </div>
-            <div>
-              <span class="stat__label">Ticket Price</span>
-              <span class="stat__value"><strong id="ticket-price">—</strong> $TREATZ</span>
-            </div>
+            <div><span class="stat__label">Current Pot</span> <span class="stat__value"><strong id="round-pot">—</strong> $TREATZ</span></div>
+            <div><span class="stat__label">Round</span> <span class="stat__value" id="round-id">—</span></div>
+            <div><span class="stat__label">Closes In</span> <span class="stat__value" id="round-countdown">—</span></div>
+            <div><span class="stat__label">Next Draw Starts In</span> <span class="stat__value" id="round-next-countdown">—</span></div>
+            <div><span class="stat__label">Ticket Price</span> <span class="stat__value"><strong id="ticket-price">—</strong> $TREATZ</span></div>
+            <div><span class="stat__label">Seed</span> <span class="stat__value" id="round-seed">commit: — / reveal: — (salt on results)</span></div>
           </div>
           <div class="progress" aria-label="Time remaining">
             <div class="progress__bar" id="jp-progress" style="width:0%"></div>
           </div>
-          <p id="raffle-schedule" class="help" style="margin-top:.5rem;"></p>
+          <p id="raffle-schedule" class="help" style="margin-top:.5rem;">Draw cadence appears here.</p>
         </div>
-        <!-- Inline wallet controls for the game area -->
-        <div class="wallet wallet--inline">
-          <button class="btn btn--ghost"   id="btn-openwallet-2" type="button" hidden>Open Wallet</button>
-          <button class="btn btn--primary" id="btn-connect-2"    type="button">Connect Wallet</button>
 
-          <!-- Optional legacy dropdown (still works as fallback) -->
-          <div class="wallet__menu" id="wallet-menu-2" hidden>
-            <button data-wallet="phantom">Phantom</button>
-            <button data-wallet="solflare">Solflare</button>
-            <button data-wallet="backpack">Backpack</button>
+        <!-- 10) DISABLED CONNECT + 11) BUY TICKETS -->
+        <div class="card__col">
+          <div class="wallet wallet--inline" style="margin-bottom:.75rem;">
+            <button class="btn btn--primary" id="btn-connect-2" type="button" disabled title="Coming soon">Connect Wallet (coming soon)</button>
           </div>
 
-          <!-- Mobile deep link helper (unique id) -->
-          <a class="btn btn--outline" id="btn-open-in-phantom-2" style="display:none" target="_blank" rel="noopener">Open in Phantom</a>
-        </div>
-
-        <!-- Buy Tickets -->
-        <div class="card__col">
           <div class="form">
             <label class="label" for="jp-amount">Buy Tickets</label>
             <input id="jp-amount" type="number" min="1" step="1" placeholder="1" />
-            <button class="btn btn--primary" id="jp-buy" type="button">Enter Raffle</button>
-            <p class="help">Tickets recorded on-chain. Auto-payout to winner. % burn to incinerator and gone forever.</p>
+            <p class="help">Total cost: <b id="jp-total">—</b> $TREATZ</p>
+            <button class="btn btn--primary" id="jp-buy" type="button" disabled title="Coming soon">Enter Raffle</button>
+            <p class="help">Tickets recorded on-chain. Auto-payout to winner. % burn to incinerator.</p>
           </div>
         </div>
 
-        <!-- Recent Rounds -->
+        <!-- 12) RECENT ROUNDS + 13) MY WALLET -->
         <div class="card__col">
           <div class="mini-table" aria-live="polite">
             <div class="mini-table__head">
               <span>Recent Rounds</span>
               <button class="btn btn--ghost" id="jp-view-all" type="button">View All</button>
             </div>
-            <!-- app.js fills this list from /rounds/recent -->
             <ul class="mini-table__list recent-list" id="recent-rounds"></ul>
-          </div> <!-- ✅ close .mini-table -->
+          </div>
 
-          <!-- Player stats (appears when wallet connected) -->
           <div id="player-stats" class="card small" hidden style="margin-top:.75rem;">
             <div><strong>Your tickets (current round):</strong> <span id="ps-tickets">0</span></div>
             <div><strong>Ticket credit:</strong> <span id="ps-credit">0</span> $TREATZ</div>
-            <div><strong>Total spent:</strong> <span id="ps-spent">0</span> $TREATZ</div>
-            <div><strong>Total winnings:</strong> <span id="ps-won">0</span> $TREATZ</div>
+            <div><strong>Total won:</strong> <span id="ps-won">0</span> $TREATZ</div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ============= RAFFLE HISTORY ============= -->
+    <!-- 14) ROUND SEARCH BAR + RESULTS -->
     <section class="section" id="raffle-history" aria-labelledby="raffle-history-title">
       <h2 class="section__title" id="raffle-history-title">Raffle History</h2>
       <div class="card">
@@ -339,7 +218,7 @@
                 <th>Pot</th>
                 <th>Winner</th>
                 <th>Payout Tx</th>
-                <th>Proof</th>
+                <th>Proof (commit/reveal/salt)</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -348,30 +227,27 @@
       </div>
     </section>
 
-    <!-- ============= ABOUT ============= -->
+    <!-- 15) ABOUT TREATZ -->
     <section class="section" id="about" aria-labelledby="about-title">
       <h2 class="section__title" id="about-title">About $TREATZ</h2>
       <div class="card">
-        <p><strong>$TREATZ</strong> is the sweetest Halloween meme coin of Solana — bold, spooky, and made for glorious pumps. Just like trick-or-treating, it’s a dash to fill your bag with candy (and profits). Born from chaos, powered by memes, and dripping with Halloween FOMO — $TREATZ is here to haunt the charts, scare the paper hands, and reward the degens brave enough to grab a bag.</p>
-        <p>Play our <em>Trick or Treat</em> coin toss and the <em>Jackpot Raffle</em>, track burns and winners in real-time, and help us light the lanterns all the way to October 31.</p>
+        <p><strong>$TREATZ</strong> is the sweetest Halloween meme coin of Solana — bold, spooky, and made for glorious pumps.</p>
+        <p>Play the <em>Trickz or TREATZ</em> coin toss and our <em>Jack'O'Lantern Jackpot</em>, track burns and winners, and help light the lanterns to Oct 31.</p>
       </div>
     </section>
 
-    <!-- ============= FOOTER ============= -->
+    <!-- 16) FOOTER + LEGAL -->
     <footer class="footer">
-      <p>© 2025 $TREATZ • Spooky season never sleeps.</p>
+      <p>© 2025 $TREATZ — The Official Halloween Candy on Solana.</p>
+      <p class="legal">Nothing herein is financial advice. Crypto involves risk. Play responsibly.</p>
     </footer>
   </main>
 
-  <!-- ==========================
-       RENDERED FX LAYER + MASCOT
-       ========================== -->
+  <!-- (FX) GLOBAL RENDER LAYER + FLOATING MASCOT -->
   <div id="fx-layer" aria-hidden="true"></div>
-  <img id="mascot-floater" alt="Mascot" />
+  <img id="mascot-floater" src="assets/Mascot.png" alt="Mascot" />
 
-  <!-- ==========================
-       WALLET SELECT MODAL
-       ========================== -->
+  <!-- (Wallet modal markup kept if needed later) -->
   <div id="wallet-modal" class="wm" hidden>
     <div class="wm__backdrop" data-close></div>
     <div class="wm__card" role="dialog" aria-modal="true" aria-labelledby="wm-title">
@@ -379,25 +255,12 @@
       <h3 id="wm-title">Connect a wallet</h3>
       <p class="wm__sub">Choose a provider to continue.</p>
       <div class="wm__list">
-        <button class="wm__item" data-wallet="phantom">
-          <span class="wm__icon phantom"></span> Phantom
-          <small class="wm__status" data-ph-status>Detected</small>
-        </button>
-        <button class="wm__item" data-wallet="solflare">
-          <span class="wm__icon solflare"></span> Solflare
-          <small class="wm__status" data-sf-status>Detected</small>
-        </button>
-        <button class="wm__item" data-wallet="backpack">
-          <span class="wm__icon backpack"></span> Backpack
-          <small class="wm__status" data-bp-status>Detected</small>
-        </button>
+        <button class="wm__item" data-wallet="phantom"><span class="wm__icon phantom"></span> Phantom</button>
+        <button class="wm__item" data-wallet="solflare"><span class="wm__icon solflare"></span> Solflare</button>
+        <button class="wm__item" data-wallet="backpack"><span class="wm__icon backpack"></span> Backpack</button>
       </div>
-      <a id="btn-open-in-phantom-modal" class="wm__deeplink" href="#" target="_blank" rel="noopener" hidden>
-        Open site in Phantom
-      </a>
-      <div class="wm__help">No wallet? <a href="https://phantom.app/" target="_blank" rel="noopener">Install Phantom</a></div>
+      <a id="btn-open-in-phantom-modal" class="wm__deeplink" href="#" target="_blank" rel="noopener" hidden>Open site in Phantom</a>
     </div>
   </div>
-
 </body>
 </html>
