@@ -1,3 +1,68 @@
+// ===== $TREATZ emergency diagnostics =====
+(function(){
+  if (!window.__TREATZ_DEBUG) return;
+
+  // Visual error overlay
+  function showDiag(msg, kind){
+    if (!document.body) { document.addEventListener("DOMContentLoaded", () => showDiag(msg, kind)); return; }
+    var bar = document.getElementById("__treatz_diag");
+    if (!bar){
+      bar = document.createElement("div");
+      bar.id = "__treatz_diag";
+      bar.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99999;padding:10px 14px;font:14px/1.3 Rubik,system-ui,sans-serif;color:#fff;background:#c01;box-shadow:0 6px 20px rgba(0,0,0,.5)";
+      document.body.appendChild(bar);
+    }
+    var span = document.createElement("div");
+    span.textContent = "[TREATZ] " + msg;
+    if (kind==="ok") { span.style.color = "#0f0"; }
+    bar.appendChild(span);
+  }
+
+  // Catch silent errors
+  window.addEventListener("error", function(e){ showDiag("JS error: " + (e.message||e.type), "err"); });
+  window.addEventListener("unhandledrejection", function(e){ showDiag("Promise rejection: " + (e.reason && e.reason.message || e.reason), "err"); });
+
+  // Minimal sanity checks after DOM is ready
+  document.addEventListener("DOMContentLoaded", async function(){
+    try {
+      showDiag("Booting diagnostics…");
+      // 1) Verify global libs
+      if (!window.solanaWeb3) showDiag("solanaWeb3 (web3.js) not loaded", "err"); else showDiag("web3.js ✓", "ok");
+      if (!window.splToken)   showDiag("spl-token IIFE not loaded", "err");      else showDiag("@solana/spl-token ✓", "ok");
+
+      // 2) API base check
+      var C = window.TREATZ_CONFIG || {};
+      var API = (C.apiBase || "/api").replace(/\/$/, "");
+      showDiag("API = " + API);
+      try {
+        const r = await fetch(API + "/health", {mode:"cors"});
+        if (!r.ok) throw new Error(r.status+" "+r.statusText);
+        const j = await r.json();
+        showDiag("API /health OK (ts="+j.ts+")", "ok");
+      } catch (e) {
+        showDiag("API not reachable: " + (e.message || e), "err");
+      }
+
+      // 3) Buttons present?
+      var btn1 = document.getElementById("btn-connect");
+      var btn2 = document.getElementById("btn-connect-2");
+      if (!btn1 && !btn2) showDiag("Connect buttons not found in DOM", "err"); else showDiag("Connect buttons present ✓", "ok");
+
+      // 4) Basic click smoke test (won't break existing handlers)
+      [btn1, btn2].filter(Boolean).forEach(b=>{
+        b.addEventListener("click", function(){ showDiag("Connect button clicked (smoke)"); }, {once:true});
+      });
+
+      // 5) Audio element present?
+      var a = document.getElementById("bg-ambient");
+      if (!a) showDiag("Ambient audio element missing", "err"); else showDiag("Ambient audio tag ✓", "ok");
+    } catch (e) {
+      showDiag("Diagnostics failed: " + (e.message || e), "err");
+    }
+  });
+})();
+
+
 /* =========================================================
    $TREATZ — App Logic (clean + organized)
    ========================================================= */
@@ -481,32 +546,47 @@
   }
 
   async function ensureConfig() {
-    if (!CONFIG) {
+  if (!CONFIG) {
+    try {
       const r = await jfetch(`${API}/config?include_balances=true`);
       CONFIG = r;
       DECIMALS = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6);
       TEN_POW  = 10 ** DECIMALS;
+    } catch (e) {
+      console.error("Failed to load /config", e);
+      toast("Backend not reachable (/config). Check CORS & Render logs.");
+      throw e;
     }
-    return CONFIG;
   }
+  return CONFIG;
+}
 
   // PRIMARY connect button (modal-first logic)
   $$("#btn-connect, #btn-connect-2").forEach(btn => btn?.addEventListener("click", async () => {
-    try {
-      if (PUBKEY) { await disconnectWallet(); return; }
-      const present = [
-        getPhantomProvider()  && "phantom",
-        getSolflareProvider() && "solflare",
-        getBackpackProvider() && "backpack",
-      ].filter(Boolean);
-      if (present.length === 0) { openWalletModal(); updateDeepLinkVisibility(); return; }
-      if (present.length === 1) { await connectWallet(present[0]); return; }
-      openWalletModal();
-    } catch (err) {
-      console.error("[btn-connect] error", err);
-      alert(err.message || "Failed to open wallet.");
+  try {
+    if (PUBKEY) { await disconnectWallet(); return; }  // toggle to disconnect
+
+    const present = [
+      getPhantomProvider()  && "phantom",
+      getSolflareProvider() && "solflare",
+      getBackpackProvider() && "backpack",
+    ].filter(Boolean);
+
+    if (present.length === 1) {
+      await connectWallet(present[0]);
+      return;
     }
-  }));
+
+    // 0 or >1 → show the modal to pick (and to reveal deep-link on mobile)
+    openWalletModal();
+    updateDeepLinkVisibility();
+
+  } catch (err) {
+    console.error("[btn-connect] error", err);
+    alert(err?.message || "Failed to open wallet.");
+  }
+}));
+
   
   // (Optional) legacy dropdown fallback (if present in DOM)
   const menu = document.getElementById("wallet-menu");
