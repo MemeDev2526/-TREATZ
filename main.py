@@ -532,6 +532,7 @@ async def get_config(include_balances: bool = False):
     # Current round timing (for countdowns)
     rid = await dbmod.kv_get(app.state.db, "current_round_id")
     opens_at = closes_at = next_opens_at = None
+    o_dt = c_dt = n_dt = None
     if rid:
         async with app.state.db.execute(
             "SELECT opens_at, closes_at FROM rounds WHERE id=?", (rid,)
@@ -840,7 +841,7 @@ async def helius_webhook(request: Request):
             except Exception:
                 await app.state.db.rollback()
                 raise
-
+     return {"ok": True}
 
 # =========================================================
 # Admin Helpers (simple, no auth — secure behind network!)
