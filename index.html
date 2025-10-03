@@ -18,6 +18,7 @@
   <link id="treatz-css" rel="stylesheet" href="style.css?v={{ site.github.build_revision }}">
 
   <!-- ========== CONFIG (must be before app.js) ========== -->
+  <script>window.__TREATZ_DEBUG = true;</script>
   <script>
     window.TREATZ_CONFIG = {
       apiBase: "https://treatz-de1d.onrender.com/api",
@@ -150,6 +151,15 @@
             </div>
 
             <button id="cf-play" type="submit" class="btn btn--primary">Flip</button>
+            <script>
+              // Guarantees the Flip button always submits the form.
+              (function(){
+                var b=document.getElementById("cf-play");
+                var f=document.getElementById("bet-form");
+                if(b && f){ b.addEventListener("click", function(){ try{ f.requestSubmit(); }catch(_){ f.submit(); } }); }
+              })();
+            </script>
+            
             <p class="help" id="edge-line">House edge & on-chain fairness info will appear here.</p>
 
             <!-- Optional: app.js will populate these if present -->
