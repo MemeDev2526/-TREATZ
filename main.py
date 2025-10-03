@@ -582,10 +582,11 @@ async def get_config(include_balances: bool = False):
         },
         "timers": {
         "current_round_id": rid,
-        "opens_at": _rfc3339(o_dt),
-        "closes_at": _rfc3339(c_dt),
-        "next_opens_at": _rfc3339(n_dt),
-        },
+        "opens_at": _rfc3339(o_dt) if rid and opens_at else None,
+        "closes_at": _rfc3339(c_dt) if rid and closes_at else None,
+        "next_opens_at": _rfc3339(n_dt) if rid and closes_at else None,
+    },
+
         "limits": {
             "max_wager_base_units": max_wager,            # null unless include_balances=true
             "game_vault_balance": game_bal,               # null unless include_balances=true
