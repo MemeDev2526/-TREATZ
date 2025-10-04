@@ -19,8 +19,33 @@ from pydantic import BaseModel, Field
 from config import settings
 import db as dbmod
 from db import ensure_schema   # import canonical schema
-from solana.publickey import PublicKey
-from solana.keypair import Keypair
+# robust imports for solana public key / keypair
+try:
+    # preferred: solana-py public API
+    from solana.publickey import PublicKey
+    from solana.keypair import Keypair
+except Exception as _e:
+    # fallback: try solders types if solana-py isn't present
+    try:
+        from solders.pubkey import Pubkey as PublicKey  # note: different class name
+        from solders.keypair import Keypair as SolderKeypair
+        # wrap solders keypair to a compatible interface if needed (basic)
+        class Keypair:
+            def __init__(self, kp: SolderKeypair):
+                self._kp = kp
+            @property
+            def public_key(self):
+                return self._kp.pubkey()
+            def to_bytes(self):
+                return bytes(self._kp.to_bytes())
+        # you may not need more adaptation for your current code paths
+    except Exception as err:
+        # Helpful error to surface in logs so you know why import failed
+        raise ImportError(
+            "Failed to import solana PublicKey/Keypair. "
+            "Ensure 'solana' is listed in requirements.txt and no local 'solana.py' or 'solana/' folder exists. "
+            f"Inner error: {_e} / {err}"
+        )
 
 # NEW: payout helpers (sign + send SPL from vaults)
 from payouts import pay_coinflip_winner, pay_jackpot_winner, pay_jackpot_split
