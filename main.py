@@ -19,7 +19,8 @@ from pydantic import BaseModel, Field
 from config import settings
 import db as dbmod
 from db import ensure_schema   # import canonical schema
-from solana.publickey import PublicKey  # add near top of file with other imports
+from solana.publickey import PublicKey
+from solana.keypair import Keypair
 
 # NEW: payout helpers (sign + send SPL from vaults)
 from payouts import pay_coinflip_winner, pay_jackpot_winner, pay_jackpot_split
