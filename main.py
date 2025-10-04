@@ -140,11 +140,13 @@ async def _rpc_get_blockhash(slot: int) -> Optional[str]:
 async def _rpc_account_exists(pubkey_str: str) -> bool:
     try:
         async with AsyncClient(RPC_URL) as c:
+            # Normalize to solana-py PublicKey
             try:
-                from solders.pubkey import Pubkey
-                key = Pubkey.from_string(pubkey_str)
+                key = PublicKey(pubkey_str)
             except Exception:
+                # fallback — allow whatever was passed through
                 key = pubkey_str
+
             r = await c.get_account_info(key, commitment="confirmed")
             val = getattr(r, "value", None)
             if val is not None:
@@ -398,9 +400,11 @@ async def rounds_current():
         row = await cur.fetchone()
     if not row:
         raise HTTPException(404, "No current round")
-        opens_dt = _parse_iso_z(row[2])
-        closes_dt = _parse_iso_z(row[3])
-        next_open_dt = closes_dt + timedelta(minutes=ROUND_BREAK)
+
+    # parse the timestamps
+    opens_dt = _parse_iso_z(row[2])
+    closes_dt = _parse_iso_z(row[3])
+    next_open_dt = closes_dt + timedelta(minutes=ROUND_BREAK)
 
     return RoundCurrentResp(
         round_id=row[0],
