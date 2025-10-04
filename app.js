@@ -4,12 +4,12 @@
 // - uses jfetch / jfetchStrict helpers and defensive DOM access
 // app.js
 
-// 1️⃣ Solana + SPL-Token imports (new)
-import { Connection, PublicKey } from "@solana/web3.js";
+// 1️⃣ Solana + SPL-Token imports (ESM)
+import { Connection, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import {
   getAssociatedTokenAddress,
-  createAssociatedTokenAccount,
-  transferChecked,
+  createAssociatedTokenAccountInstruction,
+  createTransferCheckedInstruction,
 } from "@solana/spl-token";
 
 // 2️⃣ RPC connection setup
@@ -644,37 +644,40 @@ document.addEventListener("DOMContentLoaded", () => {
   // -------------------------
   // SPL helpers (defer using Solana libs until present)
   // -------------------------
+  // ESM version (uses imported functions & PublicKey)
   async function getOrCreateATA(owner, mintPk, payer) {
-    if (!window.splToken) throw new Error("splToken not available");
-    const ata = await window.splToken.getAssociatedTokenAddress(
-      mintPk, owner, false, window.splToken.TOKEN_PROGRAM_ID, window.splToken.ASSOCIATED_TOKEN_PROGRAM_ID
-    );
+    const ownerPk = new PublicKey(owner);
+    const mintPkObj = new PublicKey(mintPk);
+    const ata = await getAssociatedTokenAddress(mintPkObj, ownerPk);
+  
+    // check existence via backend endpoint
     let exists = false;
     try {
-      const r = await jfetch(`${API}/accounts/${ata.toBase58 ? ata.toBase58() : ata}/exists`);
+      const r = await jfetch(`${API}/accounts/${ata.toBase58()}/exists`);
       exists = !!r?.exists;
-    } catch (_ ) { }
+    } catch (_) {}
+  
     if (!exists) {
-      return {
-        ata,
-        ix: window.splToken.createAssociatedTokenAccountInstruction(
-          payer, ata, owner, mintPk,
-          window.splToken.TOKEN_PROGRAM_ID, window.splToken.ASSOCIATED_TOKEN_PROGRAM_ID
-        )
-      };
+      // createAssociatedTokenAccountInstruction (imported from @solana/spl-token)
+      const ix = createAssociatedTokenAccountInstruction(
+        payer,               // payer (publicKey or string)
+        ata,                 // associated token account pubkey
+        ownerPk,             // owner pubkey
+        mintPkObj            // mint pubkey
+      );
+      return { ata, ix };
     }
     return { ata, ix: null };
   }
-
+  
   const MEMO_PROGRAM_ID_STR = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
   function memoIx(memoStr) {
-    // create a generic memo instruction; if SolanaWeb3 present use it, otherwise return an object stub.
-    if (!window.solanaWeb3) {
-      // fallback placeholder for UI-only flow
-      return { memo: memoStr };
-    }
     const data = new TextEncoder().encode(memoStr);
-    return new window.solanaWeb3.TransactionInstruction({ programId: new window.solanaWeb3.PublicKey(MEMO_PROGRAM_ID_STR), keys: [], data });
+    return new TransactionInstruction({
+      programId: new PublicKey(MEMO_PROGRAM_ID_STR),
+      keys: [],
+      data,
+    });
   }
 
   // -------------------------
@@ -740,9 +743,15 @@ document.addEventListener("DOMContentLoaded", () => {
       const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
+      // createTransferCheckedInstruction expects (source, mint, destination, owner, amount, decimals, signers?)
       ixs.push(
-        window.splToken.createTransferInstruction(
-          srcAta, destAta, payer, toBaseUnits(amountHuman), [], window.splToken.TOKEN_PROGRAM_ID
+        createTransferCheckedInstruction(
+          srcAta,           // source ATA (PublicKey)
+          mintPk,           // mint (PublicKey)
+          destAta,          // dest ATA (PublicKey)
+          payer,            // owner of source (PublicKey)
+          toBaseUnits(amountHuman),
+          DECIMALS
         ),
         memoIx(bet.memo)
       );
