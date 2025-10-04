@@ -155,6 +155,24 @@ async def _rpc_account_exists(pubkey_str: str) -> bool:
     except Exception:
         return False
     return False
+    
+def _parse_iso_z(s: Optional[str]) -> Optional[datetime]:
+    """Parse an RFC3339-ish string. Accepts trailing 'Z' by converting to +00:00."""
+    if not s:
+        return None
+    s2 = str(s).strip()
+    # Allow plain "Z" timezone by converting to +00:00 which fromisoformat accepts
+    if s2.endswith("Z"):
+        s2 = s2[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(s2)
+    except Exception:
+        # Fallback: attempt naive parse without offset (YYYY-MM-DDTHH:MM:SS)
+        try:
+            return datetime.strptime(s2, "%Y-%m-%dT%H:%M:%S")
+        except Exception:
+            # Re-raise so caller sees the error (so it can be logged)
+            raise
 
 # =========================================================
 # Lifecycle
@@ -177,7 +195,9 @@ async def round_scheduler():
             if not row:
                 await asyncio.sleep(2)
                 continue
-            closes_at = datetime.fromisoformat(row[0])
+
+            # Parse closes_at robustly (accept trailing Z)
+            closes_at = _parse_iso_z(row[0])
             status = (row[1] or "").upper()
             now = datetime.utcnow()
 
@@ -190,7 +210,12 @@ async def round_scheduler():
                 # sleep until close or check again shortly
                 sleep_s = max(1.0, min(5.0, (closes_at - now).total_seconds()))
                 await asyncio.sleep(sleep_s)
-        except Exception:
+        except Exception as ex:
+            # surface exceptions to logs so scheduler failures are visible in service logs
+            try:
+                print(f"[round_scheduler] exception: {ex}", flush=True)
+            except Exception:
+                pass
             await asyncio.sleep(2.0)
 
 @app.on_event("startup")
@@ -373,9 +398,9 @@ async def rounds_current():
         row = await cur.fetchone()
     if not row:
         raise HTTPException(404, "No current round")
-    opens_dt = datetime.fromisoformat(row[2])
-    closes_dt = datetime.fromisoformat(row[3])
-    next_open_dt = closes_dt + timedelta(minutes=ROUND_BREAK)
+        opens_dt = _parse_iso_z(row[2])
+        closes_dt = _parse_iso_z(row[3])
+        next_open_dt = closes_dt + timedelta(minutes=ROUND_BREAK)
 
     return RoundCurrentResp(
         round_id=row[0],
@@ -542,10 +567,9 @@ async def get_config(include_balances: bool = False):
         if row:
             opens_at = row[0]
             closes_at = row[1]
-            o_dt = datetime.fromisoformat(opens_at)
-            c_dt = datetime.fromisoformat(closes_at)
+            o_dt = _parse_iso_z(opens_at)
+            c_dt = _parse_iso_z(closes_at)
             n_dt = c_dt + timedelta(minutes=ROUND_BREAK)
-
     # Vault balances / limits (optional — hits RPC)
     game_vault_ata = getattr(settings, "GAME_VAULT_ATA", "")
     jackpot_vault_ata = getattr(settings, "JACKPOT_VAULT_ATA", "")
