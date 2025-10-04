@@ -9,6 +9,7 @@ import hashlib
 import secrets
 import time
 import asyncio
+import traceback
 from datetime import datetime, timedelta, timezone
 def _rfc3339(dt: datetime) -> str:
     """
@@ -252,6 +253,9 @@ async def round_scheduler():
     """
     Watches current round timing; when it expires, calls admin_close_round()
     which settles, pays, and opens the next round.
+
+    Instrumented: when an exception occurs we print full traceback + context
+    (current_round_id, last SQL row if available) so we can identify the failing SQL.
     """
     while True:
         try:
@@ -259,36 +263,78 @@ async def round_scheduler():
             if not rid:
                 await asyncio.sleep(2)
                 continue
-            async with app.state.db.execute(
-                "SELECT closes_at,status FROM rounds WHERE id=?", (rid,)
-            ) as cur:
-                row = await cur.fetchone()
+
+            # fetch closes_at / status
+            try:
+                async with app.state.db.execute(
+                    "SELECT closes_at,status FROM rounds WHERE id=?", (rid,)
+                ) as cur:
+                    row = await cur.fetchone()
+            except Exception as sql_ex:
+                # SQL failed while selecting — log the SQL error and context
+                print("[round_scheduler] SQL select error for current_round_id:", repr(rid), flush=True)
+                traceback.print_exc()
+                # brief sleep to avoid tight loop if DB is flaky
+                await asyncio.sleep(2.0)
+                continue
+
             if not row:
+                # nothing found for this round id
                 await asyncio.sleep(2)
                 continue
 
-            # Parse closes_at robustly (accept trailing Z)
-            closes_at = _parse_iso_z(row[0])
+            # attempt to parse closes_at robustly (use existing _parse_iso_z if available)
+            try:
+                # if you have _parse_iso_z defined earlier, use it; otherwise fall back
+                closes_at = _parse_iso_z(row[0]) if " _parse_iso_z" in globals() else datetime.fromisoformat(row[0])
+            except Exception as parse_ex:
+                print("[round_scheduler] failed to parse closes_at:", repr(row[0]), "for round:", rid, flush=True)
+                traceback.print_exc()
+                await asyncio.sleep(2.0)
+                continue
+
             status = (row[1] or "").upper()
-            # use timezone-aware now to match parsed closes_at (which returns aware)
+            # use timezone-aware now to match stored ISO datetimes (they should be Z/UTC)
             now = datetime.now(timezone.utc)
 
+            # safety check: ensure closes_at is timezone-aware
+            if closes_at.tzinfo is None:
+                # treat naive as UTC to avoid comparisons between naive / aware
+                closes_at = closes_at.replace(tzinfo=timezone.utc)
+
             if status == "OPEN" and now >= closes_at:
-                # Use the same logic as the admin endpoint (no HTTP needed)
-                await admin_close_round(auth=True)
-                # small breather to avoid tight loop
+                try:
+                    # call admin_close_round and surface any exception
+                    await admin_close_round(auth=True)
+                except Exception as admin_ex:
+                    print("[round_scheduler] admin_close_round raised an exception for round:", rid, flush=True)
+                    traceback.print_exc()
+                    # small breather
+                    await asyncio.sleep(1.0)
+                # small breather to avoid tight loop after handling a close
                 await asyncio.sleep(1.0)
             else:
-                sleep_s = max(1.0, min(5.0, (closes_at - now).total_seconds()))
+                # compute sleep seconds safely
+                try:
+                    delta_s = (closes_at - now).total_seconds()
+                    sleep_s = max(1.0, min(5.0, delta_s))
+                except Exception as se:
+                    print("[round_scheduler] error computing sleep interval", flush=True)
+                    traceback.print_exc()
+                    sleep_s = 2.0
                 await asyncio.sleep(sleep_s)
         except Exception as ex:
-            # surface exceptions to logs so scheduler failures are visible in service logs
+            # This is a top-level protection: print full traceback and context so you can diagnose.
             try:
-                print(f"[round_scheduler] exception: {ex}", flush=True)
+                print("[round_scheduler] top-level exception (will sleep 2s):", str(ex), flush=True)
+                print("current_round_id:", repr(rid) if 'rid' in locals() else "<unknown>", flush=True)
+                if 'row' in locals():
+                    print("last row:", repr(row), flush=True)
+                traceback.print_exc()
             except Exception:
                 pass
             await asyncio.sleep(2.0)
-
+            
 @app.on_event("startup")
 async def on_startup():
     # Connect DB + ensure schema
@@ -990,10 +1036,15 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
                 break
 
         # Store reveal & entropy on round
-        await app.state.db.execute(
-            "UPDATE rounds SET server_seed_reveal=? WHERE id=?",
-            (round_server_seed, rid),
-        )
+        try:
+            await app.state.db.execute(
+                "UPDATE rounds SET server_seed_reveal=? WHERE id=?",
+                (round_server_seed, rid),
+            )
+        except Exception:
+            print("[admin_close_round] failed UPDATE server_seed_reveal for round:", rid, "params:", (round_server_seed, rid), flush=True)
+            traceback.print_exc()
+            raise
         await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy)
 
         # Split pot
