@@ -35,10 +35,8 @@ def _rfc3339(dt: datetime) -> str:
     # remove possible fractional seconds already handled by replace
     return iso + "Z"
 from typing import Literal, Optional
-from fastapi import FastAPI, HTTPException, Request, StaticFiles
-# serve ./static at the web root (index.html for /)
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from config import settings
@@ -109,6 +107,13 @@ def admin_guard(creds: HTTPAuthorizationCredentials = Depends(_auth_scheme)):
 # =========================================================
 app = FastAPI(title="$TREATZ Backend", version="0.1.0")
 
+# Serve built frontend (dist -> copied to ./static during build)
+# Only do this if you are building the frontend into a 'static' folder
+try:
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+except Exception:
+    # If static dir doesn't exist (e.g., in pure-backend deploy), ignore
+    pass
 # ----------------------------- CORS ---------------------------------
 app.add_middleware(
     CORSMiddleware,
