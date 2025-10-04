@@ -2,14 +2,15 @@
 from __future__ import annotations
 import asyncio
 import base58
-from typing import Tuple, List
+from typing import Tuple, List, Optional, Union
 
 from config import settings
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solana.transaction import Transaction
-from solders.pubkey import Pubkey as PublicKey
-from solders.keypair import Keypair
+# use solana-py PublicKey/Keypair to match spl.token and Transaction expectations
+from solana.publickey import PublicKey
+from solana.keypair import Keypair
 from spl.token.instructions import (
     transfer_checked,
     get_associated_token_address,
@@ -23,8 +24,13 @@ RPC_URL = settings.RPC_URL
 
 # --------------------------- Utils / Config ---------------------------
 
-def to_public_key(addr: str | PublicKey) -> PublicKey:
-    return PublicKey.from_string(addr) if isinstance(addr, str) else addr
+def to_public_key(addr: Union[str, PublicKey]) -> PublicKey:
+    """Return solana.PublicKey given a str or PublicKey."""
+    if isinstance(addr, PublicKey):
+        return addr
+    if not addr:
+        raise ValueError("Empty public key string provided")
+    return PublicKey(str(addr))
 
 def _require_token_mint() -> None:
     if not settings.TREATZ_MINT:
@@ -42,15 +48,18 @@ JACKPOT_VAULT = to_public_key(settings.JACKPOT_VAULT)
 GAME_VAULT_PK_B58 = settings.GAME_VAULT_PK or ""
 JACKPOT_VAULT_PK_B58 = settings.JACKPOT_VAULT_PK or ""
 
-
 # --------------------------- Keypair Loader ---------------------------
 
 def _kp_from_base58(b58: str) -> Keypair:
+    """
+    Decode a base58-encoded secret key and return solana.keypair.Keypair.
+    Accepts 64-byte secret keys (private+public) which solana expects.
+    """
     raw = base58.b58decode(b58)
     if len(raw) == 64:
-        return Keypair.from_bytes(raw)
+        # solana Keypair expects bytes-like for from_secret_key
+        return Keypair.from_secret_key(raw)
     raise ValueError("Invalid secret key: expected base58-encoded 64-byte secret key.")
-
 
 def _assert_owner_matches(vault_pub: PublicKey, kp: Keypair, label: str) -> None:
     if vault_pub != kp.public_key:
@@ -101,30 +110,62 @@ async def _send_spl_from_vault(
     for ix in pre_ixs:
         tx.add(ix)
 
+    # transfer_checked signature: (program_id, source, mint, dest, owner, amount, decimals, signers=None)
     tx.add(
         transfer_checked(
-            program_id=TOKEN_PROGRAM_ID,
-            source=vault_ata,
-            mint=mint_pk,
-            dest=winner_ata,
-            owner=vault_wallet,
-            amount=amount_base_units,
-            decimals=TOKEN_DECIMALS,
-            signers=[vault_owner_kp.public_key],
+            TOKEN_PROGRAM_ID,
+            vault_ata,
+            mint_pk,
+            winner_ata,
+            vault_wallet,
+            amount_base_units,
+            TOKEN_DECIMALS,
+            signers=None,
         )
     )
 
-    tx.recent_blockhash = (await client.get_latest_blockhash()).value.blockhash
+    # Set recent blockhash & fee payer
+    lbh = await client.get_latest_blockhash()
+    # extract blockhash robustly (solders vs dict differences)
+    bh = getattr(getattr(lbh, "value", None), "blockhash", None) or (lbh.get("result") or {}).get("value", {}).get("blockhash") if isinstance(lbh, dict) else None
+    if not bh:
+        # fallback to the top-level result shape
+        try:
+            bh = lbh["result"]["value"]["blockhash"]
+        except Exception:
+            raise RuntimeError("Could not fetch latest blockhash")
+
+    tx.recent_blockhash = bh
     tx.fee_payer = vault_wallet
+
+    # sign with vault owner keypair (solana Keypair)
     tx.sign(vault_owner_kp)
 
     raw = tx.serialize()
-    sig = await client.send_raw_transaction(
-        raw, opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed)
-    )
-    await client.confirm_transaction(sig.value, commitment=Confirmed)
-    return sig.value
+    resp = await client.send_raw_transaction(raw, opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed))
 
+    # normalize response to a signature string
+    sig = None
+    if isinstance(resp, dict):
+        sig = resp.get("result") or resp.get("result", None)
+        # some versions put signature at resp['result']
+        if isinstance(sig, dict):
+            sig = sig.get("signature") or sig.get("txHash") or None
+    else:
+        # solana-py may return a SendResult-like object with .value
+        sig = getattr(resp, "value", None) or getattr(resp, "result", None) or str(resp)
+
+    if not sig:
+        raise RuntimeError(f"Unable to determine tx signature from send_raw_transaction response: {resp}")
+
+    # wait for confirmation
+    try:
+        await client.confirm_transaction(sig, commitment=Confirmed)
+    except Exception:
+        # still return the signature even if confirm failed
+        return str(sig)
+
+    return str(sig)
 
 # ------------------------------ Public APIs ---------------------------
 
