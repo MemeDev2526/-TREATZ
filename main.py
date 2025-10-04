@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from config import settings
 import db as dbmod
 from db import ensure_schema   # import canonical schema
+from solana.publickey import PublicKey  # add near top of file with other imports
 
 # NEW: payout helpers (sign + send SPL from vaults)
 from payouts import pay_coinflip_winner, pay_jackpot_winner, pay_jackpot_split
@@ -97,22 +98,20 @@ async def _rpc_get_token_balance(ata: str) -> int:
         return 0
     try:
         async with AsyncClient(RPC_URL) as c:
-            # Accept both str and Pubkey transparently
+            # Normalize to solana-py PublicKey
             try:
-                from solders.pubkey import Pubkey
-                key = Pubkey.from_string(ata)
+                key = PublicKey(ata)
             except Exception:
-                key = ata  # fall back to raw string if solders isn't used
+                # If ata is some unexpected type (already a PublicKey), try to use it directly
+                key = ata
 
             r = await c.get_token_account_balance(key)
-
-            # solders style
+            # handle multiple return shapes (solders vs dict etc.)
             val = getattr(r, "value", None)
             amt = None
             if val is not None:
                 amt = getattr(val, "amount", None) or (val.get("amount") if isinstance(val, dict) else None)
 
-            # dict style
             if amt is None and isinstance(r, dict):
                 amt = (((r.get("result") or {}).get("value") or {}).get("amount"))
 
