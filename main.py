@@ -120,29 +120,53 @@ def _hmac(secret: str, msg: str, as_hex: bool = False) -> str | bytes:
 # RPC Helpers
 # =========================================================
 async def _rpc_get_token_balance(ata: str) -> int:
+    """
+    Return token amount (base units) for a given ATA/pubkey string.
+    Tries several PublicKey construction strategies to be tolerant across versions.
+    Returns 0 if the ATA is empty, RPC fails, or the account has no balance.
+    """
     if not ata:
         return 0
+
+    # Build a key acceptable to solana-py (try several fallbacks)
+    key = None
+    try:
+        # Preferred: direct constructor (works for string or base58)
+        key = PublicKey(ata)
+    except Exception:
+        try:
+            # Fallback: decode base58 to raw bytes then construct PublicKey
+            raw = _b58.b58decode(ata)
+            if len(raw) == 32:
+                key = PublicKey(raw)
+            else:
+                # if decoded length isn't 32, leave as raw string fallback
+                key = ata
+        except Exception:
+            # Final fallback: keep raw string (some clients accept a str pubkey)
+            key = ata
+
     try:
         async with AsyncClient(RPC_URL) as c:
-            # Normalize to solana-py PublicKey
-            try:
-                key = PublicKey(ata)
-            except Exception:
-                # If ata is some unexpected type (already a PublicKey), try to use it directly
-                key = ata
-
             r = await c.get_token_account_balance(key)
-            # handle multiple return shapes (solders vs dict etc.)
+
+            # solders / object shape: r.value.amount
             val = getattr(r, "value", None)
             amt = None
             if val is not None:
-                amt = getattr(val, "amount", None) or (val.get("amount") if isinstance(val, dict) else None)
+                # If val is an object with attribute .amount
+                amt = getattr(val, "amount", None)
+                # Or if val is a dict-like
+                if amt is None and isinstance(val, dict):
+                    amt = val.get("amount")
 
+            # dict shape fallback: r['result']['value']['amount']
             if amt is None and isinstance(r, dict):
                 amt = (((r.get("result") or {}).get("value") or {}).get("amount"))
 
             return int(str(amt)) if amt is not None else 0
     except Exception:
+        # RPC or parsing failed — treat as zero so frontend gets a clear error later
         return 0
 
 async def _rpc_get_slot() -> int:
