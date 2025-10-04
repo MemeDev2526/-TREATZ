@@ -35,7 +35,10 @@ def _rfc3339(dt: datetime) -> str:
     # remove possible fractional seconds already handled by replace
     return iso + "Z"
 from typing import Literal, Optional
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, StaticFiles
+# serve ./static at the web root (index.html for /)
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from config import settings
