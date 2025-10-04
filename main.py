@@ -10,6 +10,7 @@ import secrets
 import time
 import asyncio
 import traceback
+import base58 as _b58
 from datetime import datetime, timedelta, timezone
 def _rfc3339(dt: datetime) -> str:
     """
@@ -286,7 +287,7 @@ async def round_scheduler():
             # attempt to parse closes_at robustly (use existing _parse_iso_z if available)
             try:
                 # if you have _parse_iso_z defined earlier, use it; otherwise fall back
-                closes_at = _parse_iso_z(row[0]) if " _parse_iso_z" in globals() else datetime.fromisoformat(row[0])
+                closes_at = _parse_iso_z(row[0]) if "_parse_iso_z" in globals() else datetime.fromisoformat(row[0])
             except Exception as parse_ex:
                 print("[round_scheduler] failed to parse closes_at:", repr(row[0]), "for round:", rid, flush=True)
                 traceback.print_exc()
@@ -1086,8 +1087,8 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
     finalize_slot = curr_slot + (ROUND_MIN * SLOTS_PER_MIN)
 
     await app.state.db.execute(
-        "INSERT INTO rounds(...,opens_at,closes_at,...) VALUES(?,?,?,?)",
-        (new_id, "OPEN", _rfc3339(now), _rfc3339(closes), ...)
+        "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) VALUES(?,?,?,?,?,?,?,?)",
+        (new_id, "OPEN", _rfc3339(now), _rfc3339(closes), srv_hash, secrets.token_hex(8), finalize_slot, 0),
     )
     await dbmod.kv_set(app.state.db, "current_round_id", new_id)
     await app.state.db.commit()
