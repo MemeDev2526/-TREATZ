@@ -1,41 +1,50 @@
 # payouts.py
 from __future__ import annotations
 import asyncio
-import base58
+import base58 as _b58
 from typing import Tuple, List, Optional, Union
 
 from config import settings
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solana.transaction import Transaction
-# use solana-py PublicKey/Keypair to match spl.token and Transaction expectations
-# robust imports for solana public key / keypair
+# prefer solana-py classes; fallback to solders shapes handled below
 try:
-    # preferred: solana-py public API
     from solana.publickey import PublicKey
     from solana.keypair import Keypair
-except Exception as _e:
-    # fallback: try solders types if solana-py isn't present
+except Exception:
+    # solders fallback (keep names compatible-ish)
     try:
-        from solders.pubkey import Pubkey as PublicKey  # note: different class name
+        from solders.pubkey import Pubkey as PublicKey
         from solders.keypair import Keypair as SolderKeypair
-        # wrap solders keypair to a compatible interface if needed (basic)
+
+        # Provide a minimal shim for Keypair that exposes .public_key and .to_bytes
         class Keypair:
             def __init__(self, kp: SolderKeypair):
                 self._kp = kp
+
             @property
             def public_key(self):
-                return self._kp.pubkey()
-            def to_bytes(self):
+                # solders.pubkey object -> bytes or str depending on use; use .to_string() if available
+                try:
+                    return PublicKey(bytes(self._kp.pubkey()))
+                except Exception:
+                    return PublicKey(str(self._kp.pubkey()))
+
+            @classmethod
+            def from_secret_key(cls, secret: bytes):
+                # solders Keypair loads from bytes
+                return cls(SolderKeypair.from_bytes(secret))
+
+            def to_bytes(self) -> bytes:
                 return bytes(self._kp.to_bytes())
-        # you may not need more adaptation for your current code paths
-    except Exception as err:
-        # Helpful error to surface in logs so you know why import failed
+    except Exception as e:
         raise ImportError(
-            "Failed to import solana PublicKey/Keypair. "
-            "Ensure 'solana' is listed in requirements.txt and no local 'solana.py' or 'solana/' folder exists. "
-            f"Inner error: {_e} / {err}"
+            "Could not import solana PublicKey/Keypair (neither solana-py nor solders usable). "
+            "Install 'solana' or 'solders' packages. Inner error: " + str(e)
         )
+
+# spl token helpers (solana-py)
 from spl.token.instructions import (
     transfer_checked,
     get_associated_token_address,
@@ -46,16 +55,18 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 
 RPC_URL = settings.RPC_URL
 
+# =========================================================
+# Helpers & config
+# =========================================================
 
-# --------------------------- Utils / Config ---------------------------
+# Keep original strings at module level and convert lazily
+GAME_VAULT_STR = settings.GAME_VAULT or ""
+JACKPOT_VAULT_STR = settings.JACKPOT_VAULT or ""
 
-def to_public_key(addr: Union[str, PublicKey]) -> PublicKey:
-    """Return solana.PublicKey given a str or PublicKey."""
-    if isinstance(addr, PublicKey):
-        return addr
-    if not addr:
-        raise ValueError("Empty public key string provided")
-    return PublicKey(str(addr))
+GAME_VAULT_PK_B58 = settings.GAME_VAULT_PK or ""
+JACKPOT_VAULT_PK_B58 = settings.JACKPOT_VAULT_PK or ""
+
+TOKEN_DECIMALS = settings.TOKEN_DECIMALS
 
 def _require_token_mint() -> None:
     if not settings.TREATZ_MINT:
@@ -65,33 +76,106 @@ def _token_mint() -> PublicKey:
     _require_token_mint()
     return to_public_key(settings.TREATZ_MINT)
 
-TOKEN_DECIMALS = settings.TOKEN_DECIMALS
+def to_public_key(addr: Optional[Union[str, PublicKey]]) -> PublicKey:
+    """
+    Robustly return a solana PublicKey instance from:
+      - a PublicKey (returned as-is)
+      - a base58 string (decoded -> PublicKey)
+      - raw bytes (used directly)
+    """
+    if addr is None:
+        raise ValueError("Empty public key provided")
 
-GAME_VAULT = to_public_key(settings.GAME_VAULT)
-JACKPOT_VAULT = to_public_key(settings.JACKPOT_VAULT)
+    # If it's already the expected PublicKey class, return as-is
+    try:
+        if isinstance(addr, PublicKey):
+            return addr
+    except Exception:
+        # isinstance may fail across solders/solana types; proceed to try other conversions
+        pass
 
-GAME_VAULT_PK_B58 = settings.GAME_VAULT_PK or ""
-JACKPOT_VAULT_PK_B58 = settings.JACKPOT_VAULT_PK or ""
+    # If it's bytes (32), try constructing
+    if isinstance(addr, (bytes, bytearray)):
+        try:
+            return PublicKey(bytes(addr))
+        except Exception:
+            # some PublicKey constructors accept bytes or expect different wrapper; try str fallback
+            try:
+                return PublicKey(addr)
+            except Exception as e:
+                raise ValueError(f"Cannot convert bytes to PublicKey: {e}")
 
-# --------------------------- Keypair Loader ---------------------------
+    # If it's a string, try direct constructor (works for many solana-py versions)
+    if isinstance(addr, str):
+        try:
+            return PublicKey(addr)
+        except Exception:
+            # fallback: base58-decode and construct from raw bytes
+            try:
+                raw = _b58.b58decode(addr)
+                if len(raw) != 32:
+                    raise ValueError(f"Decoded key length != 32 ({len(raw)})")
+                return PublicKey(raw)
+            except Exception as e:
+                raise ValueError(f"Could not convert '{addr}' to PublicKey: {e}")
+
+    # final attempt: try passing to constructor, let it raise if it must
+    try:
+        return PublicKey(addr)
+    except Exception as e:
+        raise ValueError(f"Unsupported public key type: {type(addr)} -> {e}")
+
+# ---------------- Keypair loader ----------------
 
 def _kp_from_base58(b58: str) -> Keypair:
     """
-    Decode a base58-encoded secret key and return solana.keypair.Keypair.
+    Decode a base58-encoded secret key and return a Keypair suitable for signing.
     Accepts 64-byte secret keys (private+public) which solana expects.
     """
-    raw = base58.b58decode(b58)
+    if not b58:
+        raise ValueError("Empty secret key provided")
+    raw = _b58.b58decode(b58)
+    # Some providers export 64-byte secret key (private + public), others 32; handle both:
     if len(raw) == 64:
-        # solana Keypair expects bytes-like for from_secret_key
-        return Keypair.from_secret_key(raw)
-    raise ValueError("Invalid secret key: expected base58-encoded 64-byte secret key.")
+        # solana Keypair.from_secret_key expects a bytes-like secret key (private+public)
+        try:
+            return Keypair.from_secret_key(raw)
+        except Exception:
+            # try alternative constructor names
+            try:
+                return Keypair.from_seed(raw[:32])
+            except Exception as e:
+                raise ValueError(f"Could not construct Keypair from 64-byte raw key: {e}")
+    elif len(raw) == 32:
+        # If only 32 bytes given, many APIs accept from_secret_key or from_seed
+        try:
+            return Keypair.from_secret_key(raw)
+        except Exception:
+            try:
+                # solana-py Keypair.from_seed exists
+                return Keypair.from_seed(raw)
+            except Exception as e:
+                raise ValueError(f"Could not construct Keypair from 32-byte seed: {e}")
+    else:
+        raise ValueError(f"Invalid secret key length: {len(raw)} (expected 32 or 64 bytes)")
 
 def _assert_owner_matches(vault_pub: PublicKey, kp: Keypair, label: str) -> None:
-    if vault_pub != kp.public_key:
-        raise RuntimeError(f"{label} signer does not match configured vault public key.")
+    # vault_pub is PublicKey; kp.public_key may be PublicKey or similar - normalize to str
+    try:
+        vault_s = str(vault_pub)
+        kp_pub_s = str(kp.public_key)
+    except Exception:
+        # fallback: compare bytes if possible
+        try:
+            vault_s = bytes(vault_pub)
+            kp_pub_s = bytes(kp.public_key)
+        except Exception:
+            vault_s = vault_pub
+            kp_pub_s = kp.public_key
+    if vault_s != kp_pub_s:
+        raise RuntimeError(f"{label} signer does not match configured vault public key. ({vault_s} != {kp_pub_s})")
 
-
-# ---------------------- ATA Ensure (vault pays fees) ------------------
+# ---------------- ATA ensure ----------------
 
 async def _ensure_ata_ixs(
     client: AsyncClient,
@@ -106,7 +190,8 @@ async def _ensure_ata_ixs(
     ata = get_associated_token_address(owner, mint_pk)
     resp = await client.get_account_info(ata, commitment=Confirmed)
     ixs: List = []
-    if resp.value is None:
+    # resp.value is None when missing
+    if getattr(resp, "value", None) is None:
         ixs.append(
             create_associated_token_account(
                 payer=payer,
@@ -116,8 +201,7 @@ async def _ensure_ata_ixs(
         )
     return ata, ixs
 
-
-# ------------------- Core SPL transfer from a vault -------------------
+# ---------------- Core SPL transfer ----------------
 
 async def _send_spl_from_vault(
     client: AsyncClient,
@@ -135,7 +219,8 @@ async def _send_spl_from_vault(
     for ix in pre_ixs:
         tx.add(ix)
 
-    # transfer_checked signature: (program_id, source, mint, dest, owner, amount, decimals, signers=None)
+    # transfer_checked parameters vary across versions; use positional style compatible with spl.token.instructions:
+    # transfer_checked(program_id, source, mint, dest, owner, amount, decimals, signers=None)
     tx.add(
         transfer_checked(
             TOKEN_PROGRAM_ID,
@@ -149,12 +234,19 @@ async def _send_spl_from_vault(
         )
     )
 
-    # Set recent blockhash & fee payer
+    # Set recent blockhash & fee payer robustly
     lbh = await client.get_latest_blockhash()
-    # extract blockhash robustly (solders vs dict differences)
-    bh = getattr(getattr(lbh, "value", None), "blockhash", None) or (lbh.get("result") or {}).get("value", {}).get("blockhash") if isinstance(lbh, dict) else None
+    bh = None
+    # many response shapes: object.value.blockhash, dict -> result.value.blockhash, etc.
+    if hasattr(lbh, "value") and getattr(lbh, "value", None) is not None:
+        bh = getattr(lbh.value, "blockhash", None) or getattr(lbh.value, "blockhash", None)
+    if not bh and isinstance(lbh, dict):
+        try:
+            bh = (lbh.get("result") or {}).get("value", {}) .get("blockhash")
+        except Exception:
+            bh = None
     if not bh:
-        # fallback to the top-level result shape
+        # try nested dict fallback
         try:
             bh = lbh["result"]["value"]["blockhash"]
         except Exception:
@@ -163,70 +255,74 @@ async def _send_spl_from_vault(
     tx.recent_blockhash = bh
     tx.fee_payer = vault_wallet
 
-    # sign with vault owner keypair (solana Keypair)
+    # sign with vault owner keypair
     tx.sign(vault_owner_kp)
 
     raw = tx.serialize()
     resp = await client.send_raw_transaction(raw, opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed))
 
-    # normalize response to a signature string
+    # Normalize signature out of the response
     sig = None
     if isinstance(resp, dict):
-        sig = resp.get("result") or resp.get("result", None)
-        # some versions put signature at resp['result']
+        # solana RPC dict shape -> resp['result'] often contains signature string
+        sig = resp.get("result") or resp.get("signature") or None
+        # some shapes: {'result': {'value': 'sig'}} -> try nested
         if isinstance(sig, dict):
             sig = sig.get("signature") or sig.get("txHash") or None
     else:
-        # solana-py may return a SendResult-like object with .value
         sig = getattr(resp, "value", None) or getattr(resp, "result", None) or str(resp)
 
     if not sig:
-        raise RuntimeError(f"Unable to determine tx signature from send_raw_transaction response: {resp}")
+        # try if resp has .value and .value is signature
+        try:
+            sig = str(resp)
+        except Exception:
+            raise RuntimeError(f"Unable to determine tx signature from send_raw_transaction response: {resp}")
 
-    # wait for confirmation
+    # wait for confirmation (best-effort)
     try:
         await client.confirm_transaction(sig, commitment=Confirmed)
     except Exception:
-        # still return the signature even if confirm failed
+        # still return signature even if confirm failed
         return str(sig)
 
     return str(sig)
 
-# ------------------------------ Public APIs ---------------------------
+# ---------------- Public payout APIs ----------------
 
 async def pay_coinflip_winner(winner_pubkey_str: str, amount_base_units: int) -> str:
     """Pay a coinflip winner from GAME_VAULT."""
     if not GAME_VAULT_PK_B58:
         raise RuntimeError("GAME_VAULT_PK not set.")
     kp = _kp_from_base58(GAME_VAULT_PK_B58)
-    _assert_owner_matches(GAME_VAULT, kp, "GAME_VAULT")
+    vault_pub = to_public_key(GAME_VAULT_STR)
+    _assert_owner_matches(vault_pub, kp, "GAME_VAULT")
 
     async with AsyncClient(RPC_URL, commitment=Confirmed) as client:
         return await _send_spl_from_vault(
             client=client,
             vault_owner_kp=kp,
-            vault_wallet=GAME_VAULT,
+            vault_wallet=vault_pub,
             winner_wallet=to_public_key(winner_pubkey_str),
             amount_base_units=amount_base_units,
         )
-
 
 async def pay_jackpot_winner(winner_pubkey_str: str, amount_base_units: int) -> str:
     """Pay the jackpot winner from JACKPOT_VAULT."""
     if not JACKPOT_VAULT_PK_B58:
         raise RuntimeError("JACKPOT_VAULT_PK not set.")
     kp = _kp_from_base58(JACKPOT_VAULT_PK_B58)
-    _assert_owner_matches(JACKPOT_VAULT, kp, "JACKPOT_VAULT")
+    vault_pub = to_public_key(JACKPOT_VAULT_STR)
+    _assert_owner_matches(vault_pub, kp, "JACKPOT_VAULT")
 
     async with AsyncClient(RPC_URL, commitment=Confirmed) as client:
         return await _send_spl_from_vault(
             client=client,
             vault_owner_kp=kp,
-            vault_wallet=JACKPOT_VAULT,
+            vault_wallet=vault_pub,
             winner_wallet=to_public_key(winner_pubkey_str),
             amount_base_units=amount_base_units,
         )
-
 
 async def pay_jackpot_split(
     winner_pubkey_str: str, winner_amount: int,
@@ -237,9 +333,10 @@ async def pay_jackpot_split(
     if not JACKPOT_VAULT_PK_B58:
         raise RuntimeError("JACKPOT_VAULT_PK not set.")
     kp = _kp_from_base58(JACKPOT_VAULT_PK_B58)
-    _assert_owner_matches(JACKPOT_VAULT, kp, "JACKPOT_VAULT")
+    vault_pub = to_public_key(JACKPOT_VAULT_STR)
+    _assert_owner_matches(vault_pub, kp, "JACKPOT_VAULT")
 
-    w_pub = to_public_key(winner_pubkey_str) if winner_amount > 0 else None
+    w_pub = to_public_key(winner_pubkey_str) if winner_amount > 0 and winner_pubkey_str else None
     d_pub = to_public_key(dev_pubkey_str) if (dev_amount > 0 and dev_pubkey_str) else None
     b_pub = to_public_key(burn_pubkey_str) if (burn_amount > 0 and burn_pubkey_str) else None
 
@@ -251,31 +348,62 @@ async def pay_jackpot_split(
         pre_ixs: List = []
         w_ata = d_ata = b_ata = None
         if w_pub:
-            w_ata, ixs = await _ensure_ata_ixs(client, w_pub, payer=JACKPOT_VAULT); pre_ixs += ixs
+            w_ata, ixs = await _ensure_ata_ixs(client, w_pub, payer=vault_pub); pre_ixs += ixs
         if d_pub:
-            d_ata, ixs = await _ensure_ata_ixs(client, d_pub, payer=JACKPOT_VAULT); pre_ixs += ixs
+            d_ata, ixs = await _ensure_ata_ixs(client, d_pub, payer=vault_pub); pre_ixs += ixs
         if b_pub:
-            b_ata, ixs = await _ensure_ata_ixs(client, b_pub, payer=JACKPOT_VAULT); pre_ixs += ixs
+            b_ata, ixs = await _ensure_ata_ixs(client, b_pub, payer=vault_pub); pre_ixs += ixs
 
-        vault_ata = get_associated_token_address(JACKPOT_VAULT, mint_pk)
+        vault_ata = get_associated_token_address(vault_pub, mint_pk)
 
         for ix in pre_ixs:
             tx.add(ix)
 
+        # Use same transfer_checked positional form
         if w_pub and winner_amount > 0:
-            tx.add(transfer_checked(TOKEN_PROGRAM_ID, vault_ata, mint_pk, w_ata, JACKPOT_VAULT,
-                                    winner_amount, TOKEN_DECIMALS, [kp.public_key]))
+            tx.add(transfer_checked(
+                TOKEN_PROGRAM_ID, vault_ata, mint_pk, w_ata, vault_pub,
+                winner_amount, TOKEN_DECIMALS, [kp.public_key]
+            ))
         if d_pub and dev_amount > 0:
-            tx.add(transfer_checked(TOKEN_PROGRAM_ID, vault_ata, mint_pk, d_ata, JACKPOT_VAULT,
-                                    dev_amount, TOKEN_DECIMALS, [kp.public_key]))
+            tx.add(transfer_checked(
+                TOKEN_PROGRAM_ID, vault_ata, mint_pk, d_ata, vault_pub,
+                dev_amount, TOKEN_DECIMALS, [kp.public_key]
+            ))
         if b_pub and burn_amount > 0:
-            tx.add(transfer_checked(TOKEN_PROGRAM_ID, vault_ata, mint_pk, b_ata, JACKPOT_VAULT,
-                                    burn_amount, TOKEN_DECIMALS, [kp.public_key]))
+            tx.add(transfer_checked(
+                TOKEN_PROGRAM_ID, vault_ata, mint_pk, b_ata, vault_pub,
+                burn_amount, TOKEN_DECIMALS, [kp.public_key]
+            ))
 
-        tx.recent_blockhash = (await client.get_latest_blockhash()).value.blockhash
-        tx.fee_payer = JACKPOT_VAULT
+        lbh = await client.get_latest_blockhash()
+        # extract blockhash robustly
+        bh = getattr(getattr(lbh, "value", None), "blockhash", None) or (lbh.get("result") or {}).get("value", {}).get("blockhash") if isinstance(lbh, dict) else None
+        if not bh:
+            try:
+                bh = lbh["result"]["value"]["blockhash"]
+            except Exception:
+                raise RuntimeError("Could not fetch latest blockhash")
+        tx.recent_blockhash = bh
+        tx.fee_payer = vault_pub
+
+        # sign with vault keypair
         tx.sign(kp)
         raw = tx.serialize()
-        sig = await client.send_raw_transaction(raw, opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed))
-        await client.confirm_transaction(sig.value, commitment=Confirmed)
-        return sig.value
+        sig_resp = await client.send_raw_transaction(raw, opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed))
+
+        # Normalize signature and confirm
+        sig = None
+        if isinstance(sig_resp, dict):
+            sig = sig_resp.get("result") or sig_resp.get("signature") or None
+        else:
+            sig = getattr(sig_resp, "value", None) or getattr(sig_resp, "result", None) or str(sig_resp)
+
+        # try confirm
+        try:
+            await client.confirm_transaction(sig, commitment=Confirmed)
+        except Exception:
+            # still return the signature even if confirm failed
+            return str(sig)
+
+        return str(sig)
