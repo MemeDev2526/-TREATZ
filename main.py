@@ -35,6 +35,8 @@ def _rfc3339(dt: datetime) -> str:
     # remove possible fractional seconds already handled by replace
     return iso + "Z"
 from typing import Literal, Optional
+import os
+from fastapi.responses import FileResponse
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -114,6 +116,33 @@ try:
 except Exception:
     # If static dir doesn't exist (e.g., in pure-backend deploy), ignore
     pass
+    
+# static dir where build step copies dist/ -> ./static
+BASE_DIR = os.path.dirname(__file__)
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# if the SPA was built into ./static, expose its assets
+if os.path.isdir(STATIC_DIR):
+    # keep existing mount for /static (you already have this)
+    # app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    # expose SPA assets that index.html expects at /assets (dist/assets/...)
+    assets_dir = os.path.join(STATIC_DIR, "assets")
+    if os.path.isdir(assets_dir):
+        # mount /assets so <script src="assets/..."> resolves
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="spa-assets")
+
+    # serve the SPA index at root (so GET / returns index.html)
+    index_file = os.path.join(STATIC_DIR, "index.html")
+
+    @app.get("/", include_in_schema=False)
+    async def serve_index():
+        return FileResponse(index_file)
+
+    # Optional: also serve exact /index.html path
+    @app.get("/index.html", include_in_schema=False)
+    async def serve_index_html():
+        return FileResponse(index_file)
 # ----------------------------- CORS ---------------------------------
 app.add_middleware(
     CORSMiddleware,
