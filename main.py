@@ -112,9 +112,9 @@ app = FastAPI(title="$TREATZ Backend", version="0.1.0")
 # Serve built frontend (dist -> copied to ./static during build)
 # Only do this if you are building the frontend into a 'static' folder
 try:
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/", StaticFiles(directory="static", html=True), name="static")
 except Exception:
-    # If static dir doesn't exist (e.g., in pure-backend deploy), ignore
+    # If no static directory (pure-backend deploy), ignore and continue
     pass
     
 # static dir where build step copies dist/ -> ./static
