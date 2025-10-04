@@ -2,6 +2,34 @@
 // - keeps FX, countdown, raffle UI, coin flip animation, ticker, mascot, ambient audio
 // - tolerant to missing solana libs/providers (no TDZ / ReferenceError)
 // - uses jfetch / jfetchStrict helpers and defensive DOM access
+// app.js
+
+// 1️⃣ Solana + SPL-Token imports (new)
+import { Connection, PublicKey } from "@solana/web3.js";
+import {
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccount,
+  transferChecked,
+} from "@solana/spl-token";
+
+// 2️⃣ RPC connection setup
+const RPC_URL = "https://api.mainnet-beta.solana.com";
+const connection = new Connection(RPC_URL, "confirmed");
+
+// 3️⃣ Helper functions (can be imported or inline)
+export async function getAta(owner, mint) {
+  const ata = await getAssociatedTokenAddress(
+    new PublicKey(mint),
+    new PublicKey(owner)
+  );
+  console.log("ATA:", ata.toBase58());
+  return ata;
+}
+
+// 4️⃣ Rest of your app.js (DOM hooks, connect wallet, etc.)
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("[TREATZ] Frontend initialized");
+});
 
 (function () {
   "use strict";
