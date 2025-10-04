@@ -9,9 +9,29 @@ import hashlib
 import secrets
 import time
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 def _rfc3339(dt: datetime) -> str:
-    return dt.replace(microsecond=0).isoformat() + "Z"
+    """
+    Return an RFC3339-style UTC timestamp ending with 'Z'.
+    Accepts naive or aware datetimes and normalizes to UTC (no offset).
+    """
+    if dt is None:
+        return None
+    # if naive, treat as UTC
+    if dt.tzinfo is None:
+        dt_utc = dt.replace(microsecond=0)
+    else:
+        # convert to UTC and drop tzinfo for canonical Z suffix
+        dt_utc = dt.astimezone(timezone.utc).replace(microsecond=0)
+
+    # Use ISO format without offset, append 'Z'
+    # If dt_utc.isoformat() contains an offset (it won't after astimezone+replace above),
+    # we still strip anything after the seconds portion for safety.
+    iso = dt_utc.isoformat()
+    if iso.endswith("+00:00"):
+        iso = iso.rsplit("+", 1)[0]
+    # remove possible fractional seconds already handled by replace
+    return iso + "Z"
 from typing import Literal, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -250,7 +270,8 @@ async def round_scheduler():
             # Parse closes_at robustly (accept trailing Z)
             closes_at = _parse_iso_z(row[0])
             status = (row[1] or "").upper()
-            now = datetime.utcnow()
+            # use timezone-aware now to match parsed closes_at (which returns aware)
+            now = datetime.now(timezone.utc)
 
             if status == "OPEN" and now >= closes_at:
                 # Use the same logic as the admin endpoint (no HTTP needed)
@@ -258,7 +279,6 @@ async def round_scheduler():
                 # small breather to avoid tight loop
                 await asyncio.sleep(1.0)
             else:
-                # sleep until close or check again shortly
                 sleep_s = max(1.0, min(5.0, (closes_at - now).total_seconds()))
                 await asyncio.sleep(sleep_s)
         except Exception as ex:
@@ -279,7 +299,8 @@ async def on_startup():
     current = await dbmod.kv_get(app.state.db, "current_round_id")
     if not current:
         rid = f"R{secrets.randbelow(10_000):04d}"
-        now = datetime.utcnow()
+        # use timezone-aware UTC now
+        now = datetime.now(timezone.utc)
         closes = now + timedelta(minutes=ROUND_MIN)
         round_srv = secrets.token_hex(32)
         await dbmod.kv_set(app.state.db, f"round:{rid}:server_seed", round_srv)
@@ -1002,7 +1023,8 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
 
     # Open next round (timed with ROUND_MIN & finalize_slot)
     new_id = f"R{secrets.randbelow(10_000):04d}"
-    now = datetime.utcnow() + timedelta(minutes=ROUND_BREAK)
+    # make new round times timezone-aware UTC
+    now = datetime.now(timezone.utc) + timedelta(minutes=ROUND_BREAK)
     closes = now + timedelta(minutes=ROUND_MIN)
 
     new_round_srv = secrets.token_hex(32)
@@ -1013,8 +1035,8 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
     finalize_slot = curr_slot + (ROUND_MIN * SLOTS_PER_MIN)
 
     await app.state.db.execute(
-        "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) VALUES(?,?,?,?,?,?,?,?)",
-        (new_id, "OPEN", _rfc3339(now), _rfc3339(closes), srv_hash, secrets.token_hex(8), finalize_slot, 0),
+        "INSERT INTO rounds(...,opens_at,closes_at,...) VALUES(?,?,?,?)",
+        (new_id, "OPEN", _rfc3339(now), _rfc3339(closes), ...)
     )
     await dbmod.kv_set(app.state.db, "current_round_id", new_id)
     await app.state.db.commit()
