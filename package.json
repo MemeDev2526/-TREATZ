@@ -1,0 +1,28 @@
+{
+  "name": "treatz-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for the TREATZ dApp — Solana-powered fun & games",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.3",
+    "@solana/spl-token": "^0.4.7"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  },
+  "keywords": [
+    "solana",
+    "spl-token",
+    "treatz",
+    "web3",
+    "dapp"
+  ],
+  "author": "Treatz Devs",
+  "license": "MIT"
+}
