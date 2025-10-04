@@ -262,5 +262,11 @@
       <a id="btn-open-in-phantom-modal" class="wm__deeplink" href="#" target="_blank" rel="noopener" hidden>Open site in Phantom</a>
     </div>
   </div>
+  <!-- Solana libs (optional for future wallet plumbing) -->
+  <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.7/lib/index.iife.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@solana/spl-token@0.3.7/dist/index.iife.js"></script>
+
+  <!-- Your app JS (drop-in). Make sure this path points to the working app.js file -->
+  <script src="app.js?v=__BUILD__" defer></script>
 </body>
 </html>
