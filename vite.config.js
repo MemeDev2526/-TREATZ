@@ -2,10 +2,10 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  root: ".", // use project root (since index.html is here)
+  root: ".", // use project root (index.html lives here)
   build: {
-    outDir: "dist",
-    emptyOutDir: true
+    outDir: "static",     // 👈 build directly into the static/ folder
+    emptyOutDir: true,    // clear old builds before each build
   },
   server: {
     port: 5173,
