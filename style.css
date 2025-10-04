@@ -20,20 +20,25 @@
   --card:rgba(13,13,13,.72);
   --card-border:rgba(255,255,255,.12);
   --shadow:0 10px 30px rgba(0,0,0,.45);
+
+  /* Layout metrics (optional) */
+  --banner-max-h:220px;
 }
 
 /* =========================================================
    Base, Typography & Utilities
    ========================================================= */
-*{ box-sizing:border-box }
-html,body{ height:100% }
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
 
 body{
   margin:0;
   color:var(--white);
-  font-family:"Rubik", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  font-family:"Rubik", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
   background: linear-gradient(180deg,var(--bg-a),var(--bg-b));
   overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
 }
 
 .section__title, .nav__brand, h1, h2.display {
@@ -43,7 +48,7 @@ body{
   text-shadow: 0 0 12px rgba(57,255,20,.25), 0 2px 0 rgba(0,0,0,.6);
 }
 
-/* buttons: keep default font; removed invalid 'cursive' property */
+/* link/button color defaults */
 a, .btn--outline { color: var(--slime); }
 
 .card{
@@ -110,7 +115,6 @@ a, .btn--outline { color: var(--slime); }
 /* =========================================================
    Top Banner & Global Countdown
    ========================================================= */
-/* Make banner height **auto** to avoid cropping/overlap */
 .brand-banner{
   background:#0D0D0D;
   position: relative;
@@ -118,11 +122,11 @@ a, .btn--outline { color: var(--slime); }
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
 }
 .brand-banner img{
-  width:100%; height:auto; max-height:220px;
+  width:100%; height:auto; max-height:var(--banner-max-h);
   object-fit: cover; display:block;
 }
 
-/* Countdown directly follows banner (not sticky to simplify layout) */
+/* Countdown directly follows banner */
 .countdown{
   position: relative;
   z-index: 1001;
@@ -219,7 +223,7 @@ a, .btn--outline { color: var(--slime); }
 /* =========================================================
    Buttons
    ========================================================= */
-.btn{ cursor:pointer; border:none; padding:.7rem 1rem; border-radius:12px; font-weight:800 }
+.btn{ cursor:pointer; border:none; padding:.7rem 1rem; border-radius:12px; font-weight:800; background:transparent; color:var(--white); }
 .btn--primary{ background:linear-gradient(180deg,var(--orange),var(--orange-hi)); color:#1a0b00 }
 .btn--buy{ background:linear-gradient(90deg,var(--slime),#94DAFF); color:#032316; font-weight:900 }
 .btn--outline{ background:transparent; color:var(--white); border:1px solid var(--white) }
@@ -274,7 +278,7 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
   border-radius:12px; margin:8px auto 0; padding:.5rem .75rem; max-width:1200px;
   font-weight:700;
 }
-.ticker__rail{ display:inline-block; padding-left:100%; animation:ticker 18s linear infinite; }
+.ticker__rail{ display:inline-block; padding-left:100%; animation:ticker 18s linear infinite; white-space:nowrap; }
 @keyframes ticker{ 0%{transform:translateX(0)} 100%{transform:translateX(-100%)} }
 
 /* Ticker text colors (both variants supported) */
@@ -304,7 +308,9 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
              linear-gradient(180deg, rgba(0,255,163,.8), rgba(148,218,255,.8));
   color: var(--slime); text-shadow: 0 0 10px rgba(57,255,20,.6);
 }
-.coin.spin{ animation:spin 1.2s cubic-bezier(.2,.6,.2,1) 1 }
+
+/* Spin animation: ensure it persists while animating */
+.coin.spin{ animation:spin 1.2s cubic-bezier(.2,.6,.2,1) 1; animation-fill-mode:both; }
 @keyframes spin{ 0%{ transform:rotateY(0) } 100%{ transform:rotateY(720deg) } }
 .cf-status{ margin-top:12px; font-weight:700 }
 
@@ -397,6 +403,9 @@ body.flash { animation: screen-flash 0.9s ease both; }
   opacity: .95;
   animation: treatz-fall var(--dur,6s) linear forwards, treatz-sway 2.6s ease-in-out infinite;
 }
+.fx-piece svg{ display:block; width:72px; height:auto; pointer-events:none; }
+
+/* fall & sway */
 @keyframes treatz-fall {
   0%   { transform: translate(var(--x,0px), -10%) rotate(var(--r0,0deg)); opacity: 0; }
   8%   { opacity: .95; }
@@ -410,7 +419,9 @@ body.flash { animation: screen-flash 0.9s ease both; }
 
 #mascot-floater{
   position:fixed; left:30px; top:30px; width:140px;
-  pointer-events:none; opacity:.9; z-index: 1000;
+  pointer-events:none; opacity:.95; z-index: 1000;
+  transform: translate(0px, 0px);
+  will-change: transform;
 }
 
 /* =========================================================
