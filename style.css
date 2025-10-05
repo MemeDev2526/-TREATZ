@@ -160,16 +160,21 @@ a, .btn--outline { color: var(--slime); }
 /* Very visible numeric timer (scales across devices) */
 .countdown__timer{
   font-family:"Creepster", cursive;
-  font-size: clamp(28px, 6.8vw, 72px);  /* big on desktop, reasonable on mobile */
-  line-height: 0.95;
-  padding: 0.15rem .6rem;
-  color: var(--slime);
-  border: 1px solid rgba(57,255,20,.14);
+  font-size: clamp(28px, 6.8vw, 72px);
+  line-height: 0.92;
+  padding: 0.12rem .6rem;
+  color: #ffffff; /* ghost white numeric fill */
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
   border-radius: 10px;
-  box-shadow: 0 6px 24px rgba(57,255,20,.12);
+  border: 2px solid rgba(57,255,20,0.18);      /* slime-green border */
+  box-shadow:
+    0 6px 24px rgba(57,255,20,0.08),           /* subtle green halo */
+    0 12px 36px rgba(0,0,0,0.45);              /* grounding shadow */
   letter-spacing: -0.02em;
-  font-weight: 800;
-  text-shadow: 0 10px 28px rgba(0,0,0,0.55);
+  font-weight: 900;
+  text-shadow:
+    0 2px 0 rgba(0,0,0,0.7),
+    0 10px 34px rgba(57,255,20,0.28);          /* outer slime glow */
 }
 
 /* Omen text (slightly smaller than timer but still prominent) */
