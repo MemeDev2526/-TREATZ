@@ -34,9 +34,16 @@ if [ -d "dist" ]; then
   mkdir -p static
   # copy everything (including hidden), preserve attributes
   cp -a dist/. static/
-  
+
+  # copy raw repo assets into static/assets so both built hashed images
+  # and original files are available under /static/assets/
+  if [ -d "assets" ]; then
+    mkdir -p static/assets
+    cp -a assets/. static/assets/
+  fi
+
   cp -f whitepaper.html static/ || true
-  echo "[TREATZ] ✅ Copied dist/ → static/"
+  echo "[TREATZ] ✅ Copied dist/ → static/ and assets → static/assets/"
 else
   echo "[TREATZ] ⚠️ dist/ not found after build — aborting" >&2
   exit 1
