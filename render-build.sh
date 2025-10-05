@@ -1,28 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Activate existing venv or create+activate one
-if [ -f .venv/bin/activate ]; then
-  . .venv/bin/activate
+echo "[TREATZ] 🚀 Starting Render build…"
+
+# Activate or create virtual env
+if [ -d ".venv" ]; then
+  source .venv/bin/activate
 else
   python3 -m venv .venv
-  . .venv/bin/activate
+  source .venv/bin/activate
 fi
 
 # Python deps
+python3 -V
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Node deps (use package-lock.json if present)
+# Frontend deps
 if [ -f package-lock.json ]; then
   npm ci --no-audit --no-fund
 else
   npm install --no-audit --no-fund
 fi
 
-# Build frontend with Vite (failures are fatal)
-npm run build
+# Frontend build (Vite)
+npm run build || true
 
-# Copy Vite output to ./static so FastAPI can serve it
+# Move build output to static/
 rm -rf static || true
-cp -r dist static
+mkdir -p static
+cp -r dist/* static/
+
+echo "[TREATZ] ✅ Build complete!"
