@@ -26,6 +26,16 @@ export async function getAta(owner, mint) {
   return ata;
 }
 
+// expose to window for diagnostics / legacy checks (optional, safe)
+if (typeof window !== "undefined") {
+  window.solanaWeb3 = window.solanaWeb3 || { Connection, PublicKey, Transaction, TransactionInstruction };
+  window.splToken = window.splToken || {
+    getAssociatedTokenAddress,
+    createAssociatedTokenAccountInstruction,
+    createTransferCheckedInstruction
+  };
+}
+
 // 4️⃣ Rest of your app.js (DOM hooks, connect wallet, etc.)
 document.addEventListener("DOMContentLoaded", () => {
   console.log("[TREATZ] Frontend initialized");
@@ -736,8 +746,8 @@ document.addEventListener("DOMContentLoaded", () => {
       $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
       $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
 
-      const mintPk = new window.solanaWeb3.PublicKey(CONFIG.token.mint);
-      const destAta = new window.solanaWeb3.PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
+      const mintPk = new PublicKey(CONFIG.token.mint);
+      const destAta = new PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
       const payer = PUBKEY;
 
       const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
@@ -758,7 +768,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // fetch latest blockhash via backend helper
       const bh = (await jfetch(`${API}/cluster/latest_blockhash`)).blockhash;
-      const tx = new window.solanaWeb3.Transaction({ feePayer: payer });
+      const tx = new Transaction({ feePayer: payer });
       tx.recentBlockhash = bh;
       tx.add(...ixs);
 
