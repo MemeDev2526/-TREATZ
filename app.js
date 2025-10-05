@@ -681,17 +681,19 @@ document.addEventListener("DOMContentLoaded", () => {
     function makeLine() {
       const who = randWallet();
       const isWin = Math.random() < 0.58;
-      const amount = ...; // unchanged
+      const amounts = [5000, 10000, 25000, 50000, 75000, 100000, 150000, 250000, 500000];
+      const amount = amounts[randInt(0, amounts.length - 1)];
       const verb = isWin ? "won" : "lost";
       const emoji = isWin ? "🎉" : "💀";
       const cls = isWin ? "tick-win" : "tick-loss";
+      // wrap each tick in ticker__item so spacing CSS applies
       return `<span class="ticker__item ${cls}">${who} ${verb} ${fmt(amount)} $TREATZ ${emoji}</span>`;
     }
 
     function buildBatch(len = 30) {
       const lines = [];
       for (let i = 0; i < len; i++) lines.push(makeLine());
-      // ensure a bit of overlap so scrolling looks continuous
+      // repeat a few items for a smooth loop and use a styled separator element
       return lines.concat(lines.slice(0, 8)).join("<span class='ticker-sep' aria-hidden='true'> • </span>") + "<span class='ticker-sep' aria-hidden='true'> • • </span>";
     }
 
