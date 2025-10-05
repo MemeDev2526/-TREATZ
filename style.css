@@ -325,16 +325,6 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
   vertical-align: middle;
   border-right: 1px solid rgba(255,255,255,0.06);
 }
-/* Ticker item spacing & divider */
-.ticker__item {
-  display: inline-block;
-  padding: 0 18px;              /* horizontal breathing room */
-  margin-right: 12px;
-  line-height: 1.6;
-  font-weight: 800;
-  vertical-align: middle;
-  border-right: 1px solid rgba(255,255,255,0.06);
-}
 
 /* Remove divider on trailing item for a clean loop */
 .ticker__rail .ticker__item:last-child { border-right: none; margin-right: 0; }
@@ -455,27 +445,70 @@ body.flash { animation: screen-flash 0.9s ease both; }
 /* =========================================================
    $TREATZ FX Layer (falling wrappers/candy/ghosts)
    ========================================================= */
+/* =========================
+   FX layer (improved)
+   ========================= */
 #fx-layer{
-  position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1000;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1000;
 }
-.fx-piece{
-  position: absolute; will-change: transform, opacity;
-  filter: drop-shadow(0 4px 10px rgba(0,0,0,.5));
-  opacity: .95;
-  animation: treatz-fall var(--dur,6s) linear forwards, treatz-sway 2.6s ease-in-out infinite;
-}
-.fx-piece svg{ display:block; width:72px; height:auto; pointer-events:none; }
 
-/* fall & sway */
+/* Base particle */
+.fx-piece{
+  position: absolute;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 6px 18px rgba(0,0,0,.55));
+  opacity: .98;
+  /* default duration is short — JS can override with --dur on a per-element basis */
+  animation: treatz-fall var(--dur,1.8s) linear forwards;
+  transition: transform 300ms ease, opacity 300ms ease;
+}
+
+/* sizing for inline SVG (allow JS to place variable sizes) */
+.fx-piece svg{
+  display:block;
+  width: auto;
+  height: auto;
+  max-width:84px;
+  max-height:84px;
+  pointer-events:none;
+  transform-origin: center center;
+}
+
+/* Win wrappers (glowy, colored — JS should set inline --fx-color or color) */
+.fx-piece--win{
+  mix-blend-mode: screen;
+  animation-name: treatz-fall, treatz-sway;
+  animation-duration: var(--dur,1.8s), 2.6s;
+  animation-timing-function: linear, ease-in-out;
+  animation-fill-mode: forwards, both;
+  --fx-color: #FF6B00; /* default; JS will choose brand colors */
+}
+
+/* Loss (skulls/ghosts) — heavier drop shadow, no screen blend */
+.fx-piece--loss{
+  mix-blend-mode: normal;
+  filter: drop-shadow(0 10px 26px rgba(0,0,0,.65)) saturate(.95) contrast(1.05);
+  animation-duration: var(--dur,1.6s);
+}
+
+/* small/large variety */
+.fx-piece--small{ transform: scale(.78); }
+.fx-piece--large{ transform: scale(1.18); }
+
+/* fall & gentle sway keyframes */
 @keyframes treatz-fall {
-  0%   { transform: translate(var(--x,0px), -10%) rotate(var(--r0,0deg)); opacity: 0; }
-  8%   { opacity: .95; }
-  100% { transform: translate(var(--x,0px), 110vh) rotate(var(--r1,360deg)); opacity: .98; }
+  0%   { transform: translateY(-8vh) rotate(var(--r0,0deg)); opacity: 0; }
+  8%   { opacity: .98; }
+  100% { transform: translateY(110vh) rotate(var(--r1,360deg)); opacity: .95; }
 }
 @keyframes treatz-sway {
-  0%   { margin-left: -10px; }
-  50%  { margin-left: 10px; }
-  100% { margin-left: -10px; }
+  0%   { transform: translateX(-8px); }
+  50%  { transform: translateX(8px); }
+  100% { transform: translateX(-8px); }
 }
 
 #mascot-floater{
