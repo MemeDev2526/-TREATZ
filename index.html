@@ -43,7 +43,7 @@
 <body>
 
   <!-- (FX) Ambient music + toggle lives elsewhere; this is just the element -->
-  <audio id="bg-ambient" data-src="/assets/ambient_loop.mp3"></audio>
+  <audio id="bg-ambient" data-src="/static/assets/ambient_loop.mp3"></audio>
 
   <!-- 1) TOP BANNER -->
   <div class="brand-banner">
@@ -53,7 +53,7 @@
   <!-- 2) HALLOWEEN COUNTDOWN BANNER -->
   <div class="countdown" id="countdown" aria-live="polite">
     <div class="countdown__inner">
-      <img id="countdown-logo" class="countdown__logo" src="assets/TREATZ_Logo.png" alt="$TREATZ logo" />
+      <img id="countdown-logo" class="countdown__logo" src="/static/assets/TREATZ_Logo.png" alt="$TREATZ logo" />
       <span class="countdown__label">Countdown to Halloween:</span>
       <span class="countdown__timer" id="countdown-timer">--d --h --m --s</span>
     </div>
@@ -245,7 +245,7 @@
 
   <!-- (FX) GLOBAL RENDER LAYER + FLOATING MASCOT -->
   <div id="fx-layer" aria-hidden="true"></div>
-  <img id="mascot-floater" src="assets/Mascot.png" alt="Mascot" />
+  <img id="mascot-floater" src="/static/assets/Mascot.png" alt="Mascot" />
 
   <!-- (Wallet modal markup kept if needed later) -->
   <div id="wallet-modal" class="wm" hidden>
@@ -263,6 +263,6 @@
     </div>
   </div>
   <!-- If app.js uses `import` (ESM), load it as a module. Modern browsers will load and execute ESM modules. -->
-  <script type="module" src="app.js?v=__BUILD__"></script>
+  <script type="module" src="/static/app.js?v=__BUILD__"></script>
 </body>
 </html>
