@@ -169,87 +169,172 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const rand = (min, max) => Math.random() * (max - min) + min;
 
-  const svgWrapper = () => `...`.replace("...", `
-<svg width="84" height="40" viewBox="0 0 84 40" xmlns="http://www.w3.org/2000/svg">
-  <path class="w1" d="M8 14 L0 8 L8 10 L6 2 L14 12 Z"/>
-  <rect class="w2" x="14" y="6" rx="6" ry="6" width="56" height="28"/>
-  <path class="w1" d="M76 26 L84 32 L76 30 L78 38 L70 28 Z"/>
-  <text x="42" y="26" text-anchor="middle" font-family="Creepster, Luckiest Guy, sans-serif" font-size="16" fill="#fff" class="w3">$TREATZ</text>
-</svg>`);
+  // svgWrapper(color) => returns a wrapper SVG string tinted with `color`.
+  // color should be a CSS color string like "#6b2393". If omitted, default orange used.
+  function svgWrapper(color = "#FF6B00") {
+    // Use currentColor-friendly elements so JS can recolor by setting inline `color` or --fx-color.
+    return `
+<svg width="84" height="40" viewBox="0 0 84 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="$TREATZ">
+  <defs>
+    <linearGradient id="wrapGrad" x1="0" x2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.14"/>
+    </linearGradient>
+    <filter id="wrapShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+  <g filter="url(#wrapShadow)">
+    <path d="M10 14 L2 8 L10 10 L8 2 L16 12 Z" fill="${color}" opacity="0.95"/>
+    <rect x="16" y="6" rx="6" ry="6" width="52" height="28" fill="url(#wrapGrad)" stroke="rgba(0,0,0,0.12)" stroke-width="1"/>
+    <path d="M74 26 L82 32 L74 30 L76 38 L68 28 Z" fill="${color}" opacity="0.95"/>
+    <text x="42" y="26" text-anchor="middle" font-family="Creepster, Luckiest Guy, sans-serif" font-size="14" fill="#fff" font-weight="700">$TREATZ</text>
+  </g>
+</svg>`;
+  }
 
-  const svgCandy = () => `
-<svg width="42" height="32" viewBox="0 0 42 32" xmlns="http://www.w3.org/2000/svg">
-  <path class="c1" d="M4 16 L0 10 L6 12 L6 4 L12 10"/>
-  <rect class="c2" x="8" y="6" rx="6" ry="6" width="26" height="20"/>
-  <path class="c1" d="M38 16 L42 22 L36 20 L36 28 L30 22"/>
+  // small candy (keeps previous shape but with a nicer gradient)
+  function svgCandy() {
+    return `
+<svg width="42" height="32" viewBox="0 0 42 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="candy">
+  <defs>
+    <linearGradient id="candyG" x1="0" x2="1">
+      <stop offset="0" stop-color="#FFB27A"/>
+      <stop offset="1" stop-color="#FF6B00"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 16 L0 10 L6 12 L6 4 L12 10" fill="#F7F7F8"/>
+  <rect x="8" y="6" rx="6" ry="6" width="26" height="20" fill="url(#candyG)" stroke="rgba(0,0,0,0.12)"/>
+  <path d="M38 16 L42 22 L36 20 L36 28 L30 22" fill="#F7F7F8"/>
   <rect x="16" y="10" width="10" height="12" rx="3" fill="#0D0D0D" />
 </svg>`;
+  }
 
-  const svgGhost = () => `
-<svg width="44" height="56" viewBox="0 0 44 56" xmlns="http://www.w3.org/2000/svg">
-  <path d="M22 2c11 0 20 9 20 20v28c-4-2-8-2-12 0-4-2-8-2-12 0V22C6 11 11 2 22 2z" fill="rgba(200,200,255,.9)"/>
-  <circle cx="16" cy="22" r="4" fill="#0D0D0D"/>
-  <circle cx="28" cy="22" r="4" fill="#0D0D0D"/>
+  // ghost SVG improved — softer fill + subtle inner shadow for depth
+  function svgGhost() {
+    return `
+<svg width="44" height="56" viewBox="0 0 44 56" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ghost">
+  <defs>
+    <linearGradient id="gGhost" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#cfefff" stop-opacity="0.9"/>
+    </linearGradient>
+    <filter id="gShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <g filter="url(#gShadow)">
+    <path d="M22 2c11 0 20 9 20 20v24c0 3-3 3-6 2-3-1-5 0-8 1s-6-2-9-2-6 3-9 2-5-2-8-1c-3 1-6 1-6-2V22C2 11 11 2 22 2z" fill="url(#gGhost)"/>
+    <circle cx="16" cy="22" r="4" fill="#0D0D0D"/>
+    <circle cx="28" cy="22" r="4" fill="#0D0D0D"/>
+    <path d="M14 34 Q18 30 22 34 Q26 38 30 34" fill="rgba(0,0,0,0.06)"/>
+  </g>
 </svg>`;
+  }
 
-  const svgSkull = () => `
-<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-  <path d="M24 4c11 0 20 8 20 18 0 10-9 14-9 18H13c0-4-9-8-9-18C4 12 13 4 24 4z" fill="#f1f1f1"/>
-  <circle cx="17" cy="22" r="5" fill="#0D0D0D"/>
-  <circle cx="31" cy="22" r="5" fill="#0D0D0D"/>
-  <rect x="21" y="30" width="6" height="8" rx="2" fill="#0D0D0D"/>
+  // skull SVG — cleaner geometry + subtle shading
+  function svgSkull() {
+    return `
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="skull">
+  <defs>
+    <linearGradient id="skGrad" x1="0" x2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e0e0e0"/>
+    </linearGradient>
+    <filter id="skDrop" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <g filter="url(#skDrop)">
+    <path d="M24 6c9 0 16 6 16 14 0 8-7 11-7 14H15c0-3-7-6-7-14 0-8 7-14 16-14z" fill="url(#skGrad)"/>
+    <circle cx="17.5" cy="22" r="4.4" fill="#0D0D0D"/>
+    <circle cx="30.5" cy="22" r="4.4" fill="#0D0D0D"/>
+    <rect x="20" y="30" width="8" height="6" rx="2" fill="#0D0D0D"/>
+    <path d="M16 36 q8 6 16 0" fill="rgba(0,0,0,0.06)"/>
+  </g>
 </svg>`;
-
-  function spawnPiece(kind, xvw, sizeScale, duration) {
+  }
+  
+  // spawnPiece(kind, xvw, sizeScale, duration, opts)
+  // opts: { color } - used for wrapper tinting
+  function spawnPiece(kind, xvw, sizeScale, duration, opts = {}) {
     const el = document.createElement("div");
     el.className = `fx-piece ${kind}`;
-    el.style.left = `calc(${xvw}vw - 24px)`;
-    el.style.top = `-60px`;
+    // position relative to viewport percent; small negative to start above
+    el.style.left = `calc(${xvw}vw - 32px)`;
+    el.style.top = `-80px`;
     el.style.transform = `translate(${xvw}vw, -10%) rotate(${Math.floor(rand(-30, 30))}deg)`;
     el.style.setProperty("--x", `${xvw}vw`);
     el.style.setProperty("--dur", `${duration}s`);
     el.style.setProperty("--r0", `${Math.floor(rand(-90, 90))}deg`);
     el.style.setProperty("--r1", `${Math.floor(rand(240, 720))}deg`);
-    el.style.scale = String(sizeScale);
+    el.style.scale = String(sizeScale || 1);
 
-    const svg =
-      kind === "fx-wrapper" ? svgWrapper() :
-        kind === "fx-candy" ? svgCandy() :
-          kind === "fx-ghost" ? svgGhost() :
-            svgSkull();
+    // Choose SVG based on kind. For wrappers we allow inline color.
+    let svg = "";
+    if (kind === "fx-wrapper") {
+      const color = opts.color || opts.colorHex || "#FF6B00";
+      svg = svgWrapper(color);
+      el.classList.add("fx-piece--win");
+    } else if (kind === "fx-candy") {
+      svg = svgCandy();
+      el.classList.add("fx-piece--win");
+    } else if (kind === "fx-ghost") {
+      svg = svgGhost();
+      el.classList.add("fx-piece--loss");
+    } else { // skull
+      svg = svgSkull();
+      el.classList.add("fx-piece--loss");
+    }
 
     el.innerHTML = svg;
     fxRoot.appendChild(el);
-    setTimeout(() => el.remove(), (duration * 1000) + 300);
+    // auto-remove after duration + small buffer
+    setTimeout(() => el.remove(), Math.max(800, (duration * 1000) + 300));
   }
 
-  function rainTreatz({ count = 24, wrappers = true, candies = true, minDur = 5, maxDur = 8 } = {}) {
+  const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00']; // witch purple, slime green, orange
+
+  function rainTreatz({ count = 24, wrappers = true, candies = true, minDur = 4.5, maxDur = 7 } = {}) {
     for (let i = 0; i < count; i++) {
       const x = rand(0, 100);
-      const scale = rand(0.8, 1.25);
+      const scale = rand(0.78, 1.22);
       const dur = rand(minDur, maxDur);
-      if (wrappers) spawnPiece("fx-wrapper", x, scale, dur);
-      if (candies) spawnPiece("fx-candy", x + rand(-4, 4), rand(.7, 1.1), dur + rand(-.5, .5));
+      if (wrappers) {
+        const color = WRAP_COLORS[Math.floor(rand(0, WRAP_COLORS.length))];
+        spawnPiece("fx-wrapper", x, scale, dur, { color });
+      }
+      if (candies) {
+        spawnPiece("fx-candy", x + rand(-4, 4), rand(.7, 1.05), dur + rand(-.5, .5));
+      }
     }
   }
 
   function hauntTrick({ count = 10, ghosts = true, skulls = true } = {}) {
     for (let i = 0; i < count; i++) {
       const x = rand(5, 95);
-      const scale = rand(0.8, 1.3);
-      const dur = rand(6, 9);
-      if (ghosts) spawnPiece("fx-ghost", x, scale, dur);
-      if (skulls) spawnPiece("fx-skull", x + rand(-6, 6), rand(.9, 1.2), dur + rand(-.7, .7));
+      const scale = rand(0.85, 1.28);
+      const dur = rand(5.6, 9);
+      // alternate ghosts & skulls for mixed effect
+      if (ghosts && Math.random() < 0.66) spawnPiece("fx-ghost", x + rand(-6, 6), scale, dur);
+      if (skulls && Math.random() < 0.66) spawnPiece("fx-skull", x + rand(-6, 6), rand(.9, 1.18), dur + rand(-.7, .7));
     }
   }
 
   function playResultFX(result) {
-    if (String(result).toUpperCase() === "TRICK") {
-      hauntTrick({ count: 12 });
+    const r = String(result || "").toUpperCase();
+    if (r === "TRICK" || r === "LOSS") {
+      // Loss: more spooky, fewer wrappers
+      hauntTrick({ count: 10, ghosts: true, skulls: true });
       document.body.classList.add('flash');
-      setTimeout(() => document.body.classList.remove('flash'), 1200);
+      setTimeout(() => document.body.classList.remove('flash'), 1100);
+      // a small delayed secondary burst for oomph
+      setTimeout(() => hauntTrick({ count: 6, ghosts: true, skulls: true }), 300);
     } else {
-      rainTreatz({ count: 28, minDur: 4.5, maxDur: 7 });
+      // Win: more wrappers + candies; colors randomized
+      rainTreatz({ count: 28, wrappers: true, candies: true, minDur: 4.2, maxDur: 7 });
+      // small extra quick sprinkle
+      setTimeout(() => rainTreatz({ count: 12, wrappers: true, candies: false, minDur: 3.6, maxDur: 5.6 }), 220);
     }
   }
   window.playResultFX = playResultFX;
