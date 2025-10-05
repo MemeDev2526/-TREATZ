@@ -177,6 +177,36 @@ a, .btn--outline { color: var(--slime); }
     0 10px 34px rgba(57,255,20,0.28);          /* outer slime glow */
 }
 
+  /* Countdown: separate number + unit styling */
+  .countdown__timer .cd-part { display:inline-flex; align-items:baseline; gap:6px; margin-right:8px; }
+  .countdown__timer .cd-num {
+    color: #F8F8FA;            /* ghost-white numeric */
+    font-weight: 900;
+    font-size: 1.0em;
+    text-shadow: 0 6px 28px rgba(0,0,0,.5), 0 0 20px rgba(57,255,20,.12);
+    padding: .15rem .45rem;
+    border-radius: 8px;
+    background: rgba(0,0,0,.12);
+  }
+  .countdown__timer .cd-unit {
+    font-weight: 900;
+    font-size: .7em;
+    padding: .08rem .35rem;
+    border-radius: 6px;
+    color: #fff;
+    /* alternate accent per unit */
+  }
+  .countdown__timer .cd-part:nth-child(1) .cd-unit { background: var(--orange); color: #1a0b00; }   /* D = orange */
+  .countdown__timer .cd-part:nth-child(2) .cd-unit { background: var(--witch); color: #fff; }       /* H = witch purple */
+  .countdown__timer .cd-part:nth-child(3) .cd-unit { background: var(--slime); color: #032316; }    /* M = slime green */
+  .countdown__timer .cd-part:nth-child(4) .cd-unit { background: rgba(255,149,0,.12); color: var(--pumpkin); border: 1px solid rgba(255,149,0,.12); } /* S = muted orange fallback */
+  
+  @media (max-width: 600px) {
+    .countdown__timer .cd-part { margin-right: 6px; }
+    .countdown__timer .cd-num { font-size: 0.9em; padding: .12rem .35rem; }
+    .countdown__timer .cd-unit { font-size: .62em; }
+  }
+
 /* Omen text (slightly smaller than timer but still prominent) */
 .countdown__omen{
   font-size: clamp(14px, 2.2vw, 22px);
