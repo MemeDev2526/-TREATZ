@@ -109,40 +109,26 @@ def admin_guard(creds: HTTPAuthorizationCredentials = Depends(_auth_scheme)):
 # =========================================================
 app = FastAPI(title="$TREATZ Backend", version="0.1.0")
 
-# Serve built frontend (dist -> copied to ./static during build)
-# Only do this if you are building the frontend into a 'static' folder
-try:
-    app.mount("/", StaticFiles(directory=".", html=True), name="static")
-except Exception:
-    # If no static directory (pure-backend deploy), ignore and continue
-    pass
-    
-# static dir where build step copies dist/ -> ./static
+# Paths
 BASE_DIR = os.path.dirname(__file__)
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-# if the SPA was built into ./static, expose its assets
+# ✅ Serve built frontend (Vite output) under /static
 if os.path.isdir(STATIC_DIR):
-    # keep existing mount for /static (you already have this)
-    # app.mount("/", StaticFiles(directory=".", html=True), name="static")
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-    # expose SPA assets that index.html expects at /assets (dist/assets/...)
-    assets_dir = os.path.join(STATIC_DIR, "assets")
-    if os.path.isdir(assets_dir):
-        # mount /assets so <script src="assets/..."> resolves
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="spa-assets")
-
-    # serve the SPA index at root (so GET / returns index.html)
-    index_file = os.path.join(STATIC_DIR, "index.html")
-
-    @app.get("/", include_in_schema=False)
-    async def serve_index():
-        return FileResponse(index_file)
-
-    # Optional: also serve exact /index.html path
-    @app.get("/index.html", include_in_schema=False)
-    async def serve_index_html():
-        return FileResponse(index_file)
+# ✅ Serve index.html at root (for SPA routing)
+@app.get("/", include_in_schema=False)
+async def serve_index():
+    # Prefer built /static/index.html (from Vite)
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    # fallback: local root index.html (e.g. dev mode)
+    fallback_path = os.path.join(BASE_DIR, "index.html")
+    if os.path.exists(fallback_path):
+        return FileResponse(fallback_path)
+    return {"error": "index.html not found"}
 # ----------------------------- CORS ---------------------------------
 app.add_middleware(
     CORSMiddleware,
