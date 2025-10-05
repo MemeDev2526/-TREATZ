@@ -364,7 +364,7 @@
         const h = Math.floor((s%86400)/3600);
         const m = Math.floor((s%3600)/60);
         const sec = s%60;
-        timerEl.textContent = `${d}d ${h}h ${m}m ${sec}s`;
+        timerEl.innerHTML = formatDHMS(target - Date.now ? target - Date.now() : (new Date(CFG.halloweenISO) - Date.now()));
         if (Math.random() < 0.01)      omenEl.textContent = '??? A strange puff passes by…';
         else if (sec % 10 === 0)       omenEl.textContent = omens[Math.floor(Math.random()*omens.length)];
       }
