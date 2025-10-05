@@ -323,10 +323,10 @@ input::placeholder{ color:#cfcfcf; opacity:.7; }
 /* Ticker item spacing & divider */
 .ticker__item {
   display: inline-block;
-  padding: 0 18px;              /* horizontal breathing room */
-  margin-right: 12px;
-  line-height: 1.6;
-  font-weight: 800;
+  padding: 0 28px;              /* horizontal breathing room */
+  margin-right: 18px;
+  line-height: 1.4;
+  font-weight: 700;
   vertical-align: middle;
   border-right: 1px solid rgba(255,255,255,0.06);
 }
