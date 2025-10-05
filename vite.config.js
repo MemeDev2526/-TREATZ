@@ -2,13 +2,14 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  root: ".",               // index.html at project root
+  root: ".",
+  base: "/static/",        // <-- this line
   build: {
-    outDir: "dist",        // build goes into ./dist
-    emptyOutDir: true,
+    outDir: "dist",
+    emptyOutDir: true
   },
   server: {
     port: 5173,
-    open: true,
-  },
+    open: true
+  }
 });
