@@ -621,7 +621,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     render();
-    setInterval(render, 25000);
+    setInterval(render, 30000);
   })();
 
   // -------------------------
