@@ -248,7 +248,7 @@ a, .btn--outline { color: var(--slime); }
   position:fixed; inset:0;
   background:
     linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.75)),
-    url('/static/assets/bg_spooky.jpg') center top / cover no-repeat fixed;
+    url('/static/assets/bg_spooky.png') center top / cover no-repeat fixed;
   z-index:-1;
   filter: saturate(105%);
   background-attachment: fixed;
