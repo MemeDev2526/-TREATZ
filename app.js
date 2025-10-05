@@ -389,7 +389,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const d = Math.floor(s / 86400); s %= 86400;
     const h = Math.floor(s / 3600); s %= 3600;
     const m = Math.floor(s / 60); s %= 60;
-    return `${d}d ${String(h).padStart(2, "0")}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+    const dd = String(d);
+    const hh = String(h).padStart(2, "0");
+    const mm = String(m).padStart(2, "0");
+    const ss = String(s).padStart(2, "0");
+  
+    // Build HTML with separate spans for number + unit so CSS can style them individually
+    return (
+      `<span class="cd-part"><span class="cd-num">${dd}</span><span class="cd-unit">D</span></span>` +
+      ` <span class="cd-part"><span class="cd-num">${hh}</span><span class="cd-unit">H</span></span>` +
+      ` <span class="cd-part"><span class="cd-num">${mm}</span><span class="cd-unit">M</span></span>` +
+      ` <span class="cd-part"><span class="cd-num">${ss}</span><span class="cd-unit">S</span></span>`
+    );
   }
 
   function initHalloweenCountdown() {
@@ -417,7 +428,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const tick = () => {
         const diff = target - Date.now();
         if (diff <= 0) target = nextHalloween();
-        timerEl.textContent = formatDHMS(target - Date.now());
+        timerEl.innerHTML = formatDHMS(target - Date.now());
       };
       const rotate = () => {
         i = (i + 1) % omens.length;
