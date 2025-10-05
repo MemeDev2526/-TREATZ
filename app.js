@@ -13,8 +13,6 @@ import {
 } from "@solana/spl-token";
 
 // === SHIM: expose imported libs onto window for legacy diagnostics / IIFEs ===
-// This makes the diagnostic checks in your code (and any other legacy checks)
-// report accurately when ESM imports are used.
 if (typeof window !== "undefined") {
   window.solanaWeb3 = window.solanaWeb3 || {
     Connection,
@@ -269,9 +267,12 @@ document.addEventListener("DOMContentLoaded", () => {
       border: "none", textIndent: "-9999px", transform: "rotateY(180deg)"
     });
   }
+
+  // Prefer config assets, fallback to /static/...
   document.addEventListener("DOMContentLoaded", () => {
-    // set images if assets exist in expected paths
-    setCoinFaces("assets/coin_treatz.png", "assets/coin_trickz.png");
+    const treatImg = (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
+    const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
+    setCoinFaces(treatImg, trickImg);
   });
 
   function showWinBanner(text) {
@@ -699,6 +700,51 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Robust wallet send helper — supports several provider APIs
+  async function sendSignedTransaction(tx) {
+    // Ensure feePayer is a PublicKey
+    if (tx.feePayer && typeof tx.feePayer === "string") {
+      try { tx.feePayer = new PublicKey(tx.feePayer); } catch (e) { /* ignore */ }
+    }
+
+    // 1) signAndSendTransaction (Backpack / some providers)
+    if (WALLET?.signAndSendTransaction) {
+      try {
+        const res = await WALLET.signAndSendTransaction(tx);
+        return typeof res === "string" ? res : res?.signature;
+      } catch (e) {
+        console.warn("signAndSendTransaction failed", e);
+      }
+    }
+
+    // 2) signTransaction (Phantom style) + sendRawTransaction
+    if (WALLET?.signTransaction) {
+      try {
+        const signed = await WALLET.signTransaction(tx);
+        const raw = signed.serialize();
+        const sig = await connection.sendRawTransaction(raw);
+        // confirm
+        try { await connection.confirmTransaction(sig, "confirmed"); } catch(_) {}
+        return sig;
+      } catch (e) {
+        console.warn("signTransaction/sendRaw failed", e);
+      }
+    }
+
+    // 3) sendTransaction (Phantom newer helper)
+    if (WALLET?.sendTransaction) {
+      try {
+        const sig = await WALLET.sendTransaction(tx, connection);
+        try { await connection.confirmTransaction(sig, "confirmed"); } catch(_) {}
+        return sig;
+      } catch (e) {
+        console.warn("sendTransaction failed", e);
+      }
+    }
+
+    throw new Error("Wallet provider does not support known transaction send methods");
+  }
+
   // -------------------------
   // Coin flip UI (local animation + demo)
   // -------------------------
@@ -758,9 +804,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // use imported PublicKey (consistent)
       const mintPk = new PublicKey(CONFIG.token.mint);
       const destAta = new PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
-      const payer = PUBKEY;
 
-      const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payer, mintPk, payer);
+      // ensure payer is a PublicKey instance
+      const payerRaw = PUBKEY;
+      const payerPub = (typeof payerRaw === "string") ? new PublicKey(payerRaw) : payerRaw;
+
+      const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
       // createTransferCheckedInstruction expects (source, mint, destination, owner, amount, decimals, signers?)
@@ -769,7 +818,7 @@ document.addEventListener("DOMContentLoaded", () => {
           srcAta,           // source ATA (PublicKey)
           mintPk,           // mint (PublicKey)
           destAta,          // dest ATA (PublicKey)
-          payer,            // owner of source (PublicKey)
+          payerPub,         // owner of source (PublicKey)
           toBaseUnits(amountHuman),
           DECIMALS
         ),
@@ -778,14 +827,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // fetch latest blockhash via backend helper
       const bh = (await jfetch(`${API}/cluster/latest_blockhash`)).blockhash;
-      const tx = new Transaction({ feePayer: payer });
+      const tx = new Transaction({ feePayer: payerPub });
       tx.recentBlockhash = bh;
       tx.add(...ixs);
 
-      // sign & send using provider if available
-      if (!WALLET?.signAndSendTransaction) throw new Error("Wallet provider doesn't support signAndSendTransaction in this environment");
-      const sigRes = await WALLET.signAndSendTransaction(tx);
-      const signature = typeof sigRes === "string" ? sigRes : sigRes?.signature;
+      // sign & send using robust helper
+      const signature = await sendSignedTransaction(tx);
       $("#cf-status")?.replaceChildren(document.createTextNode(signature ? `Sent: ${signature.slice(0, 10)}…` : "Sent"));
 
       // Spin + FX
@@ -1001,7 +1048,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!a) return;
 
     if (!a.src) {
-      const cfgSrc = (window.TREATZ_CONFIG?.assets?.ambient) || a.getAttribute("data-src") || "assets/ambient_loop.mp3";
+      const cfgSrc = (window.TREATZ_CONFIG?.assets?.ambient) || a.getAttribute("data-src") || "/static/assets/ambient_loop.mp3";
       a.src = cfgSrc;
     }
 
