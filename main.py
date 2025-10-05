@@ -306,6 +306,21 @@ def _parse_iso_z(s: Optional[str]) -> Optional[datetime]:
         except Exception:
             # Re-raise so caller sees the error (so it can be logged)
             raise
+            
+# ---------- sequential round id helper ----------
+async def alloc_next_round_id() -> str:
+    """
+    Allocate a sequential round id of the form RNNNN using a KV counter 'round:next_id'.
+    Returns the new id (e.g. 'R0001').
+    """
+    key = "round:next_id"
+    cur = await dbmod.kv_get(app.state.db, key)
+    try:
+        n = int(cur or 0) + 1
+    except Exception:
+        n = 1
+    await dbmod.kv_set(app.state.db, key, str(n))
+    return f"R{n:04d}"
 
 # =========================================================
 # Lifecycle
@@ -405,7 +420,7 @@ async def on_startup():
     # Ensure a current (OPEN) round exists
     current = await dbmod.kv_get(app.state.db, "current_round_id")
     if not current:
-        rid = f"R{secrets.randbelow(10_000):04d}"
+        rid = await alloc_next_round_id()
         # use timezone-aware UTC now
         now = datetime.now(timezone.utc)
         closes = now + timedelta(minutes=ROUND_MIN)
@@ -416,13 +431,18 @@ async def on_startup():
         finalize_slot = curr_slot + (ROUND_MIN * SLOTS_PER_MIN)
         await app.state.db.execute(
             "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) VALUES(?,?,?,?,?,?,?,?)",
-            (rid, "OPEN", _rfc3339(now), _rfc3339(closes), srv_hash, secrets.token_hex(8), finalize_slot, 0),
+             (rid, "OPEN", _rfc3339(now), _rfc3339(closes), srv_hash, secrets.token_hex(8), finalize_slot, 0),
         )
         await dbmod.kv_set(app.state.db, "current_round_id", rid)
         await app.state.db.commit()
 
-    # Start internal scheduler loop
-    asyncio.create_task(round_scheduler())
+    # Start internal scheduler loop and keep a reference (helps debugging / graceful shutdown)
+    try:
+        print("[round_scheduler] starting task", flush=True)
+        app.state.round_scheduler_task = asyncio.create_task(round_scheduler())
+    except Exception as e:
+        print("[round_scheduler] failed to start:", e, flush=True)
+        traceback.print_exc()
 
 # =========================================================
 # Health
@@ -602,19 +622,21 @@ async def rounds_recent(limit: int = 10):
     except Exception:
         n = 10
 
-    query = f"SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT {n}"
-    async with app.state.db.execute(query) as cur:
-        rows = await cur.fetchall()
-
-    if not rows:
-        rid = await dbmod.kv_get(app.state.db, "current_round_id")
-        return [RecentRoundResp(id=rid, pot=0)] if rid else []
-
-    # ensure integers for pot even if NULL somehow appears
-    return [RecentRoundResp(id=str(r[0]), pot=int(r[1] or 0)) for r in rows]
-
-
-
+        try:
+            query = f"SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT {n}"
+            async with app.state.db.execute(query) as cur:
+                rows = await cur.fetchall()
+        except Exception as e:
+            print("[rounds_recent] DB error:", e, flush=True)
+            traceback.print_exc()
+            raise HTTPException(500, "Failed to fetch recent rounds")
+    
+        if not rows:
+            rid = await dbmod.kv_get(app.state.db, "current_round_id")
+            return [RecentRoundResp(id=rid, pot=0)] if rid else []
+    
+        return [RecentRoundResp(id=str(r[0]), pot=int(r[1] or 0)) for r in rows]
+    
 # =========================================================
 # Read Endpoints — Fairness & Transparency
 # =========================================================
@@ -694,11 +716,17 @@ async def account_exists(pubkey: str):
 @app.get(f"{API}/rounds/{{round_id}}/winner", response_model=RoundWinnerResp)
 async def get_round_winner(round_id: str):
     # Round basics
-    async with app.state.db.execute(
-        "SELECT id,status,opens_at,closes_at,pot,server_seed_hash,server_seed_reveal,finalize_slot FROM rounds WHERE id=?",
-        (round_id,),
-    ) as cur:
-        r = await cur.fetchone()
+    try:
+        async with app.state.db.execute(
+            "SELECT id,status,opens_at,closes_at,pot,server_seed_hash,server_seed_reveal,finalize_slot FROM rounds WHERE id=?",
+            (round_id,),
+        ) as cur:
+            r = await cur.fetchone()
+    except Exception as e:
+        print("[get_round_winner] DB error for", round_id, ":", e, flush=True)
+        traceback.print_exc()
+        raise HTTPException(500, "DB error")
+
     if not r:
         raise HTTPException(404, "Round not found")
 
@@ -1134,7 +1162,7 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
     await app.state.db.execute("UPDATE rounds SET status='SETTLED' WHERE id=?", (rid,))
 
     # Open next round (timed with ROUND_MIN & finalize_slot)
-    new_id = f"R{secrets.randbelow(10_000):04d}"
+    new_id = await alloc_next_round_id()
     # make new round times timezone-aware UTC
     now = datetime.now(timezone.utc) + timedelta(minutes=ROUND_BREAK)
     closes = now + timedelta(minutes=ROUND_MIN)
