@@ -34,6 +34,8 @@ if [ -d "dist" ]; then
   mkdir -p static
   # copy everything (including hidden), preserve attributes
   cp -a dist/. static/
+  
+  cp -f whitepaper.html static/ || true
   echo "[TREATZ] ✅ Copied dist/ → static/"
 else
   echo "[TREATZ] ⚠️ dist/ not found after build — aborting" >&2
