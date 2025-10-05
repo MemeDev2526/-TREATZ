@@ -112,10 +112,28 @@ app = FastAPI(title="$TREATZ Backend", version="0.1.0")
 # Paths
 BASE_DIR = os.path.dirname(__file__)
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 
-# ✅ Serve built frontend (Vite output) under /static
+# ✅ Serve built frontend (Vite output) under /static (if present)
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# ✅ Also serve the raw repo assets folder under /assets so legacy references work
+if os.path.isdir(ASSETS_DIR):
+    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
+# ✅ Serve a favicon if present in static
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    # prefer static/favicon.ico, then assets/favicon.ico, else 404
+    p1 = os.path.join(STATIC_DIR, "favicon.ico")
+    p2 = os.path.join(ASSETS_DIR, "favicon.ico")
+    if os.path.exists(p1):
+        return FileResponse(p1)
+    if os.path.exists(p2):
+        return FileResponse(p2)
+    raise HTTPException(status_code=404, detail="favicon not found")
+
 
 # ✅ Serve index.html at root (for SPA routing)
 @app.get("/", include_in_schema=False)
