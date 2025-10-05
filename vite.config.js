@@ -2,14 +2,14 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  base: "/static/",      // <--- ensures built HTML references /static/assets/...
   root: ".",
-  base: "/static/",        // <-- this line
   build: {
     outDir: "dist",
-    emptyOutDir: true
+    emptyOutDir: true,
   },
   server: {
     port: 5173,
-    open: true
-  }
+    open: true,
+  },
 });
