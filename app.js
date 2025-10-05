@@ -177,8 +177,8 @@ document.addEventListener("DOMContentLoaded", () => {
 <svg width="84" height="40" viewBox="0 0 84 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="$TREATZ">
   <defs>
     <linearGradient id="wrapGrad" x1="0" x2="1">
-      <stop offset="0" stop-color="${color}" stop-opacity="0.98"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="0" stop-color="${color}" stop-opacity="1"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.28"/>
     </linearGradient>
     <filter id="wrapShadow" x="-50%" y="-50%" width="200%" height="200%">
       <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.55"/>
@@ -186,7 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
   </defs>
   <g filter="url(#wrapShadow)">
     <path d="M10 14 L2 8 L10 10 L8 2 L16 12 Z" fill="${color}" opacity="0.95"/>
-    <rect x="16" y="6" rx="6" ry="6" width="52" height="28" fill="url(#wrapGrad)" stroke="rgba(0,0,0,0.12)" stroke-width="1"/>
+    <rect x="16" y="6" rx="6" ry="6" width="52" height="28" fill="url(#wrapGrad)" stroke="rgba(0,0,0,0.20)" stroke-width="1.25"/>
     <path d="M74 26 L82 32 L74 30 L76 38 L68 28 Z" fill="${color}" opacity="0.95"/>
     <text x="42" y="26" text-anchor="middle" font-family="Creepster, Luckiest Guy, sans-serif" font-size="14" fill="#fff" font-weight="700">$TREATZ</text>
   </g>
@@ -692,7 +692,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const lines = [];
       for (let i = 0; i < len; i++) lines.push(makeLine());
       // ensure a bit of overlap so scrolling looks continuous
-      return lines.concat(lines.slice(0, 6)).join("<span class='ticker-sep'> • </span>");
+      return lines.concat(lines.slice(0, 8)).join("<span class='ticker-sep' aria-hidden='true'> • </span>") + "<span class='ticker-sep' aria-hidden='true'> • • </span>";
     }
 
     function render() {
@@ -1074,10 +1074,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
     try {
-      const recent = await jfetchStrict(`${API}/rounds/recent?limit=10`);
-      const items = (query && /^R\d+$/i.test(query)) ? recent.filter(x => String(x.id).toUpperCase() === query.toUpperCase()) : recent;
+      // call server-side search endpoint
+      const url = new URL(`${API}/rounds`, location.origin);
+      if (query) url.searchParams.set("search", query);
+      url.searchParams.set("limit", "25");
+      const res = await fetch(url.toString(), { method: "GET" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const recent = data.rows || [];
       const rows = [];
-      for (const r of items) {
+      for (const r of recent) {
         let w = null;
         try { w = await jfetchStrict(`${API}/rounds/${r.id}/winner`); } catch (e) { /* ignore */ }
         const potHuman = (Number(r.pot || 0) / TEN_POW).toLocaleString();
@@ -1098,7 +1104,12 @@ document.addEventListener("DOMContentLoaded", () => {
       tbody.innerHTML = `<tr><td colspan="5" class="muted">Failed to load history from backend.</td></tr>`;
     }
   }
-  document.getElementById("history-search")?.addEventListener("change", (e) => loadHistory(e.target.value.trim()));
+  document.getElementById("history-search")?.addEventListener("input", (e) => {
+    const q = e.target.value.trim();
+    // debounce 200ms
+    clearTimeout(window.__rf_hist_timer);
+    window.__rf_hist_timer = setTimeout(() => loadHistory(q), 200);
+  });
   loadHistory();
 
   (async () => {
