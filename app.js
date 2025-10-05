@@ -12,28 +12,36 @@ import {
   createTransferCheckedInstruction,
 } from "@solana/spl-token";
 
+// === SHIM: expose imported libs onto window for legacy diagnostics / IIFEs ===
+// This makes the diagnostic checks in your code (and any other legacy checks)
+// report accurately when ESM imports are used.
+if (typeof window !== "undefined") {
+  window.solanaWeb3 = window.solanaWeb3 || {
+    Connection,
+    PublicKey,
+    Transaction,
+    TransactionInstruction,
+  };
+  window.splToken = window.splToken || {
+    getAssociatedTokenAddress,
+    createAssociatedTokenAccountInstruction,
+    createTransferCheckedInstruction,
+  };
+}
+
 // 2️⃣ RPC connection setup
 const RPC_URL = "https://api.mainnet-beta.solana.com";
 const connection = new Connection(RPC_URL, "confirmed");
 
 // 3️⃣ Helper functions (can be imported or inline)
 export async function getAta(owner, mint) {
-  const ata = await getAssociatedTokenAddress(
-    new PublicKey(mint),
-    new PublicKey(owner)
-  );
+  // This helper returns the ATA PublicKey for owner + mint.
+  // Accepts string or PublicKey-like inputs.
+  const ownerPk = new PublicKey(owner);
+  const mintPk = new PublicKey(mint);
+  const ata = await getAssociatedTokenAddress(mintPk, ownerPk);
   console.log("ATA:", ata.toBase58());
   return ata;
-}
-
-// expose to window for diagnostics / legacy checks (optional, safe)
-if (typeof window !== "undefined") {
-  window.solanaWeb3 = window.solanaWeb3 || { Connection, PublicKey, Transaction, TransactionInstruction };
-  window.splToken = window.splToken || {
-    getAssociatedTokenAddress,
-    createAssociatedTokenAccountInstruction,
-    createTransferCheckedInstruction
-  };
 }
 
 // 4️⃣ Rest of your app.js (DOM hooks, connect wallet, etc.)
@@ -70,6 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("DOMContentLoaded", async function () {
       try {
         showDiag("Booting diagnostics…");
+        // Prefer checking imported symbols too (but shim above already helps)
         if (!window.solanaWeb3) showDiag("solanaWeb3 (web3.js) not loaded", "err"); else showDiag("web3.js ✓", "ok");
         if (!window.splToken) showDiag("spl-token IIFE not loaded", "err"); else showDiag("@solana/spl-token ✓", "ok");
 
@@ -746,6 +755,7 @@ document.addEventListener("DOMContentLoaded", () => {
       $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
       $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
 
+      // use imported PublicKey (consistent)
       const mintPk = new PublicKey(CONFIG.token.mint);
       const destAta = new PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
       const payer = PUBKEY;
