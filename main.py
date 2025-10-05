@@ -129,6 +129,25 @@ async def serve_index():
     if os.path.exists(fallback_path):
         return FileResponse(fallback_path)
     return {"error": "index.html not found"}
+    
+@app.get("/whitepaper", include_in_schema=False)
+async def whitepaper():
+    p = os.path.join(STATIC_DIR, "whitepaper.html")
+    if os.path.exists(p):
+        return FileResponse(p)
+    # fallback: repo root whitepaper
+    p2 = os.path.join(BASE_DIR, "whitepaper.html")
+    if os.path.exists(p2):
+        return FileResponse(p2)
+    raise HTTPException(404, "whitepaper not found")
+    
+@app.get("/_debug/list_static", include_in_schema=False)
+async def list_static():
+    files = []
+    for root, dirs, filenames in os.walk(STATIC_DIR):
+        for f in filenames:
+            files.append(os.path.relpath(os.path.join(root,f), STATIC_DIR))
+    return {"static_exists": os.path.isdir(STATIC_DIR), "files": files[:400]}
 # ----------------------------- CORS ---------------------------------
 app.add_middleware(
     CORSMiddleware,
