@@ -580,6 +580,7 @@ body.flash { animation: screen-flash 0.9s ease both; }
 
 /* ---------- base FX piece ---------- */
 .fx-piece{
+  z-index: 999;
   position: absolute;
   will-change: transform, opacity, left, top;
   filter: drop-shadow(0 6px 18px rgba(0,0,0,.55));
