@@ -1416,4 +1416,15 @@ function svgSkull() {
   window.TREATZ.hauntTrick = hauntTrick;
   window.TREATZ.announceLastWinner = announceLastWinner;
 
+// Defensive shim + logging for FX (temporary)
+if (!window.playResultFX && typeof playResultFX === 'function') window.playResultFX = playResultFX;
+window.__TREATZ_FX_DEBUG = true;
+(function fxDebugWrap(){
+  if (!window.playResultFX) return;
+  const orig = window.playResultFX;
+  window.playResultFX = function(result){
+    try { console.log('[TREATZ FX] playResultFX ->', result, 'fxLayerChildren=', document.getElementById('fx-layer')?.children.length); } catch(e){}
+    return orig.apply(this, arguments);
+  };
+
 })();
