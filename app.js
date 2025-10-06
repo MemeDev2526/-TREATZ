@@ -167,6 +167,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return n;
   })();
 
+  // put this near the top of your app.js (after fxRoot defined)
+  console.log("FX root element:", document.getElementById('fx-layer'), 'playResultFX defined?', typeof playResultFX);
+
   const rand = (min, max) => Math.random() * (max - min) + min;
 
   // svgWrapper(color) => returns a wrapper SVG string tinted with `color`.
@@ -234,26 +237,10 @@ document.addEventListener("DOMContentLoaded", () => {
 // skull SVG with crossbones
 function svgSkull() {
   return `
-<svg width="56" height="48" viewBox="0 0 56 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="skull">
+<svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="skull">
   <g>
-    <!-- skull head (bone white) -->
-    <path d="M28 6c9 0 16 6 16 14 0 6-3 9-5 12H17c-2-3-5-6-5-12 0-8 7-14 16-14z" fill="#f6f6f6" stroke="#0b0b0b" stroke-width="0.8"/>
-    <!-- eyes -->
-    <circle cx="20" cy="20" r="4.4" fill="#0b0b0b"/>
-    <circle cx="36" cy="20" r="4.4" fill="#0b0b0b"/>
-    <!-- teeth -->
-    <rect x="22" y="30" width="12" height="6" rx="2" fill="#0b0b0b"/>
-    <!-- subtle shading -->
-    <path d="M16 36 q8 6 24 0" fill="rgba(0,0,0,0.05)"/>
-    <!-- crossbones behind skull: two rounded rectangles, rotated -->
-    <g transform="translate(28,38)">
-      <g transform="rotate(24)">
-        <rect x="-26" y="-4" width="52" height="8" rx="4" fill="#f6f6f6" stroke="#0b0b0b" stroke-width="0.6"/>
-      </g>
-      <g transform="rotate(-24)">
-        <rect x="-26" y="-4" width="52" height="8" rx="4" fill="#f6f6f6" stroke="#0b0b0b" stroke-width="0.6"/>
-      </g>
-    </g>
+    <rect width="100%" height="100%" fill="none"/>
+    <text x="50%" y="54%" text-anchor="middle" font-size="36" font-family="Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol" dominant-baseline="middle">☠️</text>
   </g>
 </svg>`;
 } 
@@ -535,6 +522,7 @@ function svgSkull() {
     requestAnimationFrame(step);
     window.addEventListener("resize", pickTarget);
   }
+  
 
   $("#btn-copy")?.addEventListener("click", () => {
     navigator.clipboard.writeText(C.tokenAddress || "").then(
