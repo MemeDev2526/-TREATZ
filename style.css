@@ -153,14 +153,14 @@ a, .btn--outline { color: var(--slime); }
 .countdown__label{
   font-weight:800;
   letter-spacing:.35px;
-  font-size: clamp(14px, 1.8vw, 18px);
+  font-size: clamp(18px, 2.2vw, 24px);
   opacity: .95;
 }
 
 /* Very visible numeric timer (scales across devices) */
 .countdown__timer{
   font-family:"Creepster", cursive;
-  font-size: clamp(28px, 6.8vw, 72px);
+  font-size: clamp(26px, 6.6vw, 68px);
   line-height: 0.92;
   padding: 0.12rem .6rem;
   color: #ffffff; /* ghost white numeric fill */
@@ -236,8 +236,8 @@ a, .btn--outline { color: var(--slime); }
 /* subtle glow under banner */
 .brand-banner::after{
   content:"";
-  position:absolute; left:0; right:0; bottom:-8px; height:10px;
-  background: radial-gradient(closest-side, rgba(0,255,102,.5), transparent 70%);
+  position:absolute; left:0; right:0; bottom:-8px; height:13px;
+  background: radial-gradient(closest-side, rgba(0,255,102,.5), transparent 77%);
   filter: blur(8px); pointer-events:none;
 }
 
