@@ -44,6 +44,29 @@ if [ -d "dist" ]; then
 
   cp -f whitepaper.html static/ || true
   echo "[TREATZ] ✅ Copied dist/ → static/ and assets → static/assets/"
+
+  # Create predictable top-level app.js / style.css pointing to the built assets
+  # so whitepaper.html can load /static/app.js and /static/style.css without 404.
+  echo "[TREATZ] 📦 Creating predictable asset names for whitepaper..."
+
+  # find first JS asset (the Vite entry bundle) and copy to static/app.js
+  JS_FILE=$(ls static/assets/*.js 2>/dev/null | head -n 1 || true)
+  if [ -n "$JS_FILE" ]; then
+    cp -f "$JS_FILE" static/app.js
+    echo "[TREATZ] Copied $JS_FILE -> static/app.js"
+  else
+    echo "[TREATZ] ⚠️ No JS built asset found in static/assets/ (app.js not created)" >&2
+  fi
+
+  # find first CSS asset (optional — not all builds emit CSS) and copy to static/style.css
+  CSS_FILE=$(ls static/assets/*.css 2>/dev/null | head -n 1 || true)
+  if [ -n "$CSS_FILE" ]; then
+    cp -f "$CSS_FILE" static/style.css
+    echo "[TREATZ] Copied $CSS_FILE -> static/style.css"
+  else
+    echo "[TREATZ] ℹ️ No CSS asset found to copy (style.css not created)."
+  fi
+
 else
   echo "[TREATZ] ⚠️ dist/ not found after build — aborting" >&2
   exit 1
