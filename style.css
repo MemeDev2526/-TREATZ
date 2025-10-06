@@ -621,9 +621,38 @@ body.flash { animation: screen-flash 0.9s ease both; }
 
 #mascot-floater{
   position:fixed; left:35px; top:35px; width:140px;
-  pointer-events:none; opacity:.95; z-index: 1000;
+  cursor: pointer;
+  opacity:.95; z-index: 1000;
   transform: translate(0px, 0px);
-  will-change: transform;
+  transition: transform 0.9s ease, left 0.9s ease, top 0.9s ease, opacity 0.6s ease;
+  will-change: transform, opacity, left, top;
+}
+/* Idle bob for any mascot that is present - subtle up/down */
+@keyframes mascot-bob {
+  0%   { transform: translateY(0) rotate(0deg); }
+  50%  { transform: translateY(-7px) rotate(-1deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+/* gentle sway for floated state to indicate it's "parked" */
+@keyframes mascot-sway {
+  0%   { transform: translateY(0) rotate(-0.5deg); }
+  50%  { transform: translateY(-8px) rotate(0.6deg); }
+  100% { transform: translateY(0) rotate(-0.5deg); }
+}
+
+/* Class applied after it settles somewhere else */
+.mascot--floated {
+  animation: mascot-sway 3.8s ease-in-out infinite;
+  transform-origin: center;
+  pointer-events: auto; /* still clickable */
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,0.35));
+}
+
+/* Slight scale/hover to indicate interactivity */
+#mascot-floater:hover, .mascot:hover {
+  transform: translateY(-4px) scale(1.03);
+  transition: transform 230ms ease;
 }
 
 /* =========================================================
