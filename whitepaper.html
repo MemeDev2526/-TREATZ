@@ -342,6 +342,30 @@
 
     const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+    <script>
+    /* Fallback shim: define formatDHMS if app.js hasn't loaded yet.
+       Safe: will NOT overwrite if a real one from app.js exists. */
+    if (typeof window.formatDHMS !== 'function') {
+      window.formatDHMS = function(ms) {
+        const rem = Math.max(0, Number(ms) || 0);
+        let s = Math.floor(rem / 1000);
+        const d = Math.floor(s / 86400); s %= 86400;
+        const h = Math.floor(s / 3600); s %= 3600;
+        const m = Math.floor(s / 60); s %= 60;
+        const dd = String(d);
+        const hh = String(h).padStart(2, "0");
+        const mm = String(m).padStart(2, "0");
+        const ss = String(s).padStart(2, "0");
+        return (
+          `<span class="cd-part"><span class="cd-num">${dd}</span><span class="cd-unit">D</span></span>` +
+          ` <span class="cd-part"><span class="cd-num">${hh}</span><span class="cd-unit">H</span></span>` +
+          ` <span class="cd-part"><span class="cd-num">${mm}</span><span class="cd-unit">M</span></span>` +
+          ` <span class="cd-part"><span class="cd-num">${ss}</span><span class="cd-unit">S</span></span>`
+        );
+      };
+    }
+    </script>
+
     /* 2) COUNTDOWN */
     (function countdown(){
       const target  = new Date(CFG.halloweenISO);
