@@ -160,7 +160,7 @@ a, .btn--outline { color: var(--slime); }
 /* Very visible numeric timer (scales across devices) */
 .countdown__timer{
   font-family:"Creepster", cursive;
-  font-size: clamp(26px, 6.6vw, 68px);
+  font-size: clamp(22px, 6.4vw, 62px);
   line-height: 0.92;
   padding: 0.12rem .6rem;
   color: #ffffff; /* ghost white numeric fill */
@@ -171,7 +171,7 @@ a, .btn--outline { color: var(--slime); }
     0 6px 24px rgba(57,255,20,0.08),
     0 12px 36px rgba(0,0,0,0.45);
   letter-spacing: -0.02em;
-  font-weight: 900;
+  font-weight: 850;
   text-shadow:
     0 2px 0 rgba(0,0,0,0.7),
     0 10px 34px rgba(57,255,20,0.28);          /* outer slime glow */
@@ -181,7 +181,7 @@ a, .btn--outline { color: var(--slime); }
   .countdown__timer .cd-part { display:inline-flex; align-items:baseline; gap:6px; margin-right:8px; }
   .countdown__timer .cd-num {
     color: #F8F8FA;            /* ghost-white numeric */
-    font-weight: 900;
+    font-weight: 850;
     font-size: 1.0em;
     text-shadow: 0 6px 28px rgba(0,0,0,.5), 0 0 20px rgba(57,255,20,.12);
     padding: .15rem .45rem;
@@ -189,10 +189,10 @@ a, .btn--outline { color: var(--slime); }
     background: rgba(0,0,0,.12);
   }
   .countdown__timer .cd-unit {
-    font-weight: 900;
-    font-size: .7em;
+    font-weight: 850;
+    font-size: .65em;
     padding: .08rem .35rem;
-    border-radius: 6px;
+    border-radius: 5px;
     color: #fff;
     /* alternate accent per unit */
   }
@@ -210,11 +210,11 @@ a, .btn--outline { color: var(--slime); }
 /* Omen text (slightly smaller than timer but still prominent) */
 .countdown__omen{
   font-size: clamp(14px, 2.2vw, 22px);
-  opacity: .98;
+  opacity: .95;
   margin-left: .6rem;
   color: #e9e0ff;
   font-style: italic;
-  font-weight:800;
+  font-weight:750;
   text-shadow: 0 6px 18px rgba(0,0,0,.45);
 }
 
@@ -236,9 +236,9 @@ a, .btn--outline { color: var(--slime); }
 /* subtle glow under banner */
 .brand-banner::after{
   content:"";
-  position:absolute; left:0; right:0; bottom:-8px; height:13px;
-  background: radial-gradient(closest-side, rgba(0,255,102,.5), transparent 77%);
-  filter: blur(8px); pointer-events:none;
+  position:absolute; left:0; right:0; bottom:-16px; height:12px;
+  background: radial-gradient(closest-side, rgba(0,255,102,.5), transparent 82%);
+  filter: blur(12px); pointer-events:none;
 }
 
 /* =========================================================
@@ -486,9 +486,13 @@ body.flash { animation: screen-flash 0.9s ease both; }
 #fx-layer{
   position: fixed;
   inset: 0;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  overflow: hidden;
-  z-index: 1000;
+  overflow: visible;
+  z-index: 11000; /* above most UI but below modals if needed — increase if still behind */
 }
 
 /* Base particle */
@@ -546,9 +550,9 @@ body.flash { animation: screen-flash 0.9s ease both; }
 
 /* fall & gentle sway keyframes (unchanged) */
 @keyframes treatz-fall {
-  0%   { transform: translateY(-8vh) rotate(var(--r0,0deg)); opacity: 0; }
+  0%   { transform: translateY(-8vh) rotate(var(--r0, 0deg)); opacity: 0; }
   8%   { opacity: .98; }
-  100% { transform: translateY(110vh) rotate(var(--r1,360deg)); opacity: .98; }
+  100% { transform: translateY(110vh) rotate(var(--r1, 360deg)); opacity: .98; }
 }
 @keyframes treatz-sway {
   0%   { transform: translateX(-8px); }
