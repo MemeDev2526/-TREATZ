@@ -12,10 +12,13 @@ import asyncio
 import traceback
 import base58 as _b58
 from datetime import datetime, timedelta, timezone
-def _rfc3339(dt: datetime) -> str:
+def _rfc3339(dt: Optional[datetime]) -> Optional[str]:
     """
     Return an RFC3339-style UTC timestamp ending with 'Z'.
     Accepts naive or aware datetimes and normalizes to UTC (no offset).
+
+    Returns:
+        RFC3339 string ending with 'Z', or None if dt is None.
     """
     if dt is None:
         return None
@@ -1253,38 +1256,39 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
 @app.post(f"{API}/admin/round/seed")
 async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
     """Backfill recent, SETTLED rounds for UI testing using sequential IDs."""
-    now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
     created = []
     for i in range(n):
         # allocate a sequential id rather than random to match production
         rid = await alloc_next_round_id()
-        # spread in the past for visible ordering
-        opens = (now - timedelta(minutes=(n - i) * 45)).isoformat()
-        closes = (now - timedelta(minutes=(n - i) * 45 - 30)).isoformat()
+        # spread in the past for visible ordering (timezone-aware UTC)
+        opens_dt = now - timedelta(minutes=(n - i) * 45)
+        closes_dt = now - timedelta(minutes=(n - i) * 45 - 30)
         pot = secrets.randbelow(4_000_000_000)  # up to ~4 SOL in lamports
 
         await app.state.db.execute(
             "INSERT OR REPLACE INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,pot) VALUES(?,?,?,?,?,?,?)",
-            (rid, "SETTLED", opens, closes, _hash("seed:" + rid), secrets.token_hex(8), pot),
+            (rid, "SETTLED", _rfc3339(opens_dt), _rfc3339(closes_dt), _hash("seed:" + rid), secrets.token_hex(8), pot),
         )
         created.append(rid)
 
     await app.state.db.commit()
     return {"ok": True, "created": created}
-    
-    @app.post(f"{API}/admin/round/reset_counter")
-    async def admin_reset_round_counter(value: int = 0, auth: bool = Depends(admin_guard)):
-        """
-        Reset the internal sequential round counter 'round:next_id' to the provided value.
-        After calling with value=0 the next allocated id will be R0001.
-        """
-        try:
-            v = int(value)
-        except Exception:
-            raise HTTPException(400, "value must be an integer")
-    
-        # Store the next number (we keep the stored value as the last allocated,
-        # so alloc_next_round_id will add 1). To make next returned id be R0001,
-        # set stored value to 0.
-        await dbmod.kv_set(app.state.db, "round:next_id", str(v))
-        return {"ok": True, "round:next_id": v}
+
+
+@app.post(f"{API}/admin/round/reset_counter")
+async def admin_reset_round_counter(value: int = 0, auth: bool = Depends(admin_guard)):
+    """
+    Reset the internal sequential round counter 'round:next_id' to the provided value.
+    After calling with value=0 the next allocated id will be R0001.
+    """
+    try:
+        v = int(value)
+    except Exception:
+        raise HTTPException(400, "value must be an integer")
+
+    # Store the next number (we keep the stored value as the last allocated,
+    # so alloc_next_round_id will add 1). To make next returned id be R0001,
+    # set stored value to 0.
+    await dbmod.kv_set(app.state.db, "round:next_id", str(v))
+    return {"ok": True, "round:next_id": v}
