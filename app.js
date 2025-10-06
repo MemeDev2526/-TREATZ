@@ -522,7 +522,110 @@ function svgSkull() {
     requestAnimationFrame(step);
     window.addEventListener("resize", pickTarget);
   }
+
+  // ------ MASCOT FLY-AWAY (paste into app.js near mascot init) ------
+  // Assumes the mascot img element has id="mascot-floater" or replace selector.
+  (function enableMascotFly() {
+    const mascot = document.getElementById('mascot-floater') || document.querySelector('.mascot, #mascot');
+    if (!mascot) return;
+
+    // ensure mascot is positioned so transforms look right
+    mascot.style.position = mascot.style.position || 'fixed';
+    mascot.style.right = mascot.style.right || '18px';
+    mascot.style.bottom = mascot.style.bottom || '22px';
+    mascot.style.zIndex = mascot.style.zIndex || 9998;
+    mascot.style.cursor = 'pointer';
+    mascot.style.transition = 'transform 900ms cubic-bezier(.18,.9,.32,1), opacity 650ms ease, left 900ms ease, top 900ms ease';
+
+    // Add an accessible label (if missing)
+    if (!mascot.getAttribute('aria-label')) mascot.setAttribute('aria-label', 'site mascot - tap to send flying');
+
+    // single-run guard — allows respawn or re-enable if you remove this flag later
+    let flew = false;
   
+    function toViewportCoords(xPct, yPct) {
+      // convert percentage [0..100] to px relative to viewport
+      return { x: (xPct / 100) * window.innerWidth, y: (yPct / 100) * window.innerHeight };
+    }
+
+    function settleAt(xPx, yPx) {
+      // Fix position in px and enable idle float
+      mascot.style.transition = 'transform 700ms ease';
+      mascot.style.left = `${Math.max(8, Math.min(xPx, window.innerWidth - mascot.offsetWidth - 8))}px`;
+      mascot.style.top  = `${Math.max(8, Math.min(yPx, window.innerHeight - mascot.offsetHeight - 8))}px`;
+      mascot.style.right = 'auto';
+      mascot.style.bottom = 'auto';
+
+      // apply class that triggers CSS bobbing animation (see CSS below)
+      mascot.classList.add('mascot--floated');
+
+      // small shadow to indicate depth
+      mascot.style.filter = 'drop-shadow(0 10px 20px rgba(0,0,0,0.35))';
+    }
+
+    function flyAwayAnimation(ev) {
+      // only allow one fly event at a time
+      if (flew) return;
+      flew = true;
+
+      // compute current on-screen location (px)
+      const rect = mascot.getBoundingClientRect();
+      const startX = rect.left;
+      const startY = rect.top;
+
+      // pick a random target quadrant (avoid center) — percentages of viewport
+      const quadrant = Math.floor(Math.random() * 4);
+      const targetPercents = [
+        { x: 12,  y: 14 },  // top-left
+        { x: 82,  y: 12 },  // top-right
+        { x: 12,  y: 72 },  // bottom-left
+        { x: 78,  y: 68 }   // bottom-right
+      ][quadrant];
+
+      // add a small random offset so it doesn't always end up identical
+      targetPercents.x += (Math.random() - 0.5) * 8;
+      targetPercents.y += (Math.random() - 0.5) * 8;
+
+      const target = toViewportCoords(targetPercents.x, targetPercents.y);
+
+      // animate using transform for smoothness: translate from current to target
+      const dx = target.x - startX;
+      const dy = target.y - startY;
+
+      // Use GPU-friendly transform for the flight motion
+      mascot.style.transition = 'transform 1100ms cubic-bezier(.22,.9,.32,1), opacity 1100ms ease';
+      mascot.style.willChange = 'transform, opacity';
+
+      // small spin to make it fun
+      const spin = (Math.random() < 0.5) ? 18 : -18;
+
+      // start animation
+      requestAnimationFrame(() => {
+        mascot.style.transform = `translate(${dx}px, ${dy}px) rotate(${spin}deg) scale(0.96)`;
+        mascot.style.opacity = 0.98;
+      });
+
+      // after flight completes, fix absolute left/top and start idle bob (so it stays)
+      setTimeout(() => {
+        // clear transform and set coordinates instead
+        mascot.style.transform = 'none';
+        mascot.style.opacity = 1;
+
+        // convert target viewport coords to final left/top calculation (account for offset center)
+        const finalLeft = target.x;
+        const finalTop  = target.y;
+
+        settleAt(finalLeft, finalTop);
+
+        // allow future interactions after it settled (optional)
+        // e.g. allow user to click again to make it fly again after 2s
+        setTimeout(() => { flew = false; }, 1200);
+      }, 1150);
+    }
+
+    mascot.addEventListener('click', flyAwayAnimation, { passive: true });
+    mascot.addEventListener('touchstart', (e) => { e.preventDefault(); flyAwayAnimation(e); }, { passive: false });
+  })();
 
   $("#btn-copy")?.addEventListener("click", () => {
     navigator.clipboard.writeText(C.tokenAddress || "").then(
