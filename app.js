@@ -1426,7 +1426,8 @@ function svgSkull() {
       try { console.log('[TREATZ FX] playResultFX ->', result, 'fxLayerChildren=', document.getElementById('fx-layer')?.children.length); } catch(e){}
       return orig.apply(this, arguments);
     };
-    
+  })();
+
   // Back-to-top wiring
   document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('#back-to-top');
