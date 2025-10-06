@@ -1262,20 +1262,18 @@ async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
         # allocate a sequential id rather than random to match production
         rid = await alloc_next_round_id()
         # spread in the past for visible ordering (timezone-aware UTC)
-        opens_dt = now - timedelta(minutes=(n - i) * 45)
-        closes_dt = now - timedelta(minutes=(n - i) * 45 - 30)
+        opens_dt = (now - timedelta(minutes=(n - i) * 45)).isoformat()
+        closes_dt = (now - timedelta(minutes=(n - i) * 45 - 30)).isoformat()
         pot = secrets.randbelow(4_000_000_000)  # up to ~4 SOL in lamports
 
         await app.state.db.execute(
             "INSERT OR REPLACE INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,pot) VALUES(?,?,?,?,?,?,?)",
-            (rid, "SETTLED", opens_dt.isoformat(), closes_dt.isoformat(),
-             "hash_" + secrets.token_hex(4), "seed_" + secrets.token_hex(4), pot)
+            (rid, "SETTLED", opens_dt, closes_dt, _hash("seed:" + rid), secrets.token_hex(8), pot),
         )
         created.append(rid)
 
     await app.state.db.commit()
-    return {"created": created}
-
+    return {"ok": True, "created": created}
 
 @app.post(f"{API}/admin/round/reset_counter")
 async def admin_reset_round_counter(value: int = 0, auth: bool = Depends(admin_guard)):
