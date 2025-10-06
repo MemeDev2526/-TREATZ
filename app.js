@@ -294,19 +294,14 @@ function svgSkull() {
 
   const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00']; // witch purple, slime green, orange
 
-  // Helper to pick a fully-random color from WRAP_COLORS
-  function pickWrapColor() {
-    return WRAP_COLORS[Math.floor(Math.random() * WRAP_COLORS.length)];
-  }
-
   function rainTreatz({ count = 24, wrappers = true, candies = true, minDur = 4.5, maxDur = 7 } = {}) {
     for (let i = 0; i < count; i++) {
       const x = rand(0, 100);
       const scale = rand(0.78, 1.22);
       const dur = rand(minDur, maxDur);
       if (wrappers) {
-        // pick a random color using Math.random() for uniformity
-        const color = pickWrapColor();
+        // Use Math.random() to pick an index uniformly
+        const color = WRAP_COLORS[Math.floor(Math.random() * WRAP_COLORS.length)];
         spawnPiece("fx-wrapper", x, scale, dur, { color });
       }
       if (candies) {
@@ -314,6 +309,16 @@ function svgSkull() {
       }
     }
   }
+
+  // in spawnPiece(), build the transform including scale so we use standard CSS
+  const rotation = Math.floor(rand(-30, 30));
+  el.style.left = `calc(${xvw}vw - 32px)`;
+  el.style.top = `-80px`;
+  // compose transform once: translate + rotate + scale
+  el.style.transform = `translate(${xvw}vw, -10%) rotate(${rotation}deg) scale(${sizeScale || 1})`;
+  el.style.setProperty("--dur", `${duration}s`);
+  el.style.setProperty("--r0", `${Math.floor(rand(-90, 90))}deg`);
+  el.style.setProperty("--r1", `${Math.floor(rand(240, 720))}deg`);
 
   function hauntTrick({ count = 10, ghosts = true, skulls = true } = {}) {
     for (let i = 0; i < count; i++) {
@@ -386,8 +391,10 @@ function svgSkull() {
     const m = now.getMonth(); // 0..11
     const d = now.getDate();
     const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
+    // Use non-leading-zero numeric literals (strict mode-safe)
     return new Date(year, 9, 31, 0, 0, 0, 0);
   }
+
 
   function formatDHMS(ms) {
     let s = Math.max(0, Math.floor(ms / 1000));
