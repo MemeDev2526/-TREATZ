@@ -192,18 +192,18 @@ document.addEventListener("DOMContentLoaded", () => {
   function svgCandy() {
     const uid = 'candyG_' + Math.floor(Math.random() * 1e9);
     return `
-  <svg width="42" height="32" viewBox="0 0 42 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="candy">
-    <defs>
-      <linearGradient id="${uid}" x1="0" x2="1">
-        <stop offset="0" stop-color="#FFB27A"/>
-        <stop offset="1" stop-color="#FF6B00"/>
-      </linearGradient>
-    </defs>
-    <path d="M4 16 L0 10 L6 12 L6 4 L12 10" fill="#F7F7F8"/>
-    <rect x="8" y="6" rx="6" ry="6" width="26" height="20" fill="url(#${uid})" stroke="rgba(0,0,0,0.12)"/>
-    <path d="M38 16 L42 22 L36 20 L36 28 L30 22" fill="#F7F7F8"/>
-    <rect x="16" y="10" width="10" height="12" rx="3" fill="#0D0D0D" />
-  </svg>`;
+<svg width="42" height="32" viewBox="0 0 42 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="candy">
+  <defs>
+    <linearGradient id="${uid}" x1="0" x2="1">
+      <stop offset="0" stop-color="#FFB27A"/>
+      <stop offset="1" stop-color="#FF6B00"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 16 L0 10 L6 12 L6 4 L12 10" fill="#F7F7F8"/>
+  <rect x="8" y="6" rx="6" ry="6" width="26" height="20" fill="url(#${uid})" stroke="rgba(0,0,0,0.12)"/>
+  <path d="M38 16 L42 22 L36 20 L36 28 L30 22" fill="#F7F7F8"/>
+  <rect x="16" y="10" width="10" height="12" rx="3" fill="#0D0D0D" />
+</svg>`;
   }
 
   // ghost SVG improved — softer fill + subtle inner shadow for depth
@@ -274,11 +274,12 @@ function svgSkull() {
     el.style.left = `calc(${xvw}vw - 32px)`;
     el.style.top = `-80px`;
     // compose transform once: translate + rotate + scale
-    el.style.transform = `translate(${xvw}vw, -10%) rotate(${rotation}deg) scale(${scaleVal})`;
+    el.style.transform = `translate(${xvw}vw, -10%) rotate(${rotation}deg) scale(${sizeScale || 1})`;
     el.style.setProperty("--x", `${xvw}vw`);
     el.style.setProperty("--dur", `${duration}s`);
-    el.style.setProperty("--r0", r0);
-    el.style.setProperty("--r1", r1);
+    el.style.setProperty("--r0", `${Math.floor(rand(-90, 90))}deg`);
+    el.style.setProperty("--r1", `${Math.floor(rand(240, 720))}deg`);
+     
 
     // Choose SVG based on kind. For wrappers we allow inline color.
     let svg = "";
