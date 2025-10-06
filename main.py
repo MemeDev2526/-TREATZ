@@ -37,7 +37,7 @@ def _rfc3339(dt: datetime) -> str:
 from typing import Literal, Optional
 import os
 from fastapi.responses import FileResponse
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -616,17 +616,12 @@ async def rounds_current():
     
 @app.get(f"{API}/rounds/recent", response_model=list[RecentRoundResp])
 async def rounds_recent(limit: int = 10):
-    """
-    Return the most recent rounds ordered by opens_at desc.
-    `limit` is clamped to [1,100] and sanitized to avoid SQL injection.
-    """
     # sanitize & clamp the limit before inlining to avoid parameterized LIMIT quirks
     try:
         n = max(1, min(100, int(limit)))
     except Exception:
         n = 10
 
-    # Build & execute the query. Keep try/except around DB access only.
     query = f"SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT {n}"
     try:
         async with app.state.db.execute(query) as cur:
@@ -640,20 +635,48 @@ async def rounds_recent(limit: int = 10):
         rid = await dbmod.kv_get(app.state.db, "current_round_id")
         return [RecentRoundResp(id=rid, pot=0)] if rid else []
 
-    # Normalize rows -> list of RecentRoundResp primitives
-    out = []
-    for r in rows:
-        # r may be tuple (id, pot)
-        try:
-            rid = str(r[0])
-            pot = int(r[1] or 0)
-        except Exception:
-            # defensive fallback
-            rid = str(r[0]) if r and len(r) > 0 else "unknown"
-            pot = int((r[1] if len(r) > 1 else 0) or 0)
-        out.append(RecentRoundResp(id=rid, pot=pot))
-    return out
+    return [RecentRoundResp(id=str(r[0]), pot=int(r[1] or 0)) for r in rows]
     
+@app.get(f"{API}/rounds")
+async def rounds_list(search: Optional[str] = Query(None), limit: int = Query(25)):
+    """
+    Return recent rounds (for history view). Response shape matches frontend expectation:
+      { "rows": [ { id: "...", "pot": 12345, "opens_at": "...", "closes_at": "..." }, ... ] }
+    Supports optional `search` (substring on id) and `limit`.
+    """
+    try:
+        n = max(1, min(200, int(limit)))
+    except Exception:
+        n = 25
+
+    # Basic SQL + optional filtering
+    params = []
+    base_sql = "SELECT id, pot, opens_at, closes_at FROM rounds"
+    if search:
+        # Allow searching by id (e.g., R1601) or by winner or seed fragments if desired.
+        base_sql += " WHERE id LIKE ?"
+        params.append(f"%{search}%")
+    base_sql += " ORDER BY opens_at DESC LIMIT ?"
+    params.append(n)
+
+    try:
+        async with app.state.db.execute(base_sql, tuple(params)) as cur:
+            rows = await cur.fetchall()
+    except Exception as e:
+        print("[rounds_list] DB error:", e, flush=True)
+        traceback.print_exc()
+        raise HTTPException(500, "Failed to fetch rounds")
+
+    result = []
+    for r in rows:
+        result.append({
+            "id": r[0],
+            "pot": int(r[1] or 0),
+            "opens_at": r[2],
+            "closes_at": r[3],
+        })
+
+    return {"rows": result}
 # =========================================================
 # Read Endpoints — Fairness & Transparency
 # =========================================================
@@ -1250,18 +1273,18 @@ async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
     return {"ok": True, "created": created}
     
     @app.post(f"{API}/admin/round/reset_counter")
-async def admin_reset_round_counter(value: int = 0, auth: bool = Depends(admin_guard)):
-    """
-    Reset the internal sequential round counter 'round:next_id' to the provided value.
-    After calling with value=0 the next allocated id will be R0001.
-    """
-    try:
-        v = int(value)
-    except Exception:
-        raise HTTPException(400, "value must be an integer")
-
-    # Store the next number (we keep the stored value as the last allocated,
-    # so alloc_next_round_id will add 1). To make next returned id be R0001,
-    # set stored value to 0.
-    await dbmod.kv_set(app.state.db, "round:next_id", str(v))
-    return {"ok": True, "round:next_id": v}
+    async def admin_reset_round_counter(value: int = 0, auth: bool = Depends(admin_guard)):
+        """
+        Reset the internal sequential round counter 'round:next_id' to the provided value.
+        After calling with value=0 the next allocated id will be R0001.
+        """
+        try:
+            v = int(value)
+        except Exception:
+            raise HTTPException(400, "value must be an integer")
+    
+        # Store the next number (we keep the stored value as the last allocated,
+        # so alloc_next_round_id will add 1). To make next returned id be R0001,
+        # set stored value to 0.
+        await dbmod.kv_set(app.state.db, "round:next_id", str(v))
+        return {"ok": True, "round:next_id": v}
