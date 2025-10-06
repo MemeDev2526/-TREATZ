@@ -342,8 +342,7 @@
 
     const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-    <script>
-    /* Fallback shim: define formatDHMS if app.js hasn't loaded yet.
+     /* Fallback shim: define formatDHMS if app.js hasn't loaded yet.
        Safe: will NOT overwrite if a real one from app.js exists. */
     if (typeof window.formatDHMS !== 'function') {
       window.formatDHMS = function(ms) {
@@ -364,8 +363,7 @@
         );
       };
     }
-    </script>
-
+  
     /* 2) COUNTDOWN */
     (function countdown(){
       const target  = new Date(CFG.halloweenISO);
