@@ -160,7 +160,7 @@ a, .btn--outline { color: var(--slime); }
 /* Very visible numeric timer (scales across devices) */
 .countdown__timer{
   font-family:"Creepster", cursive;
-  font-size: clamp(20px, 6.2vw, 6px);
+  font-size: clamp(20px, 6.2vw, 54px);
   line-height: 0.92;
   padding: 0.12rem .6rem;
   color: #ffffff; /* ghost white numeric fill */
@@ -278,6 +278,7 @@ a, .btn--outline { color: var(--slime); }
 
 .treatz-text {
   color: #6226c7; /* darker, richer purple for legibility */
+  position: relative;
   text-shadow:
     0 0 9px rgba(255,149,0,0.9),
     0 0 18px rgba(255,107,0,0.7),
