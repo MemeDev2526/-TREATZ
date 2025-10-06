@@ -218,7 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <stop offset="0" stop-color="#ffffff" stop-opacity="0.98"/>
       <stop offset="1" stop-color="#cfefff" stop-opacity="0.9"/>
     </linearGradient>
-    <filter id="gShadow" x="-50%" y="-50%" width="200%" height="200%">
+    <filter id="${fid}" x="-50%" y="-50%" width="200%" height="200%">
       <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.35"/>
     </filter>
   </defs>
@@ -230,6 +230,7 @@ document.addEventListener("DOMContentLoaded", () => {
   </g>
 </svg>`;
   }
+
 
 // skull SVG with crossbones
 function svgSkull() {
@@ -274,11 +275,12 @@ function svgSkull() {
     el.style.left = `calc(${xvw}vw - 32px)`;
     el.style.top = `-80px`;
     // compose transform once: translate + rotate + scale
-    el.style.transform = `translate(${xvw}vw, -10%) rotate(${rotation}deg) scale(${sizeScale || 1})`;
+    el.style.transform = `translate(${xvw}vw, -10%) rotate(${rotation}deg) scale(${scaleVal})`;
     el.style.setProperty("--x", `${xvw}vw`);
     el.style.setProperty("--dur", `${duration}s`);
-    el.style.setProperty("--r0", `${Math.floor(rand(-90, 90))}deg`);
-    el.style.setProperty("--r1", `${Math.floor(rand(240, 720))}deg`);
+    el.style.setProperty("--r0", r0);
+    el.style.setProperty("--r1", r1);
+
      
 
     // Choose SVG based on kind. For wrappers we allow inline color.
@@ -542,6 +544,20 @@ function svgSkull() {
       () => toast("Copy failed")
     );
   });
+
+  // Unwrap / enter page button — remove overlay and re-initialize UI bits
+  document.getElementById("btn-unwrap")?.addEventListener("click", () => {
+    const overlay = document.getElementById("entry-overlay");
+    if (overlay) {
+      // hide or remove
+      overlay.remove();
+    }
+    // re-arm items that might have been blocked
+    try { initHalloweenCountdown(); } catch (e) { /* ignore */ }
+    try { armAmbient(); } catch (e) { /* ignore */ }
+    try { announceLastWinner(); } catch (e) { /* ignore */ }
+  });
+
 
   // -------------------------
   // Wallet plumbing (lazy, provider-agnostic)
@@ -1042,6 +1058,13 @@ function svgSkull() {
       if (elId) elId.textContent = round.round_id;
       if (elPot) elPot.textContent = (Number(round.pot || 0) / TEN_POW).toLocaleString();
 
+      // fairness evidence: commit / reveal (wiring - create elements with these IDs in HTML if needed)
+      const commitEl = document.getElementById("seed-commit");
+      const revealEl = document.getElementById("seed-reveal");
+      if (commitEl) commitEl.textContent = round.server_seed_hash || "—";
+      if (revealEl) revealEl.textContent = round.server_seed_reveal || "— (reveal after settlement)";
+
+
       if (schedEl) {
         schedEl.textContent = `Each round: ${durationMin} min • Break: ${breakMin} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
       }
@@ -1111,6 +1134,13 @@ function svgSkull() {
             // update displayed round id / pot
             if (elId) elId.textContent = round.round_id;
             if (elPot) elPot.textContent = (Number(round.pot || 0) / TEN_POW).toLocaleString();
+
+            // fairness evidence: commit / reveal (wiring - create elements with these IDs in HTML if needed)
+            const commitEl = document.getElementById("seed-commit");
+            const revealEl = document.getElementById("seed-reveal");
+            if (commitEl) commitEl.textContent = round.server_seed_hash || "—";
+            if (revealEl) revealEl.textContent = round.server_seed_reveal || "— (reveal after settlement)";
+
           } else {
             // even if same round, update pot in case deposits occurred
             if (up && elPot) elPot.textContent = (Number(up.pot || 0) / TEN_POW).toLocaleString();
