@@ -172,21 +172,20 @@ document.addEventListener("DOMContentLoaded", () => {
   // svgWrapper(color) => returns a wrapper SVG string tinted with `color`.
   // color should be a CSS color string like "#6b2393". If omitted, default orange used.
   function svgWrapper(color = "#FF6B00") {
-    // return a compact solid-fill wrapper; JS passes color in so it's fully solid
-  return `
-<svg width="84" height="40" viewBox="0 0 84 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="$TREATZ">
-  <g>
-    <!-- left twist -->
-    <path d="M10 14 L2 8 L10 10 L8 2 L16 12 Z" fill="${color}" />
-    <!-- wrapper body (solid) -->
-    <rect x="16" y="6" rx="6" ry="6" width="52" height="28" fill="${color}" />
-    <!-- right twist -->
-    <path d="M74 26 L82 32 L74 30 L76 38 L68 28 Z" fill="${color}" />
-    <!-- white label -->
-    <text x="42" y="26" text-anchor="middle" font-family="Creepster, Luckiest Guy, sans-serif" font-size="14" fill="#ffffff" font-weight="700">$TREATZ</text>
-  </g>
-</svg>`;
-}
+    return `
+  <svg width="84" height="40" viewBox="0 0 84 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="$TREATZ">
+    <g>
+      <!-- left twist -->
+      <path d="M10 14 L2 8 L10 10 L8 2 L16 12 Z" fill="currentColor" />
+      <!-- wrapper body (solid) -->
+      <rect x="16" y="6" rx="6" ry="6" width="52" height="28" fill="currentColor" />
+      <!-- right twist -->
+      <path d="M74 26 L82 32 L74 30 L76 38 L68 28 Z" fill="currentColor" />
+      <!-- white label (keep explicit white) -->
+      <text x="42" y="26" text-anchor="middle" font-family="Creepster, Luckiest Guy, sans-serif" font-size="14" fill="#ffffff" font-weight="700">$TREATZ</text>
+    </g>
+  </svg>`;
+  }
 
   // small candy (keeps previous shape but with a nicer gradient)
   function svgCandy() {
@@ -272,22 +271,21 @@ function svgSkull() {
     const scaleVal = sizeScale || 1;
 
     // position relative to viewport percent; small negative to start above
-    el.style.left = `calc(${xvw}vw - 32px)`;
+    el.style.left = `calc(${xvw}vw - 32px)`; // keep horizontal positioning
     el.style.top = `-80px`;
     // compose transform once: translate + rotate + scale
-    el.style.transform = `translate(${xvw}vw, -10%) rotate(${rotation}deg) scale(${scaleVal})`;
+    el.style.transform = `translateY(-10%) rotate(${rotation}deg) scale(${scaleVal})`;
     el.style.setProperty("--x", `${xvw}vw`);
     el.style.setProperty("--dur", `${duration}s`);
     el.style.setProperty("--r0", r0);
     el.style.setProperty("--r1", r1);
-
      
-
     // Choose SVG based on kind. For wrappers we allow inline color.
     let svg = "";
     if (kind === "fx-wrapper") {
       const color = opts.color || opts.colorHex || "#FF6B00";
-      svg = svgWrapper(color);
+      el.style.color = color;    // <- set the color so SVG (currentColor) picks it up
+      svg = svgWrapper();        // wrapper SVG now uses currentColor
       el.classList.add("fx-piece--win");
     } else if (kind === "fx-candy") {
       svg = svgCandy();
@@ -314,8 +312,7 @@ function svgSkull() {
       const scale = rand(0.78, 1.22);
       const dur = rand(minDur, maxDur);
       if (wrappers) {
-        // deterministic safe index selection
-        const idx = i % WRAP_COLORS.length;
+        const idx = i % WRAP_COLORS.length; // round-robin distribution
         const color = WRAP_COLORS[idx];
         spawnPiece("fx-wrapper", x, scale, dur, { color });
       }
@@ -324,6 +321,7 @@ function svgSkull() {
       }
     }
   }
+
 
   function hauntTrick({ count = 10, ghosts = true, skulls = true } = {}) {
     for (let i = 0; i < count; i++) {
