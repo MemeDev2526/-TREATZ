@@ -1416,15 +1416,27 @@ function svgSkull() {
   window.TREATZ.hauntTrick = hauntTrick;
   window.TREATZ.announceLastWinner = announceLastWinner;
 
-// Defensive shim + logging for FX (temporary)
-if (!window.playResultFX && typeof playResultFX === 'function') window.playResultFX = playResultFX;
-window.__TREATZ_FX_DEBUG = true;
-(function fxDebugWrap(){
-  if (!window.playResultFX) return;
-  const orig = window.playResultFX;
-  window.playResultFX = function(result){
-    try { console.log('[TREATZ FX] playResultFX ->', result, 'fxLayerChildren=', document.getElementById('fx-layer')?.children.length); } catch(e){}
-    return orig.apply(this, arguments);
-  };
+  // Defensive shim + logging for FX (temporary)
+  if (!window.playResultFX && typeof playResultFX === 'function') window.playResultFX = playResultFX;
+  window.__TREATZ_FX_DEBUG = true;
+  (function fxDebugWrap(){
+    if (!window.playResultFX) return;
+    const orig = window.playResultFX;
+    window.playResultFX = function(result){
+      try { console.log('[TREATZ FX] playResultFX ->', result, 'fxLayerChildren=', document.getElementById('fx-layer')?.children.length); } catch(e){}
+      return orig.apply(this, arguments);
+    };
+    
+  // Back-to-top wiring
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('#back-to-top');
+    if (!b) return;
+    // smooth scroll to top of document (or to your main game container if you prefer)
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // if you want to focus an anchor up top (like #page), do:
+    const topFocus = document.querySelector('#page') || document.body;
+    setTimeout(() => topFocus?.focus?.(), 600);
+    e.preventDefault();
+  });
 
 })();
