@@ -257,6 +257,36 @@ a, .btn--outline { color: var(--slime); }
 /* =========================================================
    Navigation & Token Action Bar
    ========================================================= */
+/* ===== TREATZ NAV TITLE ===== */
+.treatz-title {
+  font-family: "Creepster", "Chakra Petch", sans-serif;
+  font-size: clamp(1.4rem, 2.5vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  margin: 0;
+  text-align: left;
+  line-height: 1.2;
+}
+
+.treatz-symbol {
+  color: #5BFF64; /* slime green */
+  text-shadow: 0 0 10px rgba(91, 255, 100, 0.6), 0 0 20px rgba(91, 255, 100, 0.4);
+}
+
+.treatz-text {
+  color: #9B5BFF; /* witch purple */
+  text-shadow: 0 0 6px rgba(255, 153, 0, 0.6), 0 0 16px rgba(255, 102, 0, 0.3);
+}
+
+.treatz-sub {
+  display: block;
+  font-size: 0.9rem;
+  color: #FF8C32; /* pumpkin orange */
+  text-shadow: 0 0 5px rgba(155, 91, 255, 0.6);
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
 .nav{ position:relative; z-index:5; }
 .nav__wrap{
   max-width:1200px; margin:12px auto 0; padding:0 16px;
