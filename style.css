@@ -370,7 +370,24 @@ a, .btn--outline { color: var(--slime); }
 .btn--outline{ background:transparent; color:var(--white); border:1px solid var(--white) }
 .btn--ghost{ background:transparent; color:var(--white); opacity:.9 }
 .btn:disabled{ opacity:.6; cursor:not-allowed }
-
+/* Back to top button (About section) */
+.about-backtop-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 28px 12px 48px;
+}
+.btn-back-to-top {
+  background: linear-gradient(90deg,#ffb26a,#ff6b00);
+  color: #1a0b00;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.25);
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.btn-back-to-top:hover { transform: translateY(-4px); box-shadow: 0 12px 36px rgba(0,0,0,0.32); }
 /* =========================================================
    Layout & Cards
    ========================================================= */
