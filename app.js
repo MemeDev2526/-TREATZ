@@ -190,27 +190,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // small candy (keeps previous shape but with a nicer gradient)
   function svgCandy() {
+    const uid = 'candyG_' + Math.floor(Math.random() * 1e9);
     return `
-<svg width="42" height="32" viewBox="0 0 42 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="candy">
-  <defs>
-    <linearGradient id="candyG" x1="0" x2="1">
-      <stop offset="0" stop-color="#FFB27A"/>
-      <stop offset="1" stop-color="#FF6B00"/>
-    </linearGradient>
-  </defs>
-  <path d="M4 16 L0 10 L6 12 L6 4 L12 10" fill="#F7F7F8"/>
-  <rect x="8" y="6" rx="6" ry="6" width="26" height="20" fill="url(#candyG)" stroke="rgba(0,0,0,0.12)"/>
-  <path d="M38 16 L42 22 L36 20 L36 28 L30 22" fill="#F7F7F8"/>
-  <rect x="16" y="10" width="10" height="12" rx="3" fill="#0D0D0D" />
-</svg>`;
+  <svg width="42" height="32" viewBox="0 0 42 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="candy">
+    <defs>
+      <linearGradient id="${uid}" x1="0" x2="1">
+        <stop offset="0" stop-color="#FFB27A"/>
+        <stop offset="1" stop-color="#FF6B00"/>
+      </linearGradient>
+    </defs>
+    <path d="M4 16 L0 10 L6 12 L6 4 L12 10" fill="#F7F7F8"/>
+    <rect x="8" y="6" rx="6" ry="6" width="26" height="20" fill="url(#${uid})" stroke="rgba(0,0,0,0.12)"/>
+    <path d="M38 16 L42 22 L36 20 L36 28 L30 22" fill="#F7F7F8"/>
+    <rect x="16" y="10" width="10" height="12" rx="3" fill="#0D0D0D" />
+  </svg>`;
   }
 
   // ghost SVG improved — softer fill + subtle inner shadow for depth
   function svgGhost() {
+    const uid = Math.floor(Math.random() * 1e9);
+    const gid = `gGhost_${uid}`;
+    const fid = `gShadow_${uid}`;
     return `
 <svg width="44" height="56" viewBox="0 0 44 56" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ghost">
   <defs>
-    <linearGradient id="gGhost" x1="0" x2="0" y1="0" y2="1">
+    <linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1">
       <stop offset="0" stop-color="#ffffff" stop-opacity="0.98"/>
       <stop offset="1" stop-color="#cfefff" stop-opacity="0.9"/>
     </linearGradient>
@@ -218,8 +222,8 @@ document.addEventListener("DOMContentLoaded", () => {
       <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.35"/>
     </filter>
   </defs>
-  <g filter="url(#gShadow)">
-    <path d="M22 2c11 0 20 9 20 20v24c0 3-3 3-6 2-3-1-5 0-8 1s-6-2-9-2-6 3-9 2-5-2-8-1c-3 1-6 1-6-2V22C2 11 11 2 22 2z" fill="url(#gGhost)"/>
+  <g filter="url(#${fid})">
+    <path d="M22 2c11 0 20 9 20 20v24c0 3-3 3-6 2-3-1-5 0-8 1s-6-2-9-2-6 3-9 2-5-2-8-1c-3 1-6 1-6-2V22C2 11 11 2 22 2z" fill="url(#${gid})"/>
     <circle cx="16" cy="22" r="4" fill="#0D0D0D"/>
     <circle cx="28" cy="22" r="4" fill="#0D0D0D"/>
     <path d="M14 34 Q18 30 22 34 Q26 38 30 34" fill="rgba(0,0,0,0.06)"/>
@@ -259,15 +263,22 @@ function svgSkull() {
   function spawnPiece(kind, xvw, sizeScale, duration, opts = {}) {
     const el = document.createElement("div");
     el.className = `fx-piece ${kind}`;
+
+    // choose randomized values once
+    const rotation = Math.floor(rand(-30, 30));
+    const r0 = `${Math.floor(rand(-90, 90))}deg`;
+    const r1 = `${Math.floor(rand(240, 720))}deg`;
+    const scaleVal = sizeScale || 1;
+
     // position relative to viewport percent; small negative to start above
     el.style.left = `calc(${xvw}vw - 32px)`;
     el.style.top = `-80px`;
-    el.style.transform = `translate(${xvw}vw, -10%) rotate(${Math.floor(rand(-30, 30))}deg)`;
+    // compose transform once: translate + rotate + scale
+    el.style.transform = `translate(${xvw}vw, -10%) rotate(${rotation}deg) scale(${scaleVal})`;
     el.style.setProperty("--x", `${xvw}vw`);
     el.style.setProperty("--dur", `${duration}s`);
-    el.style.setProperty("--r0", `${Math.floor(rand(-90, 90))}deg`);
-    el.style.setProperty("--r1", `${Math.floor(rand(240, 720))}deg`);
-    el.style.scale = String(sizeScale || 1);
+    el.style.setProperty("--r0", r0);
+    el.style.setProperty("--r1", r1);
 
     // Choose SVG based on kind. For wrappers we allow inline color.
     let svg = "";
@@ -300,8 +311,9 @@ function svgSkull() {
       const scale = rand(0.78, 1.22);
       const dur = rand(minDur, maxDur);
       if (wrappers) {
-        // Use Math.random() to pick an index uniformly
-        const color = WRAP_COLORS[Math.floor(Math.random() * WRAP_COLORS.length)];
+        // deterministic safe index selection
+        const idx = Math.floor(Math.random() * WRAP_COLORS.length);
+        const color = WRAP_COLORS[idx];
         spawnPiece("fx-wrapper", x, scale, dur, { color });
       }
       if (candies) {
@@ -309,16 +321,6 @@ function svgSkull() {
       }
     }
   }
-
-  // in spawnPiece(), build the transform including scale so we use standard CSS
-  const rotation = Math.floor(rand(-30, 30));
-  el.style.left = `calc(${xvw}vw - 32px)`;
-  el.style.top = `-80px`;
-  // compose transform once: translate + rotate + scale
-  el.style.transform = `translate(${xvw}vw, -10%) rotate(${rotation}deg) scale(${sizeScale || 1})`;
-  el.style.setProperty("--dur", `${duration}s`);
-  el.style.setProperty("--r0", `${Math.floor(rand(-90, 90))}deg`);
-  el.style.setProperty("--r1", `${Math.floor(rand(240, 720))}deg`);
 
   function hauntTrick({ count = 10, ghosts = true, skulls = true } = {}) {
     for (let i = 0; i < count; i++) {
@@ -882,7 +884,8 @@ function svgSkull() {
 
         // FX + banner
         playResultFX(landed);
-        showWinBanner(landed === "TREATZ" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
+        showWinBanner(landed === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
+
 
         // status text
         $("#cf-status")?.replaceChildren(document.createTextNode(landed === "TREAT" ? "WIN!" : "LOSS"));
@@ -1018,8 +1021,8 @@ function svgSkull() {
         document.getElementById("ticket-price").textContent = (priceBase / TEN_POW).toLocaleString();
       }
 
-      // current round
-      const round = await jfetchStrict(`${API}/rounds/current`);
+      // current round    
+      let round = await jfetchStrict(`${API}/rounds/current`);
       const elPot = document.getElementById("round-pot");
       const elId = document.getElementById("round-id");
       const elClose = document.getElementById("round-countdown");
@@ -1028,8 +1031,9 @@ function svgSkull() {
       const schedEl = document.getElementById("raffle-schedule");
 
       const iso = (s) => String(s || "").replace(" ", "T").replace(/\.\d+/, "").replace(/Z?$/, "Z");
-      const opensAt = new Date(iso(round.opens_at));
-      const closesAt = new Date(iso(round.closes_at));
+      let opensAt = new Date(iso(round.opens_at));
+      let closesAt = new Date(iso(round.closes_at));
+
 
       const nextOpenIso = cfg?.timers?.next_opens_at ? iso(cfg.timers.next_opens_at) : null;
       const nextOpensAt = nextOpenIso ? new Date(nextOpenIso) : new Date(closesAt.getTime() + breakMin * 60 * 1000);
@@ -1096,9 +1100,9 @@ function svgSkull() {
             // reload the page-level 'round' and associated derived values
             round = up;
             // recompute Date objects
-            const iso = (s) => String(s || "").replace(" ", "T").replace(/\.\d+/, "").replace(/Z?$/, "Z");
             const newOpensAt = new Date(iso(round.opens_at));
             const newClosesAt = new Date(iso(round.closes_at));
+
             // update closesAt / opensAt used by tick()
             if (newOpensAt && !isNaN(newOpensAt)) opensAt = newOpensAt;
             if (newClosesAt && !isNaN(newClosesAt)) closesAt = newClosesAt;
