@@ -294,13 +294,19 @@ function svgSkull() {
 
   const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00']; // witch purple, slime green, orange
 
+  // Helper to pick a fully-random color from WRAP_COLORS
+  function pickWrapColor() {
+    return WRAP_COLORS[Math.floor(Math.random() * WRAP_COLORS.length)];
+  }
+
   function rainTreatz({ count = 24, wrappers = true, candies = true, minDur = 4.5, maxDur = 7 } = {}) {
     for (let i = 0; i < count; i++) {
       const x = rand(0, 100);
       const scale = rand(0.78, 1.22);
       const dur = rand(minDur, maxDur);
       if (wrappers) {
-        const color = WRAP_COLORS[Math.floor(rand(0, WRAP_COLORS.length))];
+        // pick a random color using Math.random() for uniformity
+        const color = pickWrapColor();
         spawnPiece("fx-wrapper", x, scale, dur, { color });
       }
       if (candies) {
@@ -1073,6 +1079,38 @@ function svgSkull() {
       }
       await loadRecent();
       setInterval(loadRecent, 30000);
+
+      // --- REFRESH current round periodically so UI picks up server-side changes (open -> settled -> new round) ---
+      async function refreshRound() {
+        try {
+          const up = await jfetchStrict(`${API}/rounds/current`);
+          // update local variables used by tick/render (if they changed)
+          if (up && up.round_id && up.round_id !== round.round_id) {
+            // reload the page-level 'round' and associated derived values
+            round = up;
+            // recompute Date objects
+            const iso = (s) => String(s || "").replace(" ", "T").replace(/\.\d+/, "").replace(/Z?$/, "Z");
+            const newOpensAt = new Date(iso(round.opens_at));
+            const newClosesAt = new Date(iso(round.closes_at));
+            // update closesAt / opensAt used by tick()
+            if (newOpensAt && !isNaN(newOpensAt)) opensAt = newOpensAt;
+            if (newClosesAt && !isNaN(newClosesAt)) closesAt = newClosesAt;
+
+            // update displayed round id / pot
+            if (elId) elId.textContent = round.round_id;
+            if (elPot) elPot.textContent = (Number(round.pot || 0) / TEN_POW).toLocaleString();
+          } else {
+            // even if same round, update pot in case deposits occurred
+            if (up && elPot) elPot.textContent = (Number(up.pot || 0) / TEN_POW).toLocaleString();
+          }
+        } catch (err) {
+          // non-fatal — we want the UI to keep working even if refresh fails
+          console.warn("refreshRound failed", err);
+        }
+      }
+      // run immediately, then every 12s
+      refreshRound();
+      setInterval(refreshRound, 12000);
 
     } catch (e) {
       errOut("init", e.message || e);
