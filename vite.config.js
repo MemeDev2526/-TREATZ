@@ -23,6 +23,11 @@ export default defineConfig({
         main: resolve(__dirname, "index.html"),
         whitepaper: resolve(__dirname, "whitepaper.html"),
       },
+
+      // <<< ADDED: treat runtime /static/app.js (and optional /static/style.css) as externals
+      // This prevents Rollup from trying to resolve them at build time.
+      external: ["/static/app.js", "/static/style.css"],
+
       output: {
         // keep asset file names readable and grouped under assets/
         // the default hashing is preserved, but this ensures structure
