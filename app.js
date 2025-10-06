@@ -380,7 +380,7 @@ function svgSkull() {
     const m = now.getMonth(); // 0..11
     const d = now.getDate();
     const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
-    return new Date(year, 9, 31, 23, 59, 59, 0);
+    return new Date(year, 9, 31, 00, 00, 00, 0);
   }
 
   function formatDHMS(ms) {
@@ -489,12 +489,12 @@ function svgSkull() {
     mascotImg.alt = "Treatz Mascot";
     mascotImg.style.willChange = "transform";
     mascotImg.style.position = "fixed";
-    mascotImg.style.left = "30px";
-    mascotImg.style.top = "30px";
+    mascotImg.style.left = "35px";
+    mascotImg.style.top = "35px";
 
     const MARGIN = 24;
     let x = 120, y = 120, tx = x, ty = y, t = 0;
-    const SPEED = 0.008;
+    const SPEED = 0.01;
 
     const pickTarget = () => {
       const w = window.innerWidth, h = window.innerHeight;
@@ -869,7 +869,7 @@ function svgSkull() {
 
         // FX + banner
         playResultFX(landed);
-        showWinBanner(landed === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
+        showWinBanner(landed === "TREATZ" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
 
         // status text
         $("#cf-status")?.replaceChildren(document.createTextNode(landed === "TREAT" ? "WIN!" : "LOSS"));
