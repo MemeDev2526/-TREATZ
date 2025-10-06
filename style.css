@@ -130,7 +130,7 @@ a, .btn--outline { color: var(--slime); }
 .countdown{
   position: relative;
   z-index: 1001;
-  backdrop-filter: blur(6pm);
+  backdrop-filter: blur(6px);
   background: rgba(0,0,0,0.85);
   border-top: 1px solid rgba(255,255,255,.06);
   border-bottom: 1px solid rgba(255,255,255,.08);
@@ -166,10 +166,10 @@ a, .btn--outline { color: var(--slime); }
   color: #ffffff; /* ghost white numeric fill */
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
   border-radius: 11px;
-  border: 3px solid rgba(57,255,20,0.18);      /* slime-green border */
+  border: 3px solid rgba(57,255,20,0.18);
   box-shadow:
-    0 6px 24px rgba(57,255,20,0.08),           /* subtle green halo */
-    0 12px 36px rgba(0,0,0,0.45);              /* grounding shadow */
+    0 6px 24px rgba(57,255,20,0.08),
+    0 12px 36px rgba(0,0,0,0.45);
   letter-spacing: -0.02em;
   font-weight: 900;
   text-shadow:
@@ -496,13 +496,13 @@ body.flash { animation: screen-flash 0.9s ease both; }
   position: absolute;
   will-change: transform, opacity;
   filter: drop-shadow(0 6px 18px rgba(0,0,0,.55));
-  opacity: .99;
-  /* default duration is short — JS can override with --dur on a per-element basis */
-  animation: treatz-fall var(--dur,1.8s) linear forwards;
+  opacity: 1;
+  animation: treatz-fall var(--dur,4s) linear forwards;
   transition: transform 300ms ease, opacity 300ms ease;
+  transform-origin: center center;
 }
 
-/* sizing for inline SVG (allow JS to place variable sizes) */
+/* sizing for inline SVG */
 .fx-piece svg{
   display:block;
   width: auto;
@@ -513,32 +513,42 @@ body.flash { animation: screen-flash 0.9s ease both; }
   transform-origin: center center;
 }
 
-/* Win wrappers (glowy, colored — JS should set inline --fx-color or color) */
-.fx-piece--win{
-  mix-blend-mode: screen;
+/* Win wrappers: JS will set inline style `color` to brand color — SVG uses currentColor (solid) */
+.fx-piece--win{ 
+  mix-blend-mode: normal;
+  --fx-color: #FF6B00;  /* default - JS overrides */
+  color: var(--fx-color);
   animation-name: treatz-fall, treatz-sway;
-  animation-duration: var(--dur,1.8s), 2.6s;
-  animation-timing-function: linear, ease-in-out;
-  animation-fill-mode: forwards, both;
-  --fx-color: #FF6B00; /* default; JS will choose brand colors */
+  animation-duration: var(--dur,4s), 2.6s;
 }
 
-/* Loss (skulls/ghosts) — heavier drop shadow, no screen blend */
+/* force SVG fills to inherit color (solid) — applies when SVG uses fill="currentColor" */
+.fx-piece--win svg [class^="w"], .fx-piece--win svg path, .fx-piece--win svg rect, .fx-piece--win svg circle{
+  fill: currentColor !important;
+  stroke: none !important;
+  opacity: 1 !important;
+}
+
+/* Loss visuals (skull + crossbones) look stronger */
 .fx-piece--loss{
   mix-blend-mode: normal;
-  filter: drop-shadow(0 10px 26px rgba(0,0,0,.65)) saturate(.95) contrast(1.05);
-  animation-duration: var(--dur,1.6s);
+  filter: drop-shadow(0 12px 34px rgba(0,0,0,.7)) saturate(0.9) contrast(1.05);
+  animation-duration: var(--dur,3.6s);
+}
+.fx-piece--loss svg [class^="c"], .fx-piece--loss svg path {
+  fill: #f6f6f6 !important;  /* bone white for skulls */
+  stroke: #0b0b0b !important;
 }
 
 /* small/large variety */
 .fx-piece--small{ transform: scale(.75); }
 .fx-piece--large{ transform: scale(1.25); }
 
-/* fall & gentle sway keyframes */
+/* fall & gentle sway keyframes (unchanged) */
 @keyframes treatz-fall {
   0%   { transform: translateY(-8vh) rotate(var(--r0,0deg)); opacity: 0; }
   8%   { opacity: .98; }
-  100% { transform: translateY(110vh) rotate(var(--r1,360deg)); opacity: .95; }
+  100% { transform: translateY(110vh) rotate(var(--r1,360deg)); opacity: .98; }
 }
 @keyframes treatz-sway {
   0%   { transform: translateX(-8px); }
