@@ -172,26 +172,21 @@ document.addEventListener("DOMContentLoaded", () => {
   // svgWrapper(color) => returns a wrapper SVG string tinted with `color`.
   // color should be a CSS color string like "#6b2393". If omitted, default orange used.
   function svgWrapper(color = "#FF6B00") {
-    // Use currentColor-friendly elements so JS can recolor by setting inline `color` or --fx-color.
-    return `
+    // return a compact solid-fill wrapper; JS passes color in so it's fully solid
+  return `
 <svg width="84" height="40" viewBox="0 0 84 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="$TREATZ">
-  <defs>
-    <linearGradient id="wrapGrad" x1="0" x2="1">
-      <stop offset="0" stop-color="${color}" stop-opacity="1"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.28"/>
-    </linearGradient>
-    <filter id="wrapShadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.55"/>
-    </filter>
-  </defs>
-  <g filter="url(#wrapShadow)">
-    <path d="M10 14 L2 8 L10 10 L8 2 L16 12 Z" fill="${color}" opacity="0.95"/>
-    <rect x="16" y="6" rx="6" ry="6" width="52" height="28" fill="url(#wrapGrad)" stroke="rgba(0,0,0,0.20)" stroke-width="1.25"/>
-    <path d="M74 26 L82 32 L74 30 L76 38 L68 28 Z" fill="${color}" opacity="0.95"/>
-    <text x="42" y="26" text-anchor="middle" font-family="Creepster, Luckiest Guy, sans-serif" font-size="14" fill="#fff" font-weight="700">$TREATZ</text>
+  <g>
+    <!-- left twist -->
+    <path d="M10 14 L2 8 L10 10 L8 2 L16 12 Z" fill="${color}" />
+    <!-- wrapper body (solid) -->
+    <rect x="16" y="6" rx="6" ry="6" width="52" height="28" fill="${color}" />
+    <!-- right twist -->
+    <path d="M74 26 L82 32 L74 30 L76 38 L68 28 Z" fill="${color}" />
+    <!-- white label -->
+    <text x="42" y="26" text-anchor="middle" font-family="Creepster, Luckiest Guy, sans-serif" font-size="14" fill="#ffffff" font-weight="700">$TREATZ</text>
   </g>
 </svg>`;
-  }
+}
 
   // small candy (keeps previous shape but with a nicer gradient)
   function svgCandy() {
@@ -232,28 +227,31 @@ document.addEventListener("DOMContentLoaded", () => {
 </svg>`;
   }
 
-  // skull SVG — cleaner geometry + subtle shading
-  function svgSkull() {
-    return `
-<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="skull">
-  <defs>
-    <linearGradient id="skGrad" x1="0" x2="0">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#e0e0e0"/>
-    </linearGradient>
-    <filter id="skDrop" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.45"/>
-    </filter>
-  </defs>
-  <g filter="url(#skDrop)">
-    <path d="M24 6c9 0 16 6 16 14 0 8-7 11-7 14H15c0-3-7-6-7-14 0-8 7-14 16-14z" fill="url(#skGrad)"/>
-    <circle cx="17.5" cy="22" r="4.4" fill="#0D0D0D"/>
-    <circle cx="30.5" cy="22" r="4.4" fill="#0D0D0D"/>
-    <rect x="20" y="30" width="8" height="6" rx="2" fill="#0D0D0D"/>
-    <path d="M16 36 q8 6 16 0" fill="rgba(0,0,0,0.06)"/>
+  // skull SVG with crossbones
+function svgSkull() {
+  return `
+<svg width="56" height="48" viewBox="0 0 56 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="skull">
+  <g>
+    <!-- skull head (bone white) -->
+    <path d="M28 6c9 0 16 6 16 14 0 6-3 9-5 12H17c-2-3-5-6-5-12 0-8 7-14 16-14z" fill="#f6f6f6" stroke="#0b0b0b" stroke-width="0.8"/>
+    <!-- eyes -->
+    <circle cx="20" cy="20" r="4.4" fill="#0b0b0b"/>
+    <circle cx="36" cy="20" r="4.4" fill="#0b0b0b"/>
+    <!-- teeth -->
+    <rect x="22" y="30" width="12" height="6" rx="2" fill="#0b0b0b"/>
+    <!-- subtle shading -->
+    <path d="M16 36 q8 6 24 0" fill="rgba(0,0,0,0.05)"/>
+    <!-- crossbones behind skull: two rounded rectangles, rotated -->
+    <g transform="translate(28,38)">
+      <g transform="rotate(24)">
+        <rect x="-26" y="-4" width="52" height="8" rx="4" fill="#f6f6f6" stroke="#0b0b0b" stroke-width="0.6"/>
+      </g>
+      <g transform="rotate(-24)">
+        <rect x="-26" y="-4" width="52" height="8" rx="4" fill="#f6f6f6" stroke="#0b0b0b" stroke-width="0.6"/>
+      </g>
+    </g>
   </g>
 </svg>`;
-  }
   
   // spawnPiece(kind, xvw, sizeScale, duration, opts)
   // opts: { color } - used for wrapper tinting
@@ -1087,30 +1085,39 @@ document.addEventListener("DOMContentLoaded", () => {
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
     try {
-      // call server-side search endpoint
-      const url = new URL(`${API}/rounds`, location.origin);
-      if (query) url.searchParams.set("search", query);
-      url.searchParams.set("limit", "25");
-      const res = await fetch(url.toString(), { method: "GET" });
+      // server provides /rounds/recent; use that for search/listing
+      // we request a reasonable limit and then fetch individual winner details
+      const q = new URL(`${API}/rounds/recent`, location.origin);
+      q.searchParams.set("limit", "25");
+      // If you later add a real search param server-side, you can append it here
+      const res = await fetch(q.toString(), { method: "GET" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const recent = data.rows || [];
+      const recent = await res.json(); // expecting array [{ id, pot }, ...]
+      if (!Array.isArray(recent) || recent.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="muted">No history.</td></tr>`;
+        return;
+      }
+  
       const rows = [];
       for (const r of recent) {
+        // r.id is expected; some servers return 'id' or 'round_id' — normalize:
+        const roundId = r.id || r.round_id || r[0] || "unknown";
+        // fetch winner/details (swallow errors)
         let w = null;
-        try { w = await jfetchStrict(`${API}/rounds/${r.id}/winner`); } catch (e) { /* ignore */ }
+        try { w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(roundId)}/winner`); } catch (e) { /* ignore per-row errors */ }
         const potHuman = (Number(r.pot || 0) / TEN_POW).toLocaleString();
-        const winner = w?.winner ? w.winner : "—";
+        const winner = w?.winner || "—";
         const payout = w?.payout_sig || "—";
         const proof = (w?.server_seed_hash || "-").slice(0, 10) + "…";
         rows.push(`<tr>
-          <td>#${r.id}</td>
+          <td>${roundId}</td>
           <td>${potHuman} ${TOKEN.symbol}</td>
           <td>${winner}</td>
           <td>${payout}</td>
           <td>${proof}</td>
         </tr>`);
       }
+  
       tbody.innerHTML = rows.join("") || `<tr><td colspan="5" class="muted">No history.</td></tr>`;
     } catch (e) {
       console.error(e);
