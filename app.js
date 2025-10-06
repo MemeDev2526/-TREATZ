@@ -315,7 +315,7 @@ function svgSkull() {
       const dur = rand(minDur, maxDur);
       if (wrappers) {
         // deterministic safe index selection
-        const idx = Math.floor(Math.random() * WRAP_COLORS.length);
+        const idx = i % WRAP_COLORS.length;
         const color = WRAP_COLORS[idx];
         spawnPiece("fx-wrapper", x, scale, dur, { color });
       }
