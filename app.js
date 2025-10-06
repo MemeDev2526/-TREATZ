@@ -386,7 +386,7 @@ function svgSkull() {
     const m = now.getMonth(); // 0..11
     const d = now.getDate();
     const year = (m > 9 || (m === 9 && d >= 31)) ? now.getFullYear() + 1 : now.getFullYear();
-    return new Date(year, 9, 31, 00, 00, 00, 0);
+    return new Date(year, 9, 31, 0, 0, 0, 0);
   }
 
   function formatDHMS(ms) {
