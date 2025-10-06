@@ -9,7 +9,9 @@ Target DB path: /data/treatz.db (Render disk)
 from __future__ import annotations
 from typing import Optional
 from datetime import datetime
-import os, sqlite3, secrets
+import os
+import sqlite3
+import secrets
 import aiosqlite
 
 # =========================================================
@@ -92,7 +94,7 @@ async def ensure_schema(conn: aiosqlite.Connection) -> None:
     await conn.commit()
 
 # =========================================================
-# KV Helpers
+# KV Helpers (async)
 # =========================================================
 async def kv_set(conn: aiosqlite.Connection, k: str, v: str, commit: bool = True) -> None:
     """
@@ -118,6 +120,9 @@ async def kv_get(conn: aiosqlite.Connection, k: str) -> Optional[str]:
 # Sync helpers for scheduler/payouts
 # =========================================================
 def connect_sync(db_path: str = DB_PATH) -> sqlite3.Connection:
+    """
+    Synchronous connection for scripts / payout code that prefer blocking I/O.
+    """
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -125,9 +130,55 @@ def connect_sync(db_path: str = DB_PATH) -> sqlite3.Connection:
     conn.commit()
     return conn
 
+# -------------------------
+# Sync KV helpers (mirror async kv_get / kv_set)
+# These let synchronous shutdown/startup/payout code work with the same kv store.
+# -------------------------
+def kv_set_sync(conn: sqlite3.Connection, k: str, v: str) -> None:
+    """
+    Upsert a key/value pair in the KV table (synchronous).
+    """
+    conn.execute(
+        "INSERT INTO kv(k, v) VALUES(?, ?) "
+        "ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+        (k, v),
+    )
+    conn.commit()
+
+def kv_get_sync(conn: sqlite3.Connection, k: str) -> Optional[str]:
+    """
+    Read a value from KV; return None if missing (synchronous).
+    """
+    cur = conn.execute("SELECT v FROM kv WHERE k=?", (k,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+# -------------------------
+# Sequential round id allocator (synchronous)
+# Mirrors alloc_next_round_id() used in async code so BOTH sync + async paths
+# allocate sequential RNNNN ids consistently.
+# -------------------------
+def alloc_next_round_id_sync(conn: sqlite3.Connection) -> str:
+    """
+    Allocate a sequential round id of the form RNNNN using KV counter 'round:next_id'.
+    Returns the new id (e.g. 'R0001').
+    This is synchronous variant for use with connect_sync() users.
+    """
+    key = "round:next_id"
+    cur = kv_get_sync(conn, key)
+    try:
+        n = int(cur or 0) + 1
+    except Exception:
+        n = 1
+    kv_set_sync(conn, key, str(n))
+    return f"R{n:04d}"
+
+# -------------------------
+# Create round (synchronous) — updated to use sequential allocator
+# -------------------------
 def create_round_sync(conn: sqlite3.Connection, opens_at: datetime, closes_at: datetime) -> str:
-    """Create a new round row synchronously, returns new round ID."""
-    rid = f"R{secrets.randbelow(10_000):04d}"  # e.g. R0042
+    """Create a new round row synchronously, returns new round ID (sequential)."""
+    rid = alloc_next_round_id_sync(conn)
     client_seed = secrets.token_hex(8)
     conn.execute(
         "INSERT INTO rounds (id, status, opens_at, closes_at, pot, client_seed) VALUES (?, 'OPEN', ?, ?, 0, ?)",
@@ -136,7 +187,17 @@ def create_round_sync(conn: sqlite3.Connection, opens_at: datetime, closes_at: d
     conn.commit()
     return rid
 
+# -------------------------
+# Mark round closed (synchronous) — align with main.py which sets SETTLED
+# -------------------------
 def mark_round_closed_sync(conn: sqlite3.Connection, round_id: str) -> None:
-    """Mark a round CLOSED synchronously."""
-    conn.execute("UPDATE rounds SET status='CLOSED' WHERE id=?", (round_id,))
+    """Mark a round SETTLED synchronously."""
+    conn.execute("UPDATE rounds SET status='SETTLED' WHERE id=?", (round_id,))
     conn.commit()
+
+# Optional: helper to reset the sequential counter synchronously (handy for tests).
+def reset_round_counter_sync(conn: sqlite3.Connection, value: int = 0) -> None:
+    """
+    Reset internal 'round:next_id' counter. Setting to 0 means next allocated id will be R0001.
+    """
+    kv_set_sync(conn, "round:next_id", str(int(value)))
