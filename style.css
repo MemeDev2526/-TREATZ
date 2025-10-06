@@ -248,7 +248,7 @@ a, .btn--outline { color: var(--slime); }
   position:fixed; inset:0;
   background:
     linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.75)),
-    url('/static/assets/bg_spooky.png') center top / cover no-repeat fixed;
+    url('/static/assets/background.png') center top / cover no-repeat fixed;
   z-index:-1;
   filter: saturate(105%);
   background-attachment: fixed;
@@ -260,12 +260,12 @@ a, .btn--outline { color: var(--slime); }
 /* ===== TREATZ NAV TITLE ===== */
 .treatz-title {
   font-family: "Creepster", "Chakra Petch", sans-serif;
-  font-size: clamp(1.4rem, 2.5vw, 2.2rem);
+  font-size: clamp(1.8rem, 2.8vw, 2.8rem);
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.85px;
   margin: 0;
   text-align: left;
-  line-height: 1.2;
+  line-height: 1.5;
 }
 
 .treatz-symbol {
