@@ -1256,7 +1256,7 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
 @app.post(f"{API}/admin/round/seed")
 async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
     """Backfill recent, SETTLED rounds for UI testing using sequential IDs."""
-        now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     created = []
     for i in range(n):
         # allocate a sequential id rather than random to match production
@@ -1268,12 +1268,13 @@ async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
 
         await app.state.db.execute(
             "INSERT OR REPLACE INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,pot) VALUES(?,?,?,?,?,?,?)",
-            (rid, "SETTLED", _rfc3339(opens_dt), _rfc3339(closes_dt), _hash("seed:" + rid), secrets.token_hex(8), pot),
+            (rid, "SETTLED", opens_dt.isoformat(), closes_dt.isoformat(),
+             "hash_" + secrets.token_hex(4), "seed_" + secrets.token_hex(4), pot)
         )
         created.append(rid)
 
     await app.state.db.commit()
-    return {"ok": True, "created": created}
+    return {"created": created}
 
 
 @app.post(f"{API}/admin/round/reset_counter")
