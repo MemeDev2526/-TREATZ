@@ -227,7 +227,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </svg>`;
   }
 
-  // skull SVG with crossbones
+// skull SVG with crossbones
 function svgSkull() {
   return `
 <svg width="56" height="48" viewBox="0 0 56 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="skull">
@@ -252,8 +252,9 @@ function svgSkull() {
     </g>
   </g>
 </svg>`;
-  
-  // spawnPiece(kind, xvw, sizeScale, duration, opts)
+} 
+
+// spawnPiece(kind, xvw, sizeScale, duration, opts)
   // opts: { color } - used for wrapper tinting
   function spawnPiece(kind, xvw, sizeScale, duration, opts = {}) {
     const el = document.createElement("div");
