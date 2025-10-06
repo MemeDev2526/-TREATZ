@@ -616,26 +616,43 @@ async def rounds_current():
     
 @app.get(f"{API}/rounds/recent", response_model=list[RecentRoundResp])
 async def rounds_recent(limit: int = 10):
+    """
+    Return the most recent rounds ordered by opens_at desc.
+    `limit` is clamped to [1,100] and sanitized to avoid SQL injection.
+    """
     # sanitize & clamp the limit before inlining to avoid parameterized LIMIT quirks
     try:
         n = max(1, min(100, int(limit)))
     except Exception:
         n = 10
 
+    # Build & execute the query. Keep try/except around DB access only.
+    query = f"SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT {n}"
+    try:
+        async with app.state.db.execute(query) as cur:
+            rows = await cur.fetchall()
+    except Exception as e:
+        print("[rounds_recent] DB error:", e, flush=True)
+        traceback.print_exc()
+        raise HTTPException(500, "Failed to fetch recent rounds")
+
+    if not rows:
+        rid = await dbmod.kv_get(app.state.db, "current_round_id")
+        return [RecentRoundResp(id=rid, pot=0)] if rid else []
+
+    # Normalize rows -> list of RecentRoundResp primitives
+    out = []
+    for r in rows:
+        # r may be tuple (id, pot)
         try:
-            query = f"SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT {n}"
-            async with app.state.db.execute(query) as cur:
-                rows = await cur.fetchall()
-        except Exception as e:
-            print("[rounds_recent] DB error:", e, flush=True)
-            traceback.print_exc()
-            raise HTTPException(500, "Failed to fetch recent rounds")
-    
-        if not rows:
-            rid = await dbmod.kv_get(app.state.db, "current_round_id")
-            return [RecentRoundResp(id=rid, pot=0)] if rid else []
-    
-        return [RecentRoundResp(id=str(r[0]), pot=int(r[1] or 0)) for r in rows]
+            rid = str(r[0])
+            pot = int(r[1] or 0)
+        except Exception:
+            # defensive fallback
+            rid = str(r[0]) if r and len(r) > 0 else "unknown"
+            pot = int((r[1] if len(r) > 1 else 0) or 0)
+        out.append(RecentRoundResp(id=rid, pot=pot))
+    return out
     
 # =========================================================
 # Read Endpoints — Fairness & Transparency
@@ -1212,11 +1229,12 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
 
 @app.post(f"{API}/admin/round/seed")
 async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
-    """Backfill recent, SETTLED rounds for UI testing."""
+    """Backfill recent, SETTLED rounds for UI testing using sequential IDs."""
     now = datetime.utcnow()
     created = []
     for i in range(n):
-        rid = f"R{secrets.randbelow(10_000):04d}"
+        # allocate a sequential id rather than random to match production
+        rid = await alloc_next_round_id()
         # spread in the past for visible ordering
         opens = (now - timedelta(minutes=(n - i) * 45)).isoformat()
         closes = (now - timedelta(minutes=(n - i) * 45 - 30)).isoformat()
@@ -1230,3 +1248,20 @@ async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
 
     await app.state.db.commit()
     return {"ok": True, "created": created}
+    
+    @app.post(f"{API}/admin/round/reset_counter")
+async def admin_reset_round_counter(value: int = 0, auth: bool = Depends(admin_guard)):
+    """
+    Reset the internal sequential round counter 'round:next_id' to the provided value.
+    After calling with value=0 the next allocated id will be R0001.
+    """
+    try:
+        v = int(value)
+    except Exception:
+        raise HTTPException(400, "value must be an integer")
+
+    # Store the next number (we keep the stored value as the last allocated,
+    # so alloc_next_round_id will add 1). To make next returned id be R0001,
+    # set stored value to 0.
+    await dbmod.kv_set(app.state.db, "round:next_id", str(v))
+    return {"ok": True, "round:next_id": v}
