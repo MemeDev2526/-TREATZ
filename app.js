@@ -1416,6 +1416,16 @@ function svgSkull() {
   window.TREATZ.hauntTrick = hauntTrick;
   window.TREATZ.announceLastWinner = announceLastWinner;
 
+  /* =========================================================
+   Expose key FX + Coin helpers globally
+   ========================================================= */
+  if (typeof window !== "undefined") {
+  if (typeof playResultFX === "function") window.playResultFX = playResultFX;
+  if (typeof rainTreatz === "function") window.rainTreatz = rainTreatz;
+  if (typeof hauntTrick === "function") window.hauntTrick = hauntTrick;
+  if (typeof setCoinVisual === "function") window.setCoinVisual = setCoinVisual;
+}
+
   // Defensive shim + logging for FX (temporary)
   if (!window.playResultFX && typeof playResultFX === 'function') window.playResultFX = playResultFX;
   window.__TREATZ_FX_DEBUG = true;
