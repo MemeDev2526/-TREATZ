@@ -4,9 +4,9 @@
   "description": "Frontend for the TREATZ dApp — Solana-powered fun & games",
   "main": "app.js",
   "type": "module",
-  "scripts": {
+    "scripts": {
     "dev": "vite",
-    "build:app": "node ./scripts/build-app.js",
+    "build:app": "node ./build-app.js",
     "build": "vite build",
     "build:ci": "npm run build:app && npm run build",
     "preview": "vite preview"
