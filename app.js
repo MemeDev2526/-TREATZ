@@ -1452,6 +1452,49 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
     };
   })();
 
+  /* ============================
+   Export FX helpers to window
+   (safe: only attaches if defined)
+   ============================ */
+if (typeof window !== "undefined") {
+  try {
+    if (typeof spawnPiece === "function") {
+      window.spawnPiece = spawnPiece;
+      console.log("[TREATZ] spawnPiece -> exposed to window.spawnPiece");
+    }
+    if (typeof playResultFX === "function") {
+      window.playResultFX = playResultFX;
+      console.log("[TREATZ] playResultFX -> exposed to window.playResultFX");
+    }
+    if (typeof rainTreatz === "function") {
+      window.rainTreatz = rainTreatz;
+      console.log("[TREATZ] rainTreatz -> exposed to window.rainTreatz");
+    }
+    if (typeof hauntTrick === "function") {
+      window.hauntTrick = hauntTrick;
+      console.log("[TREATZ] hauntTrick -> exposed to window.hauntTrick");
+    }
+    if (typeof setCoinVisual === "function") {
+      window.setCoinVisual = setCoinVisual;
+      console.log("[TREATZ] setCoinVisual -> exposed to window.setCoinVisual");
+    }
+
+    // small convenience: a debug spawn that proxies to the real spawnPiece (if available)
+    if (!window.__spawnProxy && typeof window.spawnPiece === "function") {
+      window.__spawnProxy = function(kind='fx-wrapper', x=50, size=1, dur=5, opts={}) {
+        try {
+          return window.spawnPiece(kind, x, size, dur, opts);
+        } catch (e) {
+          console.warn('[TREATZ] __spawnProxy failed', e);
+        }
+      };
+      console.log('[TREATZ] __spawnProxy available for quick debug (call __spawnProxy())');
+    }
+  } catch (err) {
+    console.warn("[TREATZ] Failed to attach FX helpers to window", err);
+  }
+}
+
   // Back-to-top wiring
   document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('#back-to-top');
