@@ -567,17 +567,25 @@ body.flash { animation: screen-flash 0.9s ease both; }
 /* =========================
    $TREATZ FX Layer (falling wrappers/candy/ghosts)
    ========================= */
+/* FX root — force it to be a true viewport layer and avoid being captured
+   by transformed/filtered ancestors. This makes it robust in multi-layout pages. */
 #fx-layer{
-  position: fixed;
-  inset: 0;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  overflow: visible;
-  z-index: 11000; /* above most UI but below modals if needed — increase if still behind */
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  pointer-events: none !important;
+  overflow: visible !important;
+  z-index: 99999 !important;      /* raised for debug/visibility; reduce if necessary */
+  transform: none !important;     /* ensure not transformed by ancestor chains */
+  contain: none !important;
+  isolation: isolate;             /* keep compositing local to this layer */
+  will-change: auto;
 }
+
 
 /* ---------- base FX piece ---------- */
 .fx-piece{
