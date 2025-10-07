@@ -203,6 +203,42 @@ const fxRoot = (() => {
   return n;
 })();
 
+  // Defensive: if fx-layer is inside a transformed ancestor it may get clipped / trapped.
+  // Move it to document.documentElement to ensure fixed positioning covers viewport.
+  (function ensureFxRootTopLevel() {
+    try {
+      const fx = document.getElementById('fx-layer');
+      if (!fx) return;
+      // detect any ancestor (up to <html>) that creates a containing block for fixed positioned children
+      let n = fx.parentElement, found = false;
+      while (n && n !== document.documentElement) {
+        const cs = getComputedStyle(n);
+        if (cs.transform !== 'none' || cs.perspective !== 'none' || cs.filter !== 'none' || /fixed|sticky/.test(cs.position)) {
+          found = true;
+          break;
+        }
+        n = n.parentElement;
+      }
+      if (found) {
+        // move to <html> so it's not nested under transformed elements
+        document.documentElement.appendChild(fx);
+        // ensure styling remains full-viewport and highest z-index
+        Object.assign(fx.style, {
+          position: 'fixed',
+          inset: '0px',
+          left: '0px',
+          top: '0px',
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none'
+        });
+        // bump z-index if needed
+        fx.style.zIndex = Math.max(11000, Number(getComputedStyle(fx).zIndex || 11000)) + 10000;
+        console.log('[TREATZ] fx-layer moved to <html> to avoid transformed ancestor containment.');
+      }
+    } catch (e) { console.warn('ensureFxRootTopLevel failed', e); }
+  })();
+  
   // put this near the top of your app.js (after fxRoot defined)
   console.log("FX root element:", document.getElementById('fx-layer'), 'playResultFX defined?', typeof playResultFX);
 
