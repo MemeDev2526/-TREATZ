@@ -236,6 +236,50 @@
       min-height: 100vh;
       padding: 6vh 0 12vh;
     }
+
+    /* ---------- LOCK PUMPKIN COLOR (place at end of page-specific styles) ---------- */
+
+    /* Ensure variables exist if external CSS hasn't loaded yet */
+    :root {
+      --orange: #FF6B00;
+      --orange-hi: #FF9500;
+      --pumpkin: var(--orange);
+    }
+
+    /* Keep the card dark — prevent accidental orange backgrounds */
+    .cardy {
+      background: linear-gradient(180deg, rgba(13,13,13,.90), rgba(13,13,13,.62)) !important;
+      color: var(--white);
+    }
+
+    /* Explicit pumpkin for primary brand copy & accents */
+    .explain h2,
+    .explain .narrative,
+    .explain strong,
+    .explain em,
+    .veil__title,
+    .boo {
+      color: var(--pumpkin) !important;
+      text-shadow: 0 0 12px rgba(255,107,0,.45), 0 0 18px rgba(106,0,255,.35);
+    }
+
+    /* Make CTA primary gradient use exact pumpkin variables */
+    .btn--primary,
+    .veil__btn {
+      background: linear-gradient(180deg, var(--pumpkin), var(--orange-hi)) !important;
+      color: #1a0b00 !important;
+      box-shadow: 0 8px 30px rgba(255,107,0,.08);
+    }
+
+    /* If small elements accidentally inherit orange as a background, force transparent */
+    .explain * { background: transparent !important; }
+
+    /* Accessibility nudge: if orange text doesn't meet contrast, fallback to white on small screens */
+    @media (max-width: 480px) {
+      .explain .narrative, .explain h2 {
+        color: color-contrast(var(--pumpkin) vs var(--white) , var(--white), var(--pumpkin));
+      }
+    }
   </style>
 </head>
 
