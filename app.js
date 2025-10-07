@@ -161,11 +161,47 @@ document.addEventListener("DOMContentLoaded", () => {
   // -------------------------
   // FX helpers: particles, effects, coin faces
   // -------------------------
-  const fxRoot = (() => {
-    let n = document.getElementById("fx-layer");
-    if (!n) { n = document.createElement("div"); n.id = "fx-layer"; document.body.appendChild(n); }
-    return n;
-  })();
+  // FX root (robust): ensure fx-layer is a direct child of document.body and
+// not nested inside any transformed/overflowing container.
+const fxRoot = (() => {
+  let n = document.getElementById("fx-layer");
+  if (!n) {
+    n = document.createElement("div");
+    n.id = "fx-layer";
+    n.setAttribute("aria-hidden", "true");
+    document.body.appendChild(n);
+    console.log("[TREATZ] fx-layer created and appended to document.body");
+  } else {
+    // If fx-layer exists but is not a direct child of body, move it under body.
+    if (n.parentElement !== document.body) {
+      console.warn("[TREATZ] fx-layer found but not direct child of <body>. Moving it to document.body for viewport behaviour.");
+      document.body.appendChild(n);
+    }
+  }
+
+  // Safety: ensure it's styled strongly enough to avoid ancestor capture
+  Object.assign(n.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100vw",
+    height: "100vh",
+    pointerEvents: "none",
+    overflow: "visible",
+    zIndex: "99999",
+    transform: "none",
+  });
+
+  // Debug helpers available on window for interactive testing
+  window.__spawnProxy = () => {
+    // quick demonstration spawn (3 wrappers + 2 candies)
+    rainTreatz?.({ count: 12 });
+    setTimeout(() => hauntTrick?.({ count: 6 }), 600);
+    console.log("[TREATZ] __spawnProxy fired");
+  };
+
+  return n;
+})();
 
   // put this near the top of your app.js (after fxRoot defined)
   console.log("FX root element:", document.getElementById('fx-layer'), 'playResultFX defined?', typeof playResultFX);
@@ -386,11 +422,19 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
 
   // setCoinVisual: ensure the coin image / faces match the landed result immediately
   function setCoinVisual(landed) {
-    // landed expected "TREAT" | "TRICK"
+    // Normalize input
+    const result = String(landed || "").toUpperCase();
+    const isTreat = (result === "TREAT");
+
+    // canonical images (config override or fallback)
     const treatImg = (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
     const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
 
-    // set the front/back faces (same logic as setCoinFaces but idempotent)
+    if (typeof setCoinFaces === "function") {
+      try { setCoinFaces(treatImg, trickImg); } catch (_) { /* ignore */ }
+    } else {
+      
+    // fallback if setCoinFaces is not present; set the front/back faces (same logic as setCoinFaces but idempotent)
     const front = document.querySelector(".coin__face--front");
     const back = document.querySelector(".coin__face--back");
     if (front) front.style.background = `center/contain no-repeat url('${treatImg}')`;
@@ -402,7 +446,6 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
 
     // ensure the final orientation is set after spin settles
     // If landed === 'TREAT' we want front face showing (or rotated depending on your CSS)
-    // We keep your current transform logic but also set an explicit class to avoid conflicts
     if (coinRoot) {
       if (landed === "TREAT") {
         coinRoot.classList.add("coin--show-treat");
@@ -1433,12 +1476,19 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
   /* =========================================================
    Expose key FX + Coin helpers globally
    ========================================================= */
-  if (typeof window !== "undefined") {
-  if (typeof playResultFX === "function") window.playResultFX = playResultFX;
-  if (typeof rainTreatz === "function") window.rainTreatz = rainTreatz;
-  if (typeof hauntTrick === "function") window.hauntTrick = hauntTrick;
-  if (typeof setCoinVisual === "function") window.setCoinVisual = setCoinVisual;
-}
+  if (typeof window !== 'undefined') {
+    if (typeof spawnPiece === 'function') window.spawnPiece = spawnPiece;
+    if (typeof rainTreatz === 'function') window.rainTreatz = rainTreatz;
+    if (typeof hauntTrick === 'function') window.hauntTrick = hauntTrick;
+    if (typeof playResultFX === 'function') window.playResultFX = playResultFX;
+    if (typeof setCoinVisual === 'function') window.setCoinVisual = setCoinVisual;
+    console.log("[TREATZ] spawnPiece -> exposed to window.spawnPiece");
+    console.log("[TREATZ] playResultFX -> exposed to window.playResultFX");
+    console.log("[TREATZ] rainTreatz -> exposed to window.rainTreatz");
+    console.log("[TREATZ] hauntTrick -> exposed to window.hauntTrick");
+    console.log("[TREATZ] setCoinVisual -> exposed to window.setCoinVisual");
+    console.log("[TREATZ] __spawnProxy available for quick debug (call __spawnProxy())");
+  }
 
   // Defensive shim + logging for FX (temporary)
   if (!window.playResultFX && typeof playResultFX === 'function') window.playResultFX = playResultFX;
