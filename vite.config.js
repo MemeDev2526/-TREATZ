@@ -7,7 +7,12 @@ export default defineConfig({
   base: "/static/",
   root: ".",
 
-  build: {
+  // Speed up dev & avoid ESM resolution hiccups for large libs used elsewhere
+  optimizeDeps: {
+    include: ["@solana/web3.js", "@solana/spl-token"]
+  },
+
+    build: {
     outDir: "dist",
     emptyOutDir: true,
 
@@ -24,7 +29,7 @@ export default defineConfig({
         whitepaper: resolve(__dirname, "whitepaper.html"),
       },
 
-      // <<< ADDED: treat runtime /static/app.js (and optional /static/style.css) as externals
+      // <<< keep treat runtime /static/app.js (and optional /static/style.css) as externals
       // This prevents Rollup from trying to resolve them at build time.
       external: ["/static/app.js", "/static/style.css"],
 
