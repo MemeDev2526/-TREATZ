@@ -246,75 +246,78 @@ function svgSkull() {
 } 
 
 // spawnPiece(kind, xvw, sizeScale, duration, opts)
-  // opts: { color } - used for wrapper tinting
-  function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
-    const el = document.createElement("div");
-    el.className = `fx-piece ${kind}`;
+function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
+  const el = document.createElement("div");
+  el.className = `fx-piece ${kind}`;
 
-    // sensible defaults & randomized rotations
-    const rotation = Math.floor(rand(-28, 28));
-    const r1 = `${Math.floor(rand(240, 720))}deg`;
-    const scaleVal = (typeof sizeScale === "number" && !isNaN(sizeScale)) ? sizeScale : 1;
+  // random rotation for variety
+  const rotation = Math.floor(rand(-28, 28));
+  const r1 = `${Math.floor(rand(240, 720))}deg`;
+  const scaleVal = (typeof sizeScale === "number" && !isNaN(sizeScale)) ? sizeScale : 1;
 
-    // Use percent coordinates but ensure bounds
-    const leftPct = Math.max(0, Math.min(100, Number(xvw) || 50));
-    el.style.left = `${leftPct}%`;
-    // start slightly above the viewport so fall animation is visible
-    el.style.top = `-8%`;
+  // Use percent coords, keep inside viewport bounds
+  const leftPct = Math.max(2, Math.min(98, Number(xvw) || 50));
+  el.style.left = `${leftPct}%`;
+  el.style.top = `-8%`; // start above the viewport for falling pieces
 
-    // set CSS vars for duration and scale so CSS handles transforms
-    el.style.setProperty("--dur", `${duration}s`);
-    el.style.setProperty("--scale", String(scaleVal));
-    el.style.setProperty("--r0", `${rotation}deg`);
-    el.style.setProperty("--r1", r1);
+  // expose CSS vars used by stylesheet for smooth transforms
+  el.style.setProperty("--dur", `${duration}s`);
+  el.style.setProperty("--scale", String(scaleVal));
+  el.style.setProperty("--r0", `${rotation}deg`);
+  el.style.setProperty("--r1", r1);
 
-    // choose SVG based on kind and apply semantic classes
-    let svg = "";
-    if (kind === "fx-wrapper") {
-      const color = opts.color || opts.colorHex || "#FF6B00";
-      el.style.setProperty("--fx-color", color);
-      el.classList.add("fx-piece--win");
-      svg = svgWrapper(color);
-    } else if (kind === "fx-candy") {
-      el.classList.add("fx-piece--win");
-      svg = svgCandy();
-    } else if (kind === "fx-ghost") {
-      el.classList.add("fx-piece--ghost");
-      svg = svgGhost();
-    } else if (kind === "fx-skull" || kind === "fx-loss" || kind === "fx-bone") {
-      el.classList.add("fx-piece--loss");
-      svg = svgSkull();
-    } else {
-      el.classList.add("fx-piece--loss");
-      svg = svgSkull();
-    }
-
-    el.innerHTML = svg;
-    fxRoot.appendChild(el);
-
-    // remove after animation finishes (duration + buffer)
-    const removeAfter = Math.max(800, Math.round(duration * 1000) + 350);
-    setTimeout(() => {
-      // graceful fade-out class if you want to animate removal
-      try { el.remove(); } catch (e) { /* ignore */ }
-    }, removeAfter);
-
-    return el;
+  // Choose SVG and semantic classes
+  let svg = "";
+  if (kind === "fx-wrapper") {
+    const color = opts.color || opts.colorHex || "#FF6B00";
+    el.style.setProperty("--fx-color", color);
+    el.classList.add("fx-piece--win");
+    svg = svgWrapper(color);
+  } else if (kind === "fx-candy") {
+    el.classList.add("fx-piece--win");
+    svg = svgCandy();
+  } else if (kind === "fx-ghost") {
+    el.classList.add("fx-piece--ghost");
+    svg = svgGhost();
+  } else if (kind === "fx-skull" || kind === "fx-loss" || kind === "fx-bone") {
+    el.classList.add("fx-piece--loss");
+    svg = svgSkull();
+  } else {
+    // fallback to skull so something visible shows up
+    el.classList.add("fx-piece--loss");
+    svg = svgSkull();
   }
 
+  el.innerHTML = svg;
+  fxRoot.appendChild(el);
+
+  // cleanup after animation finishes (duration + buffer)
+  const removeAfter = Math.max(800, Math.round(duration * 1000) + 400);
+  setTimeout(() => {
+    try { el.remove(); } catch (e) { /* ignore */ }
+  }, removeAfter);
+
+  return el;
+}
+  
   const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00']; // witch purple, slime green, orange
 
   function rainTreatz({ count = 24, wrappers = true, candies = true, minDur = 4.5, maxDur = 7 } = {}) {
     for (let i = 0; i < count; i++) {
-      const x = Math.round(rand(4, 96)); // avoid absolute edges
+      // avoid edges; give each item a slightly different horizontal position
+      const x = Math.round(rand(6, 94));
       const scale = rand(0.78, 1.22);
       const dur = rand(minDur, maxDur);
+
       if (wrappers) {
+        // choose a random wrap color each spawn for variety
         const color = WRAP_COLORS[Math.floor(Math.random() * WRAP_COLORS.length)];
-        spawnPiece("fx-wrapper", x, scale, dur, { color });
+        spawnPiece("fx-wrapper", x + rand(-3, 3), scale, dur, { color });
       }
-      if (candies && Math.random() < 0.6) {
-        spawnPiece("fx-candy", Math.max(4, Math.min(96, x + rand(-6, 6))), rand(.7, 1.05), Math.max(2.6, dur + rand(-.5, .5)));
+
+      if (candies && Math.random() < 0.75) {
+        // smaller candy pieces sprinkled
+        spawnPiece("fx-candy", Math.max(6, Math.min(94, x + rand(-6, 6))), rand(0.7, 1.05), Math.max(2.6, dur + rand(-0.6, 0.6)));
       }
     }
   }
@@ -322,12 +325,23 @@ function svgSkull() {
 
   function hauntTrick({ count = 10, ghosts = true, skulls = true } = {}) {
     for (let i = 0; i < count; i++) {
-      const x = rand(5, 95);
-      const scale = rand(0.85, 1.28);
-      const dur = rand(5.6, 9);
-      // alternate ghosts & skulls for mixed effect
-      if (ghosts && Math.random() < 0.66) spawnPiece("fx-ghost", x + rand(-6, 6), scale, dur);
-      if (skulls && Math.random() < 0.66) spawnPiece("fx-skull", x + rand(-6, 6), rand(0.8, 2.2), dur + rand(-1.2, 1.2));
+      const x = rand(6, 94);
+      // increase skull size variance: from small to very large
+      const skullScale = rand(0.7, 2.6);   // 70% to 260%
+      // ghosts slightly larger and float longer
+      const ghostScale = rand(0.9, 1.6);
+      // durations tuned for spooky pacing
+      const skullDur = rand(3.8, 7.5);
+      const ghostDur = rand(5.6, 10.5);
+
+      // stagger spawns for a layered effect
+      const delay = Math.floor(rand(0, 700));
+      if (ghosts && Math.random() < 0.75) {
+        setTimeout(() => spawnPiece("fx-ghost", x + rand(-8, 8), ghostScale, ghostDur), delay);
+      }
+        if (skulls && Math.random() < 0.85) {
+        setTimeout(() => spawnPiece("fx-skull", x + rand(-8, 8), skullScale, skullDur), delay + Math.floor(rand(80, 360)));
+      }
     }
   }
 
