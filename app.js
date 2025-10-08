@@ -47,9 +47,6 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("[TREATZ] Frontend initialized");
 });
 
-(function () {
-  "use strict";
-
   // -------------------------
   // Boot diagnostics (optional)
   // -------------------------
@@ -61,7 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!bar) {
         bar = document.createElement("div");
         bar.id = "__treatz_diag";
-        bar.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99999;padding:10px 14px;font:14px/1.3 Rubik,system-ui,sans-serif;color:#fff;background:#c01;box-shadow:0 6px 20px rgba(0,0,0,.5)";
+        bar.style.cssText = "position:fixed;left:0;right:0;top:0;color:#fff;background:#c01;box-shadow:0 6px 20px rgba(0,0,0,.5)";
         document.body.appendChild(bar);
       }
       var span = document.createElement("div");
@@ -1617,5 +1614,3 @@ if (typeof window !== "undefined") {
     setTimeout(() => topFocus?.focus?.(), 600);
     e.preventDefault();
   });
-
-})();
