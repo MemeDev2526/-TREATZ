@@ -1548,32 +1548,17 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
   /* =========================================================
    Expose key FX + Coin helpers globally
    ========================================================= */
-  if (typeof window !== 'undefined') {
-    if (typeof spawnPiece === 'function') window.spawnPiece = spawnPiece;
-    if (typeof rainTreatz === 'function') window.rainTreatz = rainTreatz;
-    if (typeof hauntTrick === 'function') window.hauntTrick = hauntTrick;
-    if (typeof playResultFX === 'function') window.playResultFX = playResultFX;
-    if (typeof setCoinVisual === 'function') window.setCoinVisual = setCoinVisual;
-    console.log("[TREATZ] spawnPiece -> exposed to window.spawnPiece");
-    console.log("[TREATZ] playResultFX -> exposed to window.playResultFX");
-    console.log("[TREATZ] rainTreatz -> exposed to window.rainTreatz");
-    console.log("[TREATZ] hauntTrick -> exposed to window.hauntTrick");
-    console.log("[TREATZ] setCoinVisual -> exposed to window.setCoinVisual");
-    console.log("[TREATZ] __spawnProxy available for quick debug (call __spawnProxy())");
-  }
 
-  // Defensive shim + logging for FX (temporary)
-  if (!window.playResultFX && typeof playResultFX === 'function') window.playResultFX = playResultFX;
+  // Lightweight debug wrapper for playResultFX — avoid IIFE mismatches
   window.__TREATZ_FX_DEBUG = true;
-  (function fxDebugWrap(){
-    if (!window.playResultFX) return;
-    const orig = window.playResultFX;
-    window.playResultFX = function(result){
+  if (typeof window !== "undefined" && typeof playResultFX === "function") {
+    const orig = playResultFX;
+    window.playResultFX = function(result) {
       try { console.log('[TREATZ FX] playResultFX ->', result, 'fxLayerChildren=', document.getElementById('fx-layer')?.children.length); } catch(e){}
       return orig.apply(this, arguments);
     };
-  })();
- 
+  }
+
   /* ============================
    Export FX helpers to window
    (safe: only attaches if defined)
@@ -1628,3 +1613,5 @@ if (typeof window !== "undefined") {
     setTimeout(() => topFocus?.focus?.(), 600);
     e.preventDefault();
   });
+
+})(); // end top-level IIFE
