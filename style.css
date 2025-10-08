@@ -132,8 +132,8 @@ a, .btn--outline { color: var(--slime); }
   z-index: 1001;
   backdrop-filter: blur(10px);
   background: rgba(0,0,0,0.85);
-  border-top: 1px solid rgba(255,255,255,.06);
-  border-bottom: 1px solid rgba(255,255,255,.08);
+  border-top: 1.25px solid rgba(255,255,255,.06);
+  border-bottom: 1.25px solid rgba(255,255,255,.08);
   box-shadow: inset 0 -2px 0 rgba(0,255,163,.12), 0 8px 18px rgba(0,0,0,.28);
 }
 
@@ -141,8 +141,8 @@ a, .btn--outline { color: var(--slime); }
   max-width:1200px;
   margin:0 auto;
   padding: 0.6rem 1.2rem;
-  min-height: 72px;                 /* slightly taller for bigger timer */
-  display:flex; gap:1rem;
+  min-height: 60px;                 /* slightly taller for bigger timer */
+  display:flex; gap:1.05rem;
   align-items:center; justify-content:center;
   flex-wrap:wrap;
   color:#fff;
@@ -152,8 +152,8 @@ a, .btn--outline { color: var(--slime); }
 /* label / small text */
 .countdown__label{
   font-weight:800;
-  letter-spacing:.35px;
-  font-size: clamp(18px, 2.2vw, 24px);
+  letter-spacing:.40px;
+  font-size: clamp(24px, 2.6vw, 32px);
   opacity: .95;
 }
 
@@ -220,13 +220,13 @@ a, .btn--outline { color: var(--slime); }
 
 /* Slightly larger logo to retain balance */
 .countdown__logo{
-  height: 110px;
+  height: 120px;
   width: auto;
   margin-right: .8rem;
   border-radius: 6px;
   box-shadow: 0 0 16px rgba(57,255,20,.28);
 }
-@media (max-width: 900px){ .countdown__logo{ height: 56px; } }
+@media (max-width: 900px){ .countdown__logo{ height: 72px; } }
 @media (max-width: 600px){
   .countdown__timer{ font-size: clamp(18px, 10vw, 36px); }
   .countdown__omen{ font-size: 13px; margin-left: .45rem; }
@@ -262,13 +262,13 @@ a, .btn--outline { color: var(--slime); }
   font-family: "Creepster", "Chakra Petch", sans-serif;
   font-size: clamp(1.8rem, 2.8vw, 2.8rem);
   font-weight: 800;
-  letter-spacing: 0.85px;
+  letter-spacing: 0.95px;
   margin: 0;
   text-align: left;
-  line-height: 1.5;
+  line-height: 2.25;
   display: flex;
   align-items: baseline;
-  gap: 8px
+  gap: 7px
 }
 
 .treatz-symbol {
@@ -283,7 +283,7 @@ a, .btn--outline { color: var(--slime); }
     0 0 9px rgba(255,149,0,0.9),
     0 0 18px rgba(255,107,0,0.7),
     0 6px 18px rgba(0,0,0,0.6);
-  font-weight:900;
+  font-weight:850;
   font-size: clamp(1.5rem, 2.5vw, 2.1rem);
   display:inline-block;
 }
@@ -301,8 +301,8 @@ a, .btn--outline { color: var(--slime); }
 
 .treatz-sub {
   display:inline-block;
-  margin-left: 10px;
-  font-size: clamp(1.25rem, 1.75vw, 1.35rem);
+  margin-left: 8px;
+  font-size: clamp(1.35rem, 1.75vw, 1.55rem);
   color: var(--orange);
   text-shadow: 0 0 8px rgba(255,149,0,.45);
   font-weight:700;
@@ -355,7 +355,7 @@ a, .btn--outline { color: var(--slime); }
   max-width:1200px; margin:10px auto 16px; padding:8px 16px;
   display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
   background:linear-gradient(180deg, rgba(13,13,13,.85), rgba(13,13,13,.6));
-  border:1px solid var(--card-border); border-radius:14px;
+  border:1px solid var(--card-border); border-radius:16px;
   box-shadow:var(--shadow)
 }
 .tokenbar__label{ opacity:.85; margin-right:6px }
@@ -380,10 +380,10 @@ a, .btn--outline { color: var(--slime); }
 .btn-back-to-top {
   background: linear-gradient(90deg,#ffb26a,#ff6b00);
   color: #1a0b00;
-  padding: 10px 16px;
+  padding: 12px 18px;
   border-radius: 999px;
   border: none;
-  font-weight: 700;
+  font-weight: 750;
   box-shadow: 0 8px 28px rgba(0,0,0,0.25);
   cursor: pointer;
   transition: transform .18s ease, box-shadow .18s ease;
