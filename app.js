@@ -47,6 +47,9 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("[TREATZ] Frontend initialized");
 });
 
+(function () {
+  "use strict";
+
   // -------------------------
   // Boot diagnostics (optional)
   // -------------------------
@@ -58,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!bar) {
         bar = document.createElement("div");
         bar.id = "__treatz_diag";
-        bar.style.cssText = "position:fixed;left:0;right:0;top:0;color:#fff;background:#c01;box-shadow:0 6px 20px rgba(0,0,0,.5)";
+        bar.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99999;padding:10px 14px;font:14px/1.3 Rubik,system-ui,sans-serif;color:#fff;background:#c01;box-shadow:0 6px 20px rgba(0,0,0,.5)";
         document.body.appendChild(bar);
       }
       var span = document.createElement("div");
@@ -155,32 +158,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return r.json();
   }
 
-// DIAG: find nearest ancestor with transform / perspective / filter etc.
-// Run in console or include for a few seconds at startup to diagnose.
-(function diagTransformedAncestors() {
-  try {
-    const fx = document.getElementById('fx-layer');
-    if (!fx) return console.log('[TREATZ DIAG] fx-layer missing');
-    let n = fx.parentElement, i = 0;
-    const bad = [];
-    while (n && i++ < 20) {
-      const cs = getComputedStyle(n);
-      if (cs.transform !== 'none' || cs.filter !== 'none' || cs.perspective !== 'none' || cs.willChange !== 'auto') {
-        bad.push({ tag: n.tagName, id: n.id || null, cls: n.className || null, transform: cs.transform, filter: cs.filter, willChange: cs.willChange });
-      }
-      n = n.parentElement;
-    }
-    if (bad.length) {
-      console.warn('[TREATZ DIAG] Transform-containing ancestors that may trap fixed children:', bad);
-    } else {
-      console.log('[TREATZ DIAG] No transformed ancestors detected (fx-layer should behave as fixed).');
-    }
-  } catch (e) {
-    console.error(e);
-  }
-})();
-
-  
   // -------------------------
   // FX helpers: particles, effects, coin faces
   // -------------------------
@@ -1327,20 +1304,7 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
         schedEl.textContent = `Each round: ${durationMin} min • Break: ${breakMin} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
       }
 
-      const fmtClock = (ms) => {
-        // ms: milliseconds remaining (may be negative)
-        if (ms == null) return "00:00:00";
-        let s = Math.max(0, Math.floor(ms / 1000));
-        const hours = Math.floor(s / 3600);
-        s = s % 3600;
-        const minutes = Math.floor(s / 60);
-        const seconds = s % 60;
-        const hh = String(hours).padStart(2, "0");
-        const mm = String(minutes).padStart(2, "0");
-        const ss = String(seconds).padStart(2, "0");
-        // If no hours, show MM:SS; otherwise HH:MM:SS
-        return (hours > 0) ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
-      };
+      const fmtClock = (ms) => { if (ms < 0) ms = 0; const s = Math.floor(ms / 1000); const h = String(Math.floor((s % 86400) / 3600)).padStart(2, "0"); const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0"); const sec = String(s % 60).padStart(2, "0"); return `${h}:${m}:${sec}`; };
       const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
       const tick = () => {
@@ -1354,7 +1318,7 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
         }
       };
       tick(); setInterval(tick, 1000);
-      
+
       // recent rounds
       const list = document.getElementById("recent-rounds");
       document.getElementById("jp-view-all")?.addEventListener("click", () => {
@@ -1548,16 +1512,31 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
   /* =========================================================
    Expose key FX + Coin helpers globally
    ========================================================= */
+  if (typeof window !== 'undefined') {
+    if (typeof spawnPiece === 'function') window.spawnPiece = spawnPiece;
+    if (typeof rainTreatz === 'function') window.rainTreatz = rainTreatz;
+    if (typeof hauntTrick === 'function') window.hauntTrick = hauntTrick;
+    if (typeof playResultFX === 'function') window.playResultFX = playResultFX;
+    if (typeof setCoinVisual === 'function') window.setCoinVisual = setCoinVisual;
+    console.log("[TREATZ] spawnPiece -> exposed to window.spawnPiece");
+    console.log("[TREATZ] playResultFX -> exposed to window.playResultFX");
+    console.log("[TREATZ] rainTreatz -> exposed to window.rainTreatz");
+    console.log("[TREATZ] hauntTrick -> exposed to window.hauntTrick");
+    console.log("[TREATZ] setCoinVisual -> exposed to window.setCoinVisual");
+    console.log("[TREATZ] __spawnProxy available for quick debug (call __spawnProxy())");
+  }
 
-  // Lightweight debug wrapper for playResultFX — avoid IIFE mismatches
+  // Defensive shim + logging for FX (temporary)
+  if (!window.playResultFX && typeof playResultFX === 'function') window.playResultFX = playResultFX;
   window.__TREATZ_FX_DEBUG = true;
-  if (typeof window !== "undefined" && typeof playResultFX === "function") {
-    const orig = playResultFX;
-    window.playResultFX = function(result) {
+  (function fxDebugWrap(){
+    if (!window.playResultFX) return;
+    const orig = window.playResultFX;
+    window.playResultFX = function(result){
       try { console.log('[TREATZ FX] playResultFX ->', result, 'fxLayerChildren=', document.getElementById('fx-layer')?.children.length); } catch(e){}
       return orig.apply(this, arguments);
     };
-  }
+  })();
 
   /* ============================
    Export FX helpers to window
@@ -1613,3 +1592,5 @@ if (typeof window !== "undefined") {
     setTimeout(() => topFocus?.focus?.(), 600);
     e.preventDefault();
   });
+
+})();
