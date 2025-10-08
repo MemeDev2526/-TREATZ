@@ -1355,20 +1355,6 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
       };
       tick(); setInterval(tick, 1000);
       
-      const clamp01 = (x) => Math.max(0, Math.min(1, x));
-
-      const tick = () => {
-        const now = new Date();
-        if (elClose) elClose.textContent = fmtClock(closesAt - now);
-        if (elNext) elNext.textContent = fmtClock(nextOpensAt - now);
-        if (elProg) {
-          const total = closesAt - opensAt;
-          const pct = clamp01((now - opensAt) / (total || 1)) * 100;
-          elProg.style.width = `${pct}%`;
-        }
-      };
-      tick(); setInterval(tick, 1000);
-
       // recent rounds
       const list = document.getElementById("recent-rounds");
       document.getElementById("jp-view-all")?.addEventListener("click", () => {
