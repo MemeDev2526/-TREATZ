@@ -1,8 +1,11 @@
-// app.js — reorganized, resilient
+// app.js — reorganized, resilient, complete drop-in for TREATZ
 // - cleaned structure: sections for imports, shims, config, helpers, FX, countdown,
-//   wallet plumbing, UI wiring, raffle, ticker, history, ambient audio.
+//   wallet plumbing, UI wiring, raffle/history, ambient audio, exports.
 // - defensive DOM access, robust wallet APIs, no TDZ/reference errors if libs missing.
-// - preserves all existing behaviors (coin flip UI, FX, mascot float, raffle UI, ticker).
+// - preserves all existing behaviors (coin flip UI, FX, mascot, ambient audio).
+//
+// NOTE: This is intended as a drop-in replacement for the original app.js at:
+// https://github.com/MemeDev2526/-TREATZ/blob/9a0930dc1809002caca7111194c6d2c34ac27c6f/app.js
 
 // 1) Solana + SPL Token imports (ESM)
 import { Connection, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
@@ -727,7 +730,7 @@ export async function getAta(owner, mint) {
       const modal = document.getElementById("wallet-modal");
       if (modal) modal.hidden = false;
     } catch (err) { console.error("[btn-connect] error", err); alert(err?.message || "Failed to open wallet."); }
-  })));
+  }));
 
   // Wallet modal menu
   const menu = document.getElementById("wallet-menu");
