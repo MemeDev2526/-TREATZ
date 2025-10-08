@@ -1614,3 +1614,5 @@ if (typeof window !== "undefined") {
     setTimeout(() => topFocus?.focus?.(), 600);
     e.preventDefault();
   });
+
+})();
