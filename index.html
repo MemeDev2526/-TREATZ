@@ -120,7 +120,7 @@
           </div>
 
           <div class="wallet wallet--inline" style="margin:.4rem 0 .6rem">
-            <button class="btn btn--primary" id="btn-connect" type="button" disabled title="Coming soon">Connect Wallet (coming soon)</button>
+            <button class="btn btn--primary" id="btn-connect" type="button" title="Connect your wallet">Connect Wallet</button>
           </div>
 
           <!-- 8) GAME UI CARD AREA (form) -->
@@ -183,14 +183,14 @@
         <!-- 10) DISABLED CONNECT + 11) BUY TICKETS -->
         <div class="card__col">
           <div class="wallet wallet--inline" style="margin-bottom:.75rem;">
-            <button class="btn btn--primary" id="btn-connect-2" type="button" disabled title="Coming soon">Connect Wallet (coming soon)</button>
+            <button class="btn btn--primary" id="btn-connect-2" type="button" title="Connect your wallet">Connect Wallet</button>
           </div>
 
           <div class="form">
             <label class="label" for="jp-amount">Buy Tickets</label>
             <input id="jp-amount" type="number" min="1" step="1" placeholder="1" />
             <p class="help">Total cost: <b id="jp-total">—</b> $TREATZ</p>
-            <button class="btn btn--primary" id="jp-buy" type="button" disabled title="Coming soon">Enter Raffle</button>
+            <button class="btn btn--primary" id="jp-buy" type="button">Enter Raffle</button>
             <p class="help">Tickets recorded on-chain. Auto-payout to winner. % burn to incinerator.</p>
           </div>
         </div>
@@ -277,7 +277,7 @@
       <button class="wm__close" data-close aria-label="Close">×</button>
       <h3 id="wm-title">Connect a wallet</h3>
       <p class="wm__sub">Choose a provider to continue.</p>
-      <div class="wm__list">
+      <div id="wallet-menu" class="wm__list">
         <button class="wm__item" data-wallet="phantom"><span class="wm__icon phantom"></span> Phantom</button>
         <button class="wm__item" data-wallet="solflare"><span class="wm__icon solflare"></span> Solflare</button>
         <button class="wm__item" data-wallet="backpack"><span class="wm__icon backpack"></span> Backpack</button>
