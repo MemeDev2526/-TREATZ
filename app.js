@@ -158,6 +158,32 @@ document.addEventListener("DOMContentLoaded", () => {
     return r.json();
   }
 
+// DIAG: find nearest ancestor with transform / perspective / filter etc.
+// Run in console or include for a few seconds at startup to diagnose.
+(function diagTransformedAncestors() {
+  try {
+    const fx = document.getElementById('fx-layer');
+    if (!fx) return console.log('[TREATZ DIAG] fx-layer missing');
+    let n = fx.parentElement, i = 0;
+    const bad = [];
+    while (n && i++ < 20) {
+      const cs = getComputedStyle(n);
+      if (cs.transform !== 'none' || cs.filter !== 'none' || cs.perspective !== 'none' || cs.willChange !== 'auto') {
+        bad.push({ tag: n.tagName, id: n.id || null, cls: n.className || null, transform: cs.transform, filter: cs.filter, willChange: cs.willChange });
+      }
+      n = n.parentElement;
+    }
+    if (bad.length) {
+      console.warn('[TREATZ DIAG] Transform-containing ancestors that may trap fixed children:', bad);
+    } else {
+      console.log('[TREATZ DIAG] No transformed ancestors detected (fx-layer should behave as fixed).');
+    }
+  } catch (e) {
+    console.error(e);
+  }
+})();
+
+  
   // -------------------------
   // FX helpers: particles, effects, coin faces
   // -------------------------
