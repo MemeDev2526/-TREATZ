@@ -298,7 +298,9 @@ export async function getAta(owner, mint) {
     let svg = "";
     if (kind === "fx-wrapper") {
       const color = opts.color || opts.colorHex || "#FF6B00";
+      // set both CSS var and element color so SVGs using 'currentColor' render correctly
       el.style.setProperty("--fx-color", color);
+      el.style.color = color;                       // <-- NEW: ensure currentColor is available
       el.classList.add("fx-piece--win");
       svg = svgWrapper(color);
     } else if (kind === "fx-candy") {
@@ -391,12 +393,19 @@ export async function getAta(owner, mint) {
   // -------------------------
   // Coin faces & visuals
   // -------------------------
-  function setCoinFaces(treatImg, trickImg) {
+  function setCoinFaces(trickImg, treatImg) {
     const front = document.querySelector(".coin__face--front");
     const back = document.querySelector(".coin__face--back");
-    if (!front && !back) return;
-    if (front) Object.assign(front.style, { background: `center/contain no-repeat url('${treatImg}')`, border: "none", textIndent: "-9999px" });
-    if (back) Object.assign(back.style, { background: `center/contain no-repeat url('${trickImg}')`, border: "none", textIndent: "-9999px", transform: "rotateY(180deg)" });
+    if (!front || !back) return;
+    // FRONT is labeled TRICK in HTML, so front should get trickImg
+    Object.assign(front.style, {
+      background: `center/contain no-repeat url('${trickImg}')`,
+      border: "none", textIndent: "-9999px"
+    });
+    Object.assign(back.style, {
+      background: `center/contain no-repeat url('${treatImg}')`,
+      border: "none", textIndent: "-9999px", transform: "rotateY(180deg)"
+    });
   }
 
   function setCoinVisual(landed) {
@@ -405,7 +414,7 @@ export async function getAta(owner, mint) {
     const treatImg = (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
     const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
     if (typeof setCoinFaces === "function") {
-      try { setCoinFaces(treatImg, trickImg); } catch (_) { /* ignore */ }
+      try { setCoinFaces(trickImg, treatImg); } catch (_) { /* ignore */ }
     }
     const coinRoot = document.getElementById("coin") || document.querySelector(".coin");
     if (coinRoot) coinRoot.dataset.coinResult = landed;
@@ -424,7 +433,7 @@ export async function getAta(owner, mint) {
   document.addEventListener("DOMContentLoaded", () => {
     const treatImg = (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
     const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
-    setCoinFaces(treatImg, trickImg);
+    setCoinFaces(trickImg, treatImg);
   });
 
   // -------------------------
@@ -912,17 +921,35 @@ export async function getAta(owner, mint) {
     cfPlay.addEventListener("click", async (e) => {
       e.preventDefault();
       const coin = $("#coin");
-      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+        coin.classList.remove("coin--final-trick", "coin--final-treat");
+        coin.classList.add(landedTreat ? "coin--final-treat" : "coin--final-trick");
+      }
       const form = document.getElementById("bet-form");
       const side = (new FormData(form)).get("side") || "TRICK";
       setTimeout(() => {
+        // landed is still random, but win depends on whether landed === chosen side
         const landedTreat = Math.random() < 0.5;
         const landed = landedTreat ? "TREAT" : "TRICK";
+
+        // update visuals first (so coin face matches)
         setCoinVisual(landed);
+
+        // orient coin final face (works with your CSS flip)
         if (coin) coin.style.transform = landedTreat ? "rotateY(180deg)" : "rotateY(0deg)";
+
+        // determine win by comparing to player's selection (side)
+        const chosen = String(side || "TRICK").toUpperCase();
+        const win = (landed === chosen);
+
+        // FX + banner: show win/loss based on comparison
         playResultFX(landed);
-        showWinBanner(landed === "TREAT" ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
-        $("#cf-status")?.replaceChildren(document.createTextNode(landed === "TREAT" ? "WIN!" : "LOSS"));
+        showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`);
+
+        // Update status + a clear landed-text beneath coin
+        const statusEl = $("#cf-status");
+        if (statusEl) {
+          statusEl.replaceChildren(document.createTextNode(win ? `WIN — ${landed}` : `LOSS — ${landed}`));
+        }
       }, 1150);
     });
   })();
