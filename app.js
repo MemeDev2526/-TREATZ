@@ -1089,15 +1089,16 @@ export async function getAta(owner, mint) {
             const chosen = String(side || "TRICK").toUpperCase();
             const win = (landed === chosen);
 
-            // update visuals first (face images & classes)
-            try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
-
             // set final orientation via classes (avoid inline transform clobber)
             if (coin) {
               coin.classList.remove("coin--final-trick", "coin--final-treat");
-              coin.classList.add(landedTreat ? "coin--final-treat" : "coin--final-trick");
+              coin.classList.add(landedTreat ? "coin--final-treat" : "coin--final-trick"););
             }
 
+            // update visuals first (face images & classes)
+            try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
+
+            
             // trigger FX and banner based on actual comparison
             try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
             try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
@@ -1128,6 +1129,16 @@ export async function getAta(owner, mint) {
   // placeCoinFlip: full backend flow when wallet available
   async function placeCoinFlip() {
     try {
+      // DIAGNOSTIC: print wallet runtime capabilities
+      console.log("[TREATZ][diag] placeCoinFlip start", {
+        PUBKEY,
+        WALLET,
+        windowPUBKEY: window.PUBKEY,
+        provider: !!window.provider,
+        can_signTx: !!(WALLET && (WALLET.signTransaction || WALLET.signAndSendTransaction || WALLET.sendTransaction)),
+        providerEvents: typeof (WALLET?.on) === 'function'
+      });
+
       await ensureConfig();
       if (!PUBKEY) throw new Error("Wallet not connected");
       if (!window.solanaWeb3 || !window.splToken || !WALLET) throw new Error("Wallet libraries not loaded");
@@ -1220,34 +1231,107 @@ export async function getAta(owner, mint) {
   // -------------------------
   document.getElementById("jp-buy")?.addEventListener("click", async () => {
     try {
-      // prefer the canonical runtime check (local and global)
       if (!PUBKEY && !window.PUBKEY) {
         toast("Connect wallet to buy tickets");
-        // open wallet modal to make it easy for users to connect
         const modal = document.getElementById("wallet-modal");
-        if (modal) {
-          modal.hidden = false;
-        } else {
-          // fallback: highlight wallet menu if present
-          const menu = document.getElementById("wallet-menu") || document.querySelector(".wm__list");
-          if (menu) menu.style.outline = "2px solid rgba(255,255,255,0.08)";
-        }
+        if (modal) { modal.hidden = false; }
         return;
       }
-
-      // At this point we have a pubkey. Proceed or delegate to a purchase function if implemented.
       toast("Starting ticket purchase...");
-      // If you implemented a purchase helper, call it. Otherwise this is a safe placeholder:
       if (typeof window.startRafflePurchase === "function") {
-        try { await window.startRafflePurchase(); return; } catch (err) { console.error("startRafflePurchase failed", err); }
+        try {
+          await window.startRafflePurchase({ tickets: 1 });
+          return;
+        } catch (err) { console.error("startRafflePurchase error", err); }
       }
-
-      // fallback informational message (no backend call here)
       toast("Ticket purchase flow starting — backend action not wired in this build.");
     } catch (e) { console.error(e); alert(e?.message || "Ticket purchase failed."); }
   });
 
+  // Safe raffle purchase helper — modeled on placeCoinFlip()
+  // NOTE: adapt the POST endpoint/body if your backend expects something else.
+  window.startRafflePurchase = async function startRafflePurchase({ tickets = 1 } = {}) {
+    try {
+      await ensureConfig();
+      // ensure we have a pubkey + WALLET
+      const runtimePub = PUBKEY || window.PUBKEY || null;
+      if (!runtimePub) throw new Error("Connect wallet to buy tickets");
+
+      if (!WALLET && window.WALLET) WALLET = window.WALLET;
+      if (!WALLET) throw new Error("Wallet provider not available to sign transaction");
   
+      // get current round (server):
+      const round = await jfetch(`${API}/rounds/current`);
+      const roundId = round?.round_id;
+      if (!roundId) throw new Error("No active raffle round");
+  
+      // ticket price from config (server uses base units)
+      const ticketBase = Number(CONFIG?.token?.ticket_price || 0);
+      if (!ticketBase) throw new Error("Ticket price not available");
+
+      // Compute amount to transfer for chosen number of tickets
+      const amountBase = ticketBase * Number(tickets || 1);
+
+      // create purchase order on backend - adapt endpoint if needed
+      // expected response should include deposit/memo like bets flow
+      const purchase = await jfetch(`${API}/rounds/${encodeURIComponent(roundId)}/buy`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tickets: Number(tickets || 1) })
+      }).catch(() => null);
+
+      if (!purchase || !purchase.memo) {
+        // If backend didn't return this endpoint shape, fall back to contacting a generic /buy endpoint
+        console.warn("[TREATZ] buy endpoint returned no memo — purchase object:", purchase);
+        // try fallback to /bets-style endpoint (if your backend uses it)
+        // const purchase2 = await jfetch(`${API}/bets`, { method: "POST", headers:{...}, body: JSON.stringify({ amount: amountBase, side: "TICKET" }) });
+        // use purchase2 instead if available
+        throw new Error("Purchase API did not return required payment payload. Confirm endpoint /rounds/:id/buy exists.");
+      }
+  
+      // Show deposit/memo for debugging
+      $("#jp-deposit")?.replaceChildren(document.createTextNode(purchase.deposit || "—"));
+      $("#jp-memo")?.replaceChildren(document.createTextNode(purchase.memo || "—"));
+
+      // Build transfer tx to game vault similar to placeCoinFlip
+      const mintPk = new PublicKey(CONFIG.token.mint);
+      const destAta = new PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
+      const payerPub = (typeof runtimePub === "string") ? new PublicKey(runtimePub) : runtimePub;
+      const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
+
+      const ixs = [];
+      if (createSrc) ixs.push(createSrc);
+      ixs.push(
+        createTransferCheckedInstruction(
+          srcAta,
+          mintPk,
+          destAta,
+          payerPub,
+          Number(amountBase),
+          DECIMALS
+        ),
+        memoIx(purchase.memo || "")
+      );
+
+      // fetch blockhash & send
+      const bh = (await jfetch(`${API}/cluster/latest_blockhash`)).blockhash;
+      const tx = new Transaction({ feePayer: payerPub });
+      tx.recentBlockhash = bh;
+      tx.add(...ixs);
+
+      // send using sendSignedTransaction helper (handles multiple provider shapes)
+      const signature = await sendSignedTransaction(tx);
+      if (!signature) throw new Error("Failed to send transaction");
+
+      toast("Ticket purchase sent: " + signature.slice(0, 8) + "…");
+      // Optionally: poll server for purchase/round updates
+      return signature;
+    } catch (err) {
+      console.error("startRafflePurchase failed", err);
+      toast(err?.message || "Ticket purchase failed (see console)");
+      throw err;
+    }
+  };
   
   (async function initRaffleUI() {
     const errOut = (where, message) => {
