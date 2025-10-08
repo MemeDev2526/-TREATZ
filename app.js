@@ -1241,11 +1241,18 @@ export async function getAta(owner, mint) {
     e.preventDefault();
   });
 
-  // Expose convenience API for debugging
+  // expose both under window.TREATZ and as direct globals for console/dev convenience
   window.TREATZ = window.TREATZ || {};
   Object.assign(window.TREATZ, {
     playResultFX, rainTreatz, hauntTrick, announceLastWinner, setCoinVisual, spawnPiece
   });
+
+  // make setCoinVisual directly callable from console/tests
+  if (typeof window !== 'undefined') {
+    window.setCoinVisual = setCoinVisual;
+    // optionally also expose setCoinFaces
+    window.setCoinFaces = setCoinFaces;
+  }
 
   // FX debug wrapper
   (function fxDebugWrap(){
