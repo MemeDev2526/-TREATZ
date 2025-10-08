@@ -1327,7 +1327,34 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
         schedEl.textContent = `Each round: ${durationMin} min • Break: ${breakMin} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
       }
 
-      const fmtClock = (ms) => { if (ms < 0) ms = 0; const s = Math.floor(ms / 1000); const h = String(Math.floor((s % 86400) / 3600)).padStart(2, "0"); const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0"); const sec = String(s % 60).padStart(2, "0"); return `${h}:${m}:${sec}`; };
+      const fmtClock = (ms) => {
+        // ms: milliseconds remaining (may be negative)
+        if (ms == null) return "00:00:00";
+        let s = Math.max(0, Math.floor(ms / 1000));
+        const hours = Math.floor(s / 3600);
+        s = s % 3600;
+        const minutes = Math.floor(s / 60);
+        const seconds = s % 60;
+        const hh = String(hours).padStart(2, "0");
+        const mm = String(minutes).padStart(2, "0");
+        const ss = String(seconds).padStart(2, "0");
+        // If no hours, show MM:SS; otherwise HH:MM:SS
+        return (hours > 0) ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+      };
+      const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+      const tick = () => {
+        const now = new Date();
+        if (elClose) elClose.textContent = fmtClock(closesAt - now);
+        if (elNext) elNext.textContent = fmtClock(nextOpensAt - now);
+        if (elProg) {
+          const total = closesAt - opensAt;
+          const pct = clamp01((now - opensAt) / (total || 1)) * 100;
+          elProg.style.width = `${pct}%`;
+        }
+      };
+      tick(); setInterval(tick, 1000);
+      
       const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
       const tick = () => {
