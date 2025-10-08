@@ -354,7 +354,10 @@ export async function getAta(owner, mint) {
       const removeNow = () => {
         if (removed) return;
         removed = true;
-        try { el.remove(); } catch (e) { /* ignore */ }
+        try {
+          if (el.__treatz_rm) { clearTimeout(el.__treatz_rm); el.__treatz_rm = null; }
+          el.remove();
+        } catch (e) { /* ignore */ }
       };
 
       // remove when animation ends (covers most browsers)
@@ -442,6 +445,17 @@ export async function getAta(owner, mint) {
     });
   }
 
+  // Defensive wrapper to ensure consistent ordering (trick -> treat)
+  function applyCoinFaces({ trickImg, treatImg } = {}) {
+    try {
+      trickImg = trickImg || (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
+      treatImg = treatImg || (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
+      setCoinFaces(trickImg, treatImg);
+    } catch (e) {
+      console.warn("applyCoinFaces failed", e);
+    }
+  }
+
   function setCoinVisual(landed) {
     const result = String(landed || "").toUpperCase();
     const isTreat = (result === "TREAT");
@@ -467,7 +481,7 @@ export async function getAta(owner, mint) {
   document.addEventListener("DOMContentLoaded", () => {
     const treatImg = (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
     const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
-    setCoinFaces(trickImg, treatImg);
+    applyCoinFaces({ trickImg, treatImg });
   });
 
   // -------------------------
@@ -1089,10 +1103,12 @@ export async function getAta(owner, mint) {
             const chosen = String(side || "TRICK").toUpperCase();
             const win = (landed === chosen);
 
-            // set final orientation via classes (avoid inline transform clobber)
+            // stop the spin animation and set final visual state (use the same classes used by setCoinVisual)
             if (coin) {
-              coin.classList.remove("coin--final-trick", "coin--final-treat");
-              coin.classList.add(landedTreat ? "coin--final-treat" : "coin--final-trick"););
+              coin.classList.remove("spin", "coin--show-trick", "coin--show-treat");
+              coin.classList.add(landedTreat ? "coin--show-treat" : "coin--show-trick");
+              // force reflow so CSS transitions settle predictably
+              void coin.offsetWidth;
             }
 
             // update visuals first (face images & classes)
