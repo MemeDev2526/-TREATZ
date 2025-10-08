@@ -1572,6 +1572,7 @@ function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
       try { console.log('[TREATZ FX] playResultFX ->', result, 'fxLayerChildren=', document.getElementById('fx-layer')?.children.length); } catch(e){}
       return orig.apply(this, arguments);
     };
+  })();
  
   /* ============================
    Export FX helpers to window
