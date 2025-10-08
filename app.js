@@ -305,7 +305,8 @@ export async function getAta(owner, mint) {
       el.classList.add("fx-piece--win");
       svg = svgCandy();
     } else if (kind === "fx-ghost") {
-      el.classList.add("fx-piece--ghost");
+      el.classList.add("fx-piece--loss");   // reuse loss styling (bones/contrast)
+      el.classList.add("fx-piece--ghost");  // extra semantic marker if you want to style ghosts separately
       svg = svgGhost();
     } else if (kind === "fx-skull" || kind === "fx-loss" || kind === "fx-bone") {
       el.classList.add("fx-piece--loss");
@@ -316,12 +317,23 @@ export async function getAta(owner, mint) {
     }
 
     el.innerHTML = svg;
-    fxRoot.appendChild(el);
 
-    const removeAfter = Math.max(800, Math.round(duration * 1000) + 400);
-    setTimeout(() => { try { el.remove(); } catch (e) { /* ignore */ } }, removeAfter);
+    // ensure GPU-friendly and hint the browser
+    el.style.willChange = "transform, opacity";
+
+    // append, force reflow so CSS animations start reliably
+    fxRoot.appendChild(el);
+    void el.offsetWidth; // force style/layout flush so keyframe animation begins
+
+    // apply immediate inline transform to give sensible start state (optional)
+    el.style.transform = `translateY(-6%) rotate(${Math.floor(rand(-20,20))}deg) scale(${scaleVal})`;
+
+    // cleanup after animation completes (duration is seconds)
+    const removeAfter = Math.max(800, Math.round(Number(duration) * 1000) + 450);
+    el.__treatz_rm = setTimeout(() => { try { el.remove(); } catch (e) { /* ignore */ } }, removeAfter);
+
     return el;
-  }
+
 
   const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00'];
 
