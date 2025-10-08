@@ -279,63 +279,97 @@ export async function getAta(owner, mint) {
 </svg>`;
   }
 
-  // spawn piece primitive
+  // spawn piece primitive — robust: resolves fxRoot at call time, uses animationend to cleanup
   function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
-    if (!fxRoot) return null;
-    const el = document.createElement("div");
-    el.className = `fx-piece ${kind}`;
-    const rotation = Math.floor(rand(-28, 28));
-    const r1 = `${Math.floor(rand(240, 720))}deg`;
-    const scaleVal = Number(sizeScale) || 1;
-    const leftPct = Math.max(2, Math.min(98, Number(xvw) || 50));
-    el.style.left = `${leftPct}%`;
-    el.style.top = `-8%`;
-    el.style.setProperty("--dur", `${duration}s`);
-    el.style.setProperty("--scale", String(scaleVal));
-    el.style.setProperty("--r0", `${rotation}deg`);
-    el.style.setProperty("--r1", r1);
+    try {
+      // resolve fxRoot dynamically so we don't rely on a closure-captured value
+      let root = document.getElementById("fx-layer") || fxRoot;
+      if (!root) {
+        // fallback: create it (very defensive)
+        root = document.createElement("div");
+        root.id = "fx-layer";
+        root.setAttribute("aria-hidden", "true");
+        document.body.appendChild(root);
+        Object.assign(root.style, {
+          position: "fixed", top: "0", left: "0", width: "100vw", height: "100vh",
+          pointerEvents: "none", overflow: "visible", zIndex: "99999", transform: "none"
+        });
+        console.log("[TREATZ] fx-layer fallback created");
+      }
 
-    let svg = "";
-    if (kind === "fx-wrapper") {
-      const color = opts.color || opts.colorHex || "#FF6B00";
-      // set both CSS var and element color so SVGs using 'currentColor' render correctly
-      el.style.setProperty("--fx-color", color);
-      el.style.color = color;                       // <-- NEW: ensure currentColor is available
-      el.classList.add("fx-piece--win");
-      svg = svgWrapper(color);
-    } else if (kind === "fx-candy") {
-      el.classList.add("fx-piece--win");
-      svg = svgCandy();
-    } else if (kind === "fx-ghost") {
-      el.classList.add("fx-piece--loss");   // reuse loss styling (bones/contrast)
-      el.classList.add("fx-piece--ghost");  // extra semantic marker if you want to style ghosts separately
-      svg = svgGhost();
-    } else if (kind === "fx-skull" || kind === "fx-loss" || kind === "fx-bone") {
-      el.classList.add("fx-piece--loss");
-      svg = svgSkull();
-    } else {
-      el.classList.add("fx-piece--loss");
-      svg = svgSkull();
+      const el = document.createElement("div");
+      el.className = `fx-piece ${kind}`;
+
+      // sensible randomized visuals
+      const rotation = Math.floor(rand(-28, 28));
+      const r1 = `${Math.floor(rand(240, 720))}deg`;
+      const scaleVal = Number(sizeScale) || 1;
+      const leftPct = Math.max(2, Math.min(98, Number(xvw) || 50));
+
+      el.style.left = `${leftPct}%`;
+      el.style.top = `-8%`;
+      el.style.setProperty("--dur", `${duration}s`);
+      el.style.setProperty("--scale", String(scaleVal));
+      el.style.setProperty("--r0", `${rotation}deg`);
+      el.style.setProperty("--r1", r1);
+
+      // decide SVG / content by kind
+      let svg = "";
+      if (kind === "fx-wrapper") {
+        const color = opts.color || opts.colorHex || "#FF6B00";
+        el.style.setProperty("--fx-color", color);
+        el.style.color = color; // ensure currentColor works in SVG
+        el.classList.add("fx-piece--win");
+        svg = svgWrapper(color);
+      } else if (kind === "fx-candy") {
+        el.classList.add("fx-piece--win");
+        svg = svgCandy();
+      } else if (kind === "fx-ghost") {
+        el.classList.add("fx-piece--loss");
+        el.classList.add("fx-piece--ghost");
+        svg = svgGhost();
+      } else if (kind === "fx-skull" || kind === "fx-loss" || kind === "fx-bone") {
+        el.classList.add("fx-piece--loss");
+        svg = svgSkull();
+      } else {
+        el.classList.add("fx-piece--loss");
+        svg = svgSkull();
+      }
+  
+      el.innerHTML = svg;
+
+      // GPU hints
+      el.style.willChange = "transform, opacity";
+
+      // append and force reflow to kick animations
+      root.appendChild(el);
+      // important: ensure styles apply before we rely on animationstart
+      void el.offsetWidth;
+
+      // explicit initial transform (non-blocking)
+      el.style.transform = `translateY(-6%) rotate(${Math.floor(rand(-20,20))}deg) scale(${scaleVal})`;
+
+      // cleanup: prefer animationend but keep a fallback timeout
+      let removed = false;
+      const removeNow = () => {
+        if (removed) return;
+        removed = true;
+        try { el.remove(); } catch (e) { /* ignore */ }
+      };
+
+      // remove when animation ends (covers most browsers)
+      el.addEventListener("animationend", () => removeNow(), { once: true });
+
+      // fallback: remove after the expected duration + safety margin
+      const removeAfter = Math.max(900, Math.round(Number(duration) * 1000) + 750);
+      el.__treatz_rm = setTimeout(removeNow, removeAfter);
+
+      return el;
+    } catch (e) {
+      console.warn("spawnPiece failed", e);
+      return null;
     }
-
-    el.innerHTML = svg;
-
-    // ensure GPU-friendly and hint the browser
-    el.style.willChange = "transform, opacity";
-
-    // append, force reflow so CSS animations start reliably
-    fxRoot.appendChild(el);
-    void el.offsetWidth; // force style/layout flush so keyframe animation begins
-
-    // apply immediate inline transform to give sensible start state (optional)
-    el.style.transform = `translateY(-6%) rotate(${Math.floor(rand(-20,20))}deg) scale(${scaleVal})`;
-
-    // cleanup after animation completes (duration is seconds)
-    const removeAfter = Math.max(800, Math.round(Number(duration) * 1000) + 450);
-    el.__treatz_rm = setTimeout(() => { try { el.remove(); } catch (e) { /* ignore */ } }, removeAfter);
-
-    return el;
-   }
+  }
   
   const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00'];
 
@@ -725,22 +759,60 @@ export async function getAta(owner, mint) {
   // Minimal connect toggles — real wallet plumbing used elsewhere
   $$("#btn-connect, #btn-connect-2").forEach(btn => btn?.addEventListener("click", async () => {
     try {
+      // disconnect if currently connected
       if (PUBKEY) {
-        PUBKEY = null; WALLET = null; setWalletLabels(); toast("Disconnected"); return;
+        PUBKEY = null; WALLET = null;
+        // also clear globals so other modules see the disconnect
+        window.PUBKEY = null;
+        window.provider = null;
+        window.WALLET = null;
+        setWalletLabels();
+        toast("Disconnected");
+        return;
       }
+
       const present = [
         getPhantomProvider() && "phantom",
         getSolflareProvider() && "solflare",
         getBackpackProvider() && "backpack",
       ].filter(Boolean);
+
+      // if only one provider available, attempt connect inline
       if (present.length === 1) {
         const name = present[0], p = getProviderByName(name);
         try {
           if (p && p.connect) {
+            // keep a global pointer to the provider
+            window.provider = p;
+            window.WALLET = p;
             const res = await p.connect({ onlyIfTrusted: false }).catch(() => null);
-            if (res?.publicKey) {
-              PUBKEY = res.publicKey.toString ? res.publicKey.toString() : String(res.publicKey);
+            // resolve public key from various provider shapes
+            const resolved = (res?.publicKey?.toString?.() || p.publicKey?.toString?.() || window.solana?.publicKey?.toString?.() || null);
+            if (resolved) {
+              PUBKEY = resolved;
               WALLET = p;
+              // mirror to globals for other modules & built bundles
+              window.PUBKEY = PUBKEY;
+              window.WALLET = WALLET;
+              window.provider = p;
+              // expose a walletPlumbing flag for legacy guards
+              window.walletPlumbingReady = !!PUBKEY && !!p;
+              // attach connect/disconnect handlers if provider supports them
+              if (typeof p.on === 'function') {
+                try {
+                  p.on('connect', (pk) => {
+                    const s = (pk && pk.toString && pk.toString()) || (p.publicKey && p.publicKey.toString && p.publicKey.toString()) || null;
+                    PUBKEY = s; window.PUBKEY = s;
+                    window.walletPlumbingReady = !!s;
+                    setWalletLabels();
+                  });
+                  p.on('disconnect', () => {
+                    PUBKEY = null; WALLET = null;
+                    window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
+                    setWalletLabels();
+                  });
+                } catch (ee) { /* ignore event wiring errors */ }
+              }
               setWalletLabels();
               toast("Wallet connected");
               return;
@@ -748,10 +820,13 @@ export async function getAta(owner, mint) {
           }
         } catch (e) { console.warn("wallet connect failed", e); }
       }
+
+      // fallback: open wallet modal
       const modal = document.getElementById("wallet-modal");
       if (modal) modal.hidden = false;
     } catch (err) { console.error("[btn-connect] error", err); alert(err?.message || "Failed to open wallet."); }
   }));
+
 
   // Wallet modal menu
   const menu = document.getElementById("wallet-menu") || document.querySelector(".wm__list");
@@ -761,22 +836,93 @@ export async function getAta(owner, mint) {
     const w = b.getAttribute("data-wallet");
     const modal = document.getElementById("wallet-modal");
     if (modal) modal.hidden = true;
+
     (async () => {
       try {
         const p = getProviderByName(w);
         if (p && p.connect) {
-          const res = await p.connect({ onlyIfTrusted: false });
-          const got = (res?.publicKey?.toString?.() || res?.publicKey || res)?.toString?.();
+          // keep global refs
+          window.provider = p;
+          window.WALLET = p;
+          const res = await p.connect({ onlyIfTrusted: false }).catch(() => null);
+          const got =
+            (res?.publicKey?.toString?.() ||
+              p.publicKey?.toString?.() ||
+              window.solana?.publicKey?.toString?.() ||
+              null);
           PUBKEY = got;
           WALLET = p;
+          // mirror to globals
+          window.PUBKEY = PUBKEY;
+          window.WALLET = WALLET;
+          window.provider = p;
+          window.walletPlumbingReady = !!PUBKEY && !!p;
+
+          // attach connect/disconnect handlers if available
+          if (typeof p.on === 'function') {
+            try {
+              p.on('connect', (pk) => {
+                const s = (pk && pk.toString && pk.toString()) || (p.publicKey && p.publicKey.toString && p.publicKey.toString()) || null;
+                PUBKEY = s; window.PUBKEY = s; window.walletPlumbingReady = !!s;
+                setWalletLabels();
+              });
+              p.on('disconnect', () => {
+                PUBKEY = null; WALLET = null;
+                window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
+                setWalletLabels();
+              });
+            } catch (_) { /* ignore */ }
+          }
+
           setWalletLabels();
           toast("Wallet connected");
         } else {
           if (w === "phantom") window.open("https://phantom.app/", "_blank");
         }
-      } catch (e) { console.error("connect from modal failed", e); }
+      } catch (e) { console.error("connect from modal failed", e); toast("Wallet connect failed"); }
     })();
   });
+
+  // On load: if an injected provider already has a publicKey, populate globals
+(function hydrateProviderOnLoad() {
+  try {
+    const p = getPhantomProvider() || getSolflareProvider() || getBackpackProvider() || window.solana;
+    // Some providers expose publicKey immediately (trusted connection) — hydrate app state with it
+    const foundPk = p?.publicKey || window.solana?.publicKey;
+    if (p && foundPk) {
+      const s = (p.publicKey && typeof p.publicKey.toString === 'function' && p.publicKey.toString()) ||
+                (window.solana?.publicKey && typeof window.solana.publicKey.toString === 'function' && window.solana.publicKey.toString()) ||
+                null;
+      if (s) {
+        PUBKEY = s;
+        WALLET = p;
+        // mirror to globals for other script modules and the built bundle to read
+        window.PUBKEY = s;
+        window.WALLET = p;
+        window.provider = p;
+        window.walletPlumbingReady = true;
+        setWalletLabels();
+        console.log("[TREATZ] hydrated provider on load ->", s);
+
+        // wire connect/disconnect events if provider supports them
+        if (typeof p.on === 'function') {
+          try {
+            p.on('connect', (pk) => {
+              const str = (pk && typeof pk.toString === 'function' && pk.toString()) ||
+                          (p.publicKey && typeof p.publicKey.toString === 'function' && p.publicKey.toString()) || null;
+              PUBKEY = str; window.PUBKEY = str; window.walletPlumbingReady = !!str; setWalletLabels();
+            });
+            p.on('disconnect', () => {
+              PUBKEY = null; WALLET = null; window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
+              setWalletLabels();
+            });
+          } catch (_) { /* ignore event wiring errors */ }
+        }
+      }
+    }
+  } catch (e) { /* ignore hydration errors */ }
+})();
+
 
   // -------------------------
   // Ticker (faux feed)
@@ -1074,11 +1220,35 @@ export async function getAta(owner, mint) {
   // -------------------------
   document.getElementById("jp-buy")?.addEventListener("click", async () => {
     try {
-      if (!PUBKEY) { toast("Connect wallet to buy tickets"); return; }
-      toast("Ticket purchase flow requires wallet plumbing — coming soon");
+      // prefer the canonical runtime check (local and global)
+      if (!PUBKEY && !window.PUBKEY) {
+        toast("Connect wallet to buy tickets");
+        // open wallet modal to make it easy for users to connect
+        const modal = document.getElementById("wallet-modal");
+        if (modal) {
+          modal.hidden = false;
+        } else {
+          // fallback: highlight wallet menu if present
+          const menu = document.getElementById("wallet-menu") || document.querySelector(".wm__list");
+          if (menu) menu.style.outline = "2px solid rgba(255,255,255,0.08)";
+        }
+        return;
+      }
+
+      // At this point we have a pubkey. Proceed or delegate to a purchase function if implemented.
+      toast("Starting ticket purchase...");
+      // If you implemented a purchase helper, call it. Otherwise this is a safe placeholder:
+      if (typeof window.startRafflePurchase === "function") {
+        try { await window.startRafflePurchase(); return; } catch (err) { console.error("startRafflePurchase failed", err); }
+      }
+
+      // fallback informational message (no backend call here)
+      toast("Ticket purchase flow starting — backend action not wired in this build.");
     } catch (e) { console.error(e); alert(e?.message || "Ticket purchase failed."); }
   });
 
+  
+  
   (async function initRaffleUI() {
     const errOut = (where, message) => {
       console.error(`[raffle:${where}]`, message);
