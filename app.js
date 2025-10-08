@@ -333,8 +333,8 @@ export async function getAta(owner, mint) {
     el.__treatz_rm = setTimeout(() => { try { el.remove(); } catch (e) { /* ignore */ } }, removeAfter);
 
     return el;
-
-
+   }
+  
   const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00'];
 
   function rainTreatz({ count = 24, wrappers = true, candies = true, minDur = 4.5, maxDur = 7 } = {}) {
