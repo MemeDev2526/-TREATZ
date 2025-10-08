@@ -918,40 +918,65 @@ export async function getAta(owner, mint) {
   (function wireCoinFlipUI() {
     const cfPlay = document.getElementById("cf-play");
     if (!cfPlay) return;
+
     cfPlay.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const coin = $("#coin");
-        coin.classList.remove("coin--final-trick", "coin--final-treat");
-        coin.classList.add(landedTreat ? "coin--final-treat" : "coin--final-trick");
-      }
-      const form = document.getElementById("bet-form");
-      const side = (new FormData(form)).get("side") || "TRICK";
-      setTimeout(() => {
-        // landed is still random, but win depends on whether landed === chosen side
-        const landedTreat = Math.random() < 0.5;
-        const landed = landedTreat ? "TREAT" : "TRICK";
+      try {
+        e.preventDefault();
 
-        // update visuals first (so coin face matches)
-        setCoinVisual(landed);
+        const coin = document.getElementById("coin") || document.querySelector(".coin");
+        if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
 
-        // orient coin final face (works with your CSS flip)
-        if (coin) coin.style.transform = landedTreat ? "rotateY(180deg)" : "rotateY(0deg)";
+        // read chosen side from form (defensive)
+        const form = document.getElementById("bet-form");
+        const side = (form ? (new FormData(form)).get("side") : null) || "TRICK";
 
-        // determine win by comparing to player's selection (side)
-        const chosen = String(side || "TRICK").toUpperCase();
-        const win = (landed === chosen);
-
-        // FX + banner: show win/loss based on comparison
-        playResultFX(landed);
-        showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`);
-
-        // Update status + a clear landed-text beneath coin
-        const statusEl = $("#cf-status");
-        if (statusEl) {
-          statusEl.replaceChildren(document.createTextNode(win ? `WIN — ${landed}` : `LOSS — ${landed}`));
+        // small helper for logging (no-op in prod)
+        if (window.__TREATZ_DEBUG) {
+          console.log("[TREATZ] coin flip clicked — chosen:", side);
         }
-      }, 1150);
-    });
+
+        // simulate spin/settle delay to match CSS .spin duration
+        setTimeout(() => {
+          try {
+            const landedTreat = Math.random() < 0.5;
+            const landed = landedTreat ? "TREAT" : "TRICK";
+            const chosen = String(side || "TRICK").toUpperCase();
+            const win = (landed === chosen);
+
+            // update visuals first (face images & classes)
+            try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
+
+            // set final orientation via classes (avoid inline transform clobber)
+            if (coin) {
+              coin.classList.remove("coin--final-trick", "coin--final-treat");
+              coin.classList.add(landedTreat ? "coin--final-treat" : "coin--final-trick");
+            }
+
+            // trigger FX and banner based on actual comparison
+            try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
+            try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
+
+            // update status text under coin
+            const statusEl = document.getElementById("cf-status");
+            if (statusEl) {
+              statusEl.textContent = (win ? `WIN — ${landed}` : `LOSS — ${landed}`);
+              // accessibility: announce via aria-live if present
+              statusEl.setAttribute("role", "status");
+              statusEl.setAttribute("aria-live", "polite");
+            }
+
+            if (window.__TREATZ_DEBUG) {
+              console.log("[TREATZ] coin flip result:", { chosen, landed, win });
+            }
+          } catch (err) {
+            console.error("coin flip settle handler error", err);
+          }
+        }, 1150); // matches CSS spin animation duration
+
+      } catch (err) {
+        console.error("cfPlay handler error", err);
+      }
+    }, { passive: true });
   })();
 
   // placeCoinFlip: full backend flow when wallet available
