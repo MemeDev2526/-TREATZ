@@ -754,7 +754,7 @@ export async function getAta(owner, mint) {
   }));
 
   // Wallet modal menu
-  const menu = document.getElementById("wallet-menu");
+  const menu = document.getElementById("wallet-menu") || document.querySelector(".wm__list");
   menu?.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-wallet]");
     if (!b) return;
@@ -976,7 +976,7 @@ export async function getAta(owner, mint) {
       } catch (err) {
         console.error("cfPlay handler error", err);
       }
-    }, { passive: true });
+    }, { passive: false });
   })();
 
   // placeCoinFlip: full backend flow when wallet available
