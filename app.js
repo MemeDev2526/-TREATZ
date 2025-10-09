@@ -178,8 +178,10 @@ export async function getAta(owner, mint) {
     try {
       let n = document.getElementById("fx-layer");
       if (!n) {
+       if (!n) {
         n = document.createElement("div");
         n.id = "fx-layer";
+        n.classList.add("fx-layer");            // <-- add this line
         n.setAttribute("aria-hidden", "true");
         document.body.appendChild(n);
         console.log("[TREATZ] fx-layer created");
@@ -1174,7 +1176,7 @@ export async function getAta(owner, mint) {
           // update visuals first (face images & classes)
           try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
 
-          // trigger FX and banner based on actual comparison
+          // 🔊 FX + banner
           try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
           try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
 
@@ -1185,7 +1187,7 @@ export async function getAta(owner, mint) {
             statusEl.setAttribute("role", "status");
             statusEl.setAttribute("aria-live", "polite");
           }
-
+          
           if (window.__TREATZ_DEBUG) {
             console.log("[TREATZ] (SIM) coin flip result:", { chosen, landed, win });
           }
@@ -1290,15 +1292,21 @@ export async function getAta(owner, mint) {
       await new Promise(r => setTimeout(r, 1500));
       try {
         const b = await jfetch(`${API}/bets/${betId}`);
-        if ((b.status || "").toUpperCase() === "SETTLED") {
+                if ((b.status || "").toUpperCase() === "SETTLED") {
           const win = !!b.win;
           const result = win ? "TREAT" : "TRICK";
+
+          // coin face + side
           setCoinVisual(result);
+
+          // 🔊 FX + banner
           playResultFX(result);
           showWinBanner(win ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
+
           $("#cf-status")?.replaceChildren(document.createTextNode(win ? "WIN!" : "LOSS"));
           return;
         }
+
       } catch { /* ignore */ }
     }
     $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
