@@ -22,38 +22,49 @@
   <link id="treatz-css" rel="stylesheet" href="/static/style.css">
 
   <script>
-    // Load hashed Vite CSS even if /static/style.css is missing.
-    (async () => {
-      // Try both locations for the manifest (your deploys have used /static/.vite before)
-      const candidates = ["/static/.vite/manifest.json", "/.vite/manifest.json"];
-      let mf = null, prefix = "/static/";
-      for (const url of candidates) {
-        try {
-          const r = await fetch(url, { cache: "no-store" });
-          if (r.ok) { mf = await r.json(); prefix = url.startsWith("/static/") ? "/static/" : "/"; break; }
-        } catch {}
-      }
-      if (!mf) return;
+  // Load hashed Vite CSS even if /static/style.css is missing.
+ (async () => {
+    const candidates = ["/static/.vite/manifest.json", "/.vite/manifest.json"];
+    let mf = null, prefix = "/static/";
+    for (const url of candidates) {
+      try {
+         const r = await fetch(url, { cache: "no-store" });
+        if (r.ok) { mf = await r.json(); prefix = url.startsWith("/static/") ? "/static/" : "/"; break; }
+      } catch {}
+    }
+     if (!mf) return;
 
-      const seen = new Set();
-      const addCss = (href) => {
-        // Try /static/<href> first, then /<href>, to cover both mount styles.
-        for (const u of [prefix + href, "/" + href.replace(/^\/+/, "")]) {
-          if (seen.has(u)) continue;
+     const seen = new Set();
+    const addCss = (href) => {
+       // If manifest gives an absolute path (/assets/...), use it as-is.
+       if (href.startsWith("/")) {
+         const u = href;
+        if (!seen.has(u)) {
           const l = document.createElement("link");
-          l.rel = "stylesheet";
-          l.href = u;
-          document.head.appendChild(l);
-          seen.add(u);
-          break;
+           l.rel = "stylesheet";
+           l.href = u;
+           document.head.appendChild(l);
+           seen.add(u);
         }
-      };
+        return;
+       }
+      // Otherwise try both /static/<href> and /<href>
+      const candidates = [prefix + href, "/" + href.replace(/^\/+/, "")];
+      for (const u of candidates) {
+        if (seen.has(u)) continue;
+        const l = document.createElement("link");
+        l.rel = "stylesheet";
+         l.href = u;
+         document.head.appendChild(l);
+         seen.add(u);
+       }
+    };
 
-      for (const v of Object.values(mf)) {
-        if (v && Array.isArray(v.css)) v.css.forEach(addCss);
-      }
-    })();
-  </script>
+    for (const v of Object.values(mf)) {
+       if (v && Array.isArray(v.css)) v.css.forEach(addCss);
+    }
+  })();
+ </script>
 
   <!-- ========== CONFIG (kept as-is so app.js can read) ========== -->
   <script>
