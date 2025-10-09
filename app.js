@@ -776,6 +776,7 @@ export async function getAta(owner, mint) {
     try {
       // disconnect if currently connected
       if (PUBKEY) {
+        try { await WALLET?.disconnect?.(); } catch {}
         PUBKEY = null; WALLET = null;
         // also clear globals so other modules see the disconnect
         window.PUBKEY = null;
@@ -1076,9 +1077,17 @@ export async function getAta(owner, mint) {
   // -------------------------
   // Coin flip UI — simulate when no wallet, on-chain when connected
   // -------------------------
-  (function wireCoinFlipUI() {
+ (function wireCoinFlipUI() {
     const cfPlay = document.getElementById("cf-play");
     if (!cfPlay) return;
+
+    function getSpinMs() {
+      const coin = document.getElementById("coin") || document.querySelector(".coin");
+      if (!coin) return 1600;
+      const s = getComputedStyle(coin).animationDuration || "1.6s";
+      const n = parseFloat(s) || 1.6;
+      return /ms$/i.test(s) ? n : n * 1000;
+    }
 
     function simulateFlip() {
       const coin = document.getElementById("coin") || document.querySelector(".coin");
@@ -1122,10 +1131,10 @@ export async function getAta(owner, mint) {
             console.log("[TREATZ] (SIM) coin flip result:", { chosen, landed, win });
           }
         } catch (err) {
-          console.error("coin flip settle handler error", err);
-        }
-      }, 1150); // matches CSS spin animation duration
-    }
+        console.error("coin flip settle handler error", err);
+      }
+    }, getSpinMs());
+  }
 
     cfPlay.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -1486,44 +1495,59 @@ export async function getAta(owner, mint) {
   // -------------------------
   // History table load
   // -------------------------
+  let __recentCache = [];
+
   async function loadHistory(query = "") {
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
-    tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
-    try {
-      const q = new URL(`${API}/rounds/recent`, location.origin);
-      q.searchParams.set("limit", "25");
-      const res = await fetch(q.toString(), { method: "GET" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const recent = await res.json();
-      if (!Array.isArray(recent) || recent.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="muted">No history.</td></tr>`;
+
+    // fetch once and cache
+    if (!__recentCache.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
+      try {
+        const q = new URL(`${API}/rounds/recent`, location.origin);
+        q.searchParams.set("limit", "25");
+        const res = await fetch(q.toString(), { method: "GET" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        __recentCache = await res.json();
+      } catch (e) {
+        console.error(e);
+        tbody.innerHTML = `<tr><td colspan="5" class="muted">Failed to load history from backend.</td></tr>`;
         return;
       }
-      const rows = [];
-      for (const r of recent) {
-        const roundId = r.id || r.round_id || r[0] || "unknown";
-        let w = null;
-        try { w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(roundId)}/winner`); } catch (e) { /* ignore per-row */ }
-        const potHuman = (Number(r.pot || 0) / TEN_POW).toLocaleString();
-        const winner = w?.winner || "—";
-        const payout = w?.payout_sig || "—";
-        const proof = (w?.server_seed_hash || "-").slice(0, 10) + "…";
-        rows.push(`<tr>
-          <td>${roundId}</td>
-          <td>${potHuman} ${TOKEN.symbol}</td>
-          <td>${winner}</td>
-          <td>${payout}</td>
-          <td>${proof}</td>
-        </tr>`);
-      }
-      tbody.innerHTML = rows.join("") || `<tr><td colspan="5" class="muted">No history.</td></tr>`;
-    } catch (e) {
-      console.error(e);
-      tbody.innerHTML = `<tr><td colspan="5" class="muted">Failed to load history from backend.</td></tr>`;
     }
+
+    const term = String(query || "").toLowerCase().trim();
+    const recent = term
+      ? __recentCache.filter(r => String(r.id || r.round_id || "").toLowerCase().includes(term))
+      : __recentCache;
+
+    if (!Array.isArray(recent) || recent.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="muted">No history.</td></tr>`;
+      return;
+    }
+
+    const rows = [];
+    for (const r of recent) {
+      const roundId = r.id || r.round_id || r[0] || "unknown";
+      let w = null;
+      try { w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(roundId)}/winner`); } catch (e) { /* ignore per-row */ }
+      const potHuman = (Number(r.pot || 0) / TEN_POW).toLocaleString();
+      const winner = w?.winner || "—";
+      const payout = w?.payout_sig || "—";
+      const proof = (w?.server_seed_hash || "-").slice(0, 10) + "…";
+      rows.push(`<tr>
+        <td>${roundId}</td>
+        <td>${potHuman} ${TOKEN.symbol}</td>
+        <td>${winner}</td>
+        <td>${payout}</td>
+        <td>${proof}</td>
+      </tr>`);
+    }
+    tbody.innerHTML = rows.join("") || `<tr><td colspan="5" class="muted">No history.</td></tr>`;
   }
+
   document.getElementById("history-search")?.addEventListener("input", (e) => {
-    const q = e.target.value.trim();
+    const q = e.target.value;
     clearTimeout(window.__rf_hist_timer);
     window.__rf_hist_timer = setTimeout(() => loadHistory(q), 200);
   });
