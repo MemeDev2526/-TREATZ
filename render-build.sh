@@ -62,28 +62,61 @@ if [ -d "dist" ]; then
   if [ -f "static/app.js" ]; then
     echo "[TREATZ] static/app.js already exists (from build:app)"
   else
-    # Use manifest.json to reliably pick the main entry file
-    if [ -f "static/manifest.json" ]; then
-      # Node one-liner: find first entry with isEntry = true
-      JS_ENTRY=$(node -e 'const fs=require("fs"); const m=require("./static/manifest.json"); for(const k in m){ if(m[k]&&m[k].isEntry){ console.log(m[k].file); process.exit(0);} } const values=Object.values(m); for(const v of values){ if(v && v.file && v.file.endsWith(".js")){ console.log(v.file); process.exit(0); } } process.exit(0);')
-      if [ -n "$JS_ENTRY" ]; then
+    # Use Vite manifest to reliably pick the main entry file
+    if [ -f "static/.vite/manifest.json" ]; then
+      JS_ENTRY=$(node -e '
+        const fs = require("fs");
+        const mf = JSON.parse(fs.readFileSync("static/.vite/manifest.json","utf8"));
+        // Prefer an entry with isEntry=true, otherwise first file
+        for (const k in mf) { const v = mf[k]; if (v && v.isEntry && v.file) { console.log(v.file); process.exit(0); } }
+        const first = Object.values(mf).find(v => v && v.file);
+        if (first && first.file) { console.log(first.file); }
+      ' || true)
+      if [ -n "$JS_ENTRY" ] && [ -f "static/$JS_ENTRY" ]; then
         cp -f "static/$JS_ENTRY" static/app.js
         echo "[TREATZ] Copied static/$JS_ENTRY -> static/app.js (manifest fallback)"
       else
-        echo "[TREATZ] ⚠️ Could not find an entry JS in manifest — app.js not created" >&2
+        echo "[TREATZ] ⚠️ Could not find an entry JS in .vite/manifest — app.js not created" >&2
       fi
     else
-      echo "[TREATZ] ⚠️ manifest.json not found — cannot determine entry JS. Ensure build:app created static/app.js" >&2
+      echo "[TREATZ] ⚠️ .vite/manifest.json not found — ensure build:app created static/app.js" >&2
+    fi
+
+    # --- Stable /static/style.css creation (manifest → assets → repo root) ---
+  if [ -f "static/.vite/manifest.json" ]; then
+    CSS_ENTRY=$(node -e '
+      const fs=require("fs");
+      const mf=JSON.parse(fs.readFileSync("static/.vite/manifest.json","utf8"));
+      const first=Object.values(mf).find(v=>v && Array.isArray(v.css) && v.css.length);
+      if(first) process.stdout.write(first.css[0]);
+    ' || true)
+    if [ -n "$CSS_ENTRY" ]; then
+      SRC="static/${CSS_ENTRY#/}"   # strip leading slash if present
+      if [ -f "$SRC" ]; then
+        cp -f "$SRC" static/style.css
+        echo "[TREATZ] Copied $SRC -> static/style.css (manifest)"
+      fi
     fi
   fi
 
-  # find first CSS asset (optional — not all builds emit CSS) and copy to static/style.css
-  CSS_FILE=$(ls static/assets/*.css 2>/dev/null | head -n 1 || true)
-  if [ -n "$CSS_FILE" ]; then
-    cp -f "$CSS_FILE" static/style.css
-    echo "[TREATZ] Copied $CSS_FILE -> static/style.css"
-  else
-    echo "[TREATZ] ℹ️ No CSS asset found to copy (style.css not created)."
+  # fallback 2: first CSS under static/assets/
+  if [ ! -f static/style.css ]; then
+    CSS_FILE=$(ls static/assets/*.css 2>/dev/null | head -n 1 || true)
+    if [ -n "$CSS_FILE" ]; then
+      cp -f "$CSS_FILE" static/style.css
+      echo "[TREATZ] Copied $CSS_FILE -> static/style.css (assets fallback)"
+    fi
+  fi
+
+  # fallback 3: repo-root style.css (if you keep one for emergencies)
+  if [ ! -f static/style.css ] && [ -f "style.css" ]; then
+    cp -f "style.css" static/style.css
+    echo "[TREATZ] Copied repo-root style.css -> static/style.css (root fallback)"
+  fi
+
+  # final notice
+  if [ ! -f static/style.css ]; then
+    echo "[TREATZ] ⚠️ No style.css could be created under /static/"
   fi
 
 else
