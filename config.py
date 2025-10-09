@@ -82,3 +82,11 @@ class Settings(BaseSettings):
 
 # Instantiate global settings (values resolved from environment)
 settings = Settings()
+
+# Normalize TICKET_PRICE to base units if env was given in whole tokens
+try:
+    dec = int(getattr(settings, "TOKEN_DECIMALS", 6))
+    if settings.TICKET_PRICE and settings.TICKET_PRICE < (10 ** dec):
+        settings.TICKET_PRICE = settings.TICKET_PRICE * (10 ** dec)
+except Exception:
+    pass
