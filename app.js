@@ -206,7 +206,6 @@ export async function getAta(owner, mint) {
     }
   })();
 
-
   // Ensure top-level to avoid transformed ancestor clipping
   (function ensureFxRootTopLevel() {
     try {
@@ -747,6 +746,26 @@ export async function getAta(owner, mint) {
     return null;
   };
 
+  // helper
+  function setWalletUIEnabled(enabled = true) {
+    const qs = '#btn-connect, #btn-connect-2, #btn-openwallet, #btn-openwallet-2';
+    document.querySelectorAll(qs).forEach(b => {
+      if (!b) return;
+      b.disabled = !enabled;
+      b.setAttribute('aria-disabled', String(!enabled));
+      b.classList.toggle('is-disabled', !enabled);
+    });
+    // optional: also hide the modal trigger buttons
+    const modal = document.getElementById('wallet-modal');
+    if (modal && !enabled) modal.hidden = true;
+    window.__WALLET_DISABLED__ = !enabled;
+  }
+
+  // call it
+  setWalletUIEnabled(false); // disable
+  // setWalletUIEnabled(true); // enable again
+
+  
   // Wallet state
   let WALLET = null;
   let PUBKEY = null;
@@ -1194,8 +1213,8 @@ export async function getAta(owner, mint) {
           }
         } catch (err) {
           console.error("coin flip settle handler error", err);
-      }
-    }, getSpinMs());
+        }            // ← add this brace (closes the setTimeout arrow function body)
+      }, getSpinMs());
   }
 
     cfPlay.addEventListener("click", async (e) => {
