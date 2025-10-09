@@ -270,6 +270,73 @@ async def _rpc_get_blockhash(slot: int) -> Optional[str]:
         if isinstance(b, dict) and b.get("result") and b["result"].get("blockhash"):
             return b["result"]["blockhash"]
         return None
+
+
+async def _rpc_get_blockhash_fallback(
+    slot: int,
+    search_back: int = 2048,
+    search_forward: int = 128
+) -> tuple[Optional[str], Optional[int]]:
+    """
+    Try to fetch a blockhash at `slot`. If the slot was skipped or pruned by the RPC,
+    search backward (and then a small forward range). As a last resort, return the
+    latest blockhash (with slot=None to signal “not the planned finalize_slot”).
+    """
+    async with AsyncClient(RPC_URL) as c:
+        async def _slot_hash(s: int) -> Optional[str]:
+            b = await c.get_block(s, max_supported_transaction_version=0)
+            v = getattr(b, "value", None)
+            if v and hasattr(v, "blockhash"):
+                return v.blockhash
+            if isinstance(b, dict) and b.get("result") and b["result"].get("blockhash"):
+                return b["result"]["blockhash"]
+            return None
+
+        # 1) exact slot
+        try:
+            h = await _slot_hash(slot)
+            if h:
+                return h, slot
+        except Exception:
+            pass
+
+        # 2) walk backward (most skipped-slot cases are solved by a short backscan)
+        for off in range(1, search_back + 1):
+            s = slot - off
+            if s <= 0:
+                break
+            try:
+                h = await _slot_hash(s)
+                if h:
+                    return h, s
+            except Exception:
+                continue
+
+        # 3) small forward window
+        for off in range(1, search_forward + 1):
+            s = slot + off
+            try:
+                h = await _slot_hash(s)
+                if h:
+                    return h, s
+            except Exception:
+                continue
+
+        # 4) last resort: latest finalized blockhash (slot unknown here)
+        try:
+            latest = await c.get_latest_blockhash()
+            val = getattr(latest, "value", None)
+            if val and hasattr(val, "blockhash"):
+                return val.blockhash, None
+            if isinstance(latest, dict):
+                v = ((latest.get("result") or {}).get("value") or {})
+                if v.get("blockhash"):
+                    return v["blockhash"], None
+        except Exception:
+            pass
+
+        return None, None
+
         
 async def _rpc_account_exists(pubkey_str: str) -> bool:
     try:
@@ -605,9 +672,10 @@ async def rounds_buy_tickets(round_id: str, payload: dict):
     nonce = secrets.token_hex(4)
     memo = f"JP:{round_id}:{nonce}"
 
-    # Prefer ATA; fall back to raw vault if ATA is not set
-    deposit = (getattr(settings, "GAME_VAULT_ATA", None) or
-               getattr(settings, "GAME_VAULT", None))
+    # Prefer JACKPOT ATA; fall back to JACKPOT owner
+    deposit = (getattr(settings, "JACKPOT_VAULT_ATA", None) or
+               getattr(settings, "JACKPOT_VAULT", None))
+
     if not deposit:
         raise HTTPException(500, "Game vault address not configured")
 
@@ -1193,12 +1261,48 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
         round_server_seed = secrets.token_hex(32)
         await dbmod.kv_set(app.state.db, f"round:{rid}:server_seed", round_server_seed)
 
-    # External entropy = blockhash at finalize_slot; fallback to last entry tx
-    entropy = await _rpc_get_blockhash(finalize_slot) if finalize_slot else None
-    if not entropy:
-        async with app.state.db.execute("SELECT tx_sig FROM entries WHERE round_id=? ORDER BY id DESC LIMIT 1", (rid,)) as cur:
-            last = await cur.fetchone()
-        entropy = last[0] if last and last[0] else secrets.token_hex(16)
+   # External entropy = blockhash at finalize_slot; robust fallback with slot correction
+   entropy: Optional[str] = None
+   effective_slot: Optional[int] = None
+
+   if finalize_slot:
+       try:
+           entropy, effective_slot = await _rpc_get_blockhash_fallback(finalize_slot)
+       except Exception:
+           entropy, effective_slot = None, None
+
+   if not entropy:
+       # final fallback — use newest entry tx or random token
+       async with app.state.db.execute(
+           "SELECT tx_sig FROM entries WHERE round_id=? ORDER BY id DESC LIMIT 1",
+           (rid,)
+       ) as cur:
+           last = await cur.fetchone()
+       entropy = last[0] if last and last[0] else secrets.token_hex(16)
+       # (finalize_slot remains whatever was stored previously)
+   else:
+       # We found a usable blockhash; if it wasn't the planned slot, persist the slot we actually used
+       if effective_slot is not None and effective_slot != finalize_slot:
+           try:
+               await app.state.db.execute(
+                   "UPDATE rounds SET finalize_slot=? WHERE id=?",
+                   (effective_slot, rid)
+               )
+               finalize_slot = effective_slot
+               await app.state.db.commit()  # ensure slot change is durable
+           except Exception:
+               traceback.print_exc()
+
+   # Persist fairness bits for the UI
+   await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy)
+   if finalize_slot:
+       await dbmod.kv_set(app.state.db, f"round:{rid}:entropy_slot", str(finalize_slot))
+
+   # Optional: trace which path we used
+   try:
+       print(f"[round_close] entropy={'blockhash' if effective_slot else 'fallback'} slot={finalize_slot}", flush=True)
+   except Exception:
+       pass
 
     # Weighted draw
     total_tix = sum(int(t or 0) for _u, t in entries)
@@ -1222,6 +1326,8 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
             traceback.print_exc()
             raise
         await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy)
+        if finalize_slot:
+            await dbmod.kv_set(app.state.db, f"round:{rid}:entropy_slot", str(finalize_slot))
 
         # Split pot
         total_pct = max(1, SPLT_WIN + SPLT_DEV + SPLT_BURN)
