@@ -35,7 +35,7 @@
         whitepaper: "/whitepaper"
       },
       buyUrl: "#",
-      tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
+      tokenAddress: "Coming Soon",
       assets: {
         ambient: "/static/assets/ambient_loop.mp3",
         logo: "/static/assets/TREATZ_Logo.png",
@@ -66,15 +66,22 @@
     </div>
   </div>
 
-  <!-- 3) NAV BAR + 4) TOKEN ADDRESS BAR -->
-  <header class="nav">
+  <!-- 3) SITE TITLE (separate, above nav) -->
+  <header class="nav" aria-label="Site header">
+    <div class="site-title">
+      <h1 class="treatz-title">
+        <span class="treatz-symbol">$</span><span class="treatz-text">TREATZ</span>
+        <span class="treatz-sub">— The Official Halloween Candy of Solana</span>
+      </h1>
+    </div>
+
+    <!-- 4) NAV BAR (chips) -->
     <div class="nav__wrap">
       <a href="/" class="nav__brand" aria-label="$TREATZ Home">
-        <h1 class="treatz-title">
-          <span class="treatz-symbol">$</span><span class="treatz-text">TREATZ</span>
-          <span class="treatz-sub">— The Official Halloween Candy of Solana</span>
-        </h1>
+        <img src="/static/assets/TREATZ_Logo.png" alt="$TREATZ logo" height="44" />
+        <span class="nav__brand-text">Home</span>
       </a>
+
       <nav class="nav__links" aria-label="Primary">
         <a href="#about" id="link-about">About</a>
         <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter / X</a>
@@ -84,26 +91,27 @@
         <a href="#" class="nav__link--disabled" id="link-nft" aria-disabled="true" title="Coming soon">NFT</a>
         <a id="btn-open-in-phantom" href="#" target="_blank" rel="noopener" hidden>Open in Phantom</a>
       </nav>
-
-    <div class="tokenbar" role="group" aria-label="Token & Buy">
-      <div class="tokenbar__address">
-        <span class="tokenbar__label">Token:</span>
-        <code id="token-address">—</code>
-        <button class="btn btn--ghost" id="btn-copy" type="button">Copy</button>
-      </div>
-
-      <!-- NEW: live $TREATZ balance -->
-      <div class="tokenbar__balance">
-        <span class="tokenbar__label">$TREATZ Balance:</span>
-        <b id="wallet-balance">—</b>
-      </div>
-
-      <div class="tokenbar__actions">
-        <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
-      </div>
     </div>
   </header>
 
+  <!-- 5) TOKEN ADDRESS / BUY BAR (separate, below nav) -->
+  <div class="tokenbar" role="group" aria-label="Token & Buy">
+    <div class="tokenbar__address">
+      <span class="tokenbar__label">Token:</span>
+      <code id="token-address">—</code>
+      <button class="btn btn--ghost" id="btn-copy" type="button">Copy</button>
+    </div>
+
+    <div class="tokenbar__balance" id="wallet-balance-wrap">
+      <span class="tokenbar__label">$TREATZ Balance:</span>
+      <b id="wallet-balance">—</b>
+    </div>
+
+    <div class="tokenbar__actions">
+      <a class="btn btn--buy" id="btn-buy" href="#" target="_blank" rel="noopener">Buy on Pump.fun</a>
+    </div>
+  </div>
+  
   <!-- Background art layer -->
   <div class="bg" role="img" aria-label="Spooky cosmic candy background"></div>
 
