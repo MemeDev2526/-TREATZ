@@ -347,6 +347,7 @@ a, .btn--outline { color: var(--slime); }
 .tokenbar__label{ opacity: .85; margin-right: 6px; }
 .tokenbar__address code{ font-size: .95rem; user-select: all; }
 .tokenbar__actions{ position: relative; z-index: 1010; display:flex; gap:10px; flex-wrap:wrap; }
+.tokenbar__balance b { font-weight: 900; }
 
 /* =========================================================
    Buttons
