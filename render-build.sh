@@ -57,7 +57,14 @@ fi
 
 # ---- Build standalone runtime AFTER the dist→static copy ----
 echo "[TREATZ] 🧩 Building standalone runtime (app.js)…"
-npm run build:app || echo "[TREATZ] ⚠️ build:app failed — continuing"
+npm run build:app
+
+# ensure we actually have JS before shipping
+if [ ! -f static/app.js ]; then
+  echo "[TREATZ] ❌ static/app.js missing after build — aborting deploy" >&2
+  exit 1
+fi
+
 
 # ---- NEVER copy from a manifest into app.js (that caused the regression) ----
 
