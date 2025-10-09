@@ -18,30 +18,42 @@
   <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
 
-   <!-- ========== CSS (predictable + Vite fallback) ========== -->
+  <!-- ========== CSS (predictable + pull hashed from Vite manifest) ========== -->
   <link id="treatz-css" rel="stylesheet" href="/static/style.css">
 
-  <!-- Also load hashed Vite CSS from manifest (covers cases where style.css is stale/empty) -->
   <script>
+    // Load hashed Vite CSS even if /static/style.css is missing.
     (async () => {
-      try {
-        const res = await fetch("/static/.vite/manifest.json");
-        if (!res.ok) return;                      // if no manifest, skip quietly
-        const mf = await res.json();
-        for (const v of Object.values(mf)) {
-          if (Array.isArray(v.css)) {
-            for (const href of v.css) {
-              const l = document.createElement("link");
-              l.rel = "stylesheet";
-              l.href = "/static/" + href;         // e.g. /static/assets/main-XYZ.css
-              document.head.appendChild(l);
-            }
-          }
+      // Try both locations for the manifest (your deploys have used /static/.vite before)
+      const candidates = ["/static/.vite/manifest.json", "/.vite/manifest.json"];
+      let mf = null, prefix = "/static/";
+      for (const url of candidates) {
+        try {
+          const r = await fetch(url, { cache: "no-store" });
+          if (r.ok) { mf = await r.json(); prefix = url.startsWith("/static/") ? "/static/" : "/"; break; }
+        } catch {}
+      }
+      if (!mf) return;
+
+      const seen = new Set();
+      const addCss = (href) => {
+        // Try /static/<href> first, then /<href>, to cover both mount styles.
+        for (const u of [prefix + href, "/" + href.replace(/^\/+/, "")]) {
+          if (seen.has(u)) continue;
+          const l = document.createElement("link");
+          l.rel = "stylesheet";
+          l.href = u;
+          document.head.appendChild(l);
+          seen.add(u);
+          break;
         }
-      } catch (_) {}
+      };
+
+      for (const v of Object.values(mf)) {
+        if (v && Array.isArray(v.css)) v.css.forEach(addCss);
+      }
     })();
   </script>
-
 
   <!-- ========== CONFIG (kept as-is so app.js can read) ========== -->
   <script>
@@ -102,7 +114,7 @@
         <a href="#" id="link-twitter"   target="_blank" rel="noopener">Twitter / X</a>
         <a href="#" id="link-telegram"  target="_blank" rel="noopener">Telegram</a>
         <a href="#" id="link-tiktok"    target="_blank" rel="noopener">TikTok</a>
-        <a href="/whitepaper" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
+        <a href="/static/whitepaper.html" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
         <a href="#" class="nav__link--disabled" id="link-nft" aria-disabled="true" title="Coming soon">NFT (coming soon)</a>
       </nav>
     </div>
@@ -325,7 +337,7 @@
   (async () => {
     // 1) Prefer the hand-built bundle if present
     try {
-      const head = await fetch("/static/app.js", { method: "HEAD" });
+      const head = await fetch("/static/app.js", { method: "HEAD", cache: "no-store" });
       if (head.ok) {
         const s = document.createElement("script");
         s.type = "module";
@@ -333,25 +345,29 @@
         document.body.appendChild(s);
         return;
       }
-    } catch (_) {}
+    } catch {}
 
-    // 2) Fall back to Vite's hashed entry via manifest
-    try {
-      const res = await fetch("/static/.vite/manifest.json");
-      if (!res.ok) throw new Error("manifest missing");
-      const mf = await res.json();
-      const files = Object.values(mf).map(x => x && x.file).filter(Boolean);
-      const main = files.find(f => /index|main|app/i.test(f)) || files.find(f => f.endsWith(".js"));
-      if (!main) throw new Error("no JS entry in manifest");
-      const s = document.createElement("script");
-      s.type = "module";
-      s.src = "/static/" + main;   // e.g. /static/assets/index-XYZ.js
-      document.body.appendChild(s);
-    } catch (e) {
-      console.error("[TREATZ] Failed to load entry JS:", e);
+    // 2) Fall back to Vite manifest (try both mount points)
+    const mfs = ["/static/.vite/manifest.json", "/.vite/manifest.json"];
+    for (const m of mfs) {
+      try {
+        const res = await fetch(m, { cache: "no-store" });
+        if (!res.ok) continue;
+        const mf = await res.json();
+        const entries = Object.values(mf).filter(Boolean);
+        const main = (entries.find(x => /index|main|app/i.test(String(x.file))) || entries[0] || {}).file;
+        if (!main) continue;
+        const prefix = m.startsWith("/static/") ? "/static/" : "/";
+        const s = document.createElement("script");
+        s.type = "module";
+        s.src = prefix + main;   // e.g. /static/assets/index-XYZ.js or /assets/index-XYZ.js
+        document.body.appendChild(s);
+        return;
+      } catch {}
     }
-  })();
-</script>
 
+    console.error("[TREATZ] Failed to load entry JS from all sources");
+  })();
+  </script>
 </body>
 </html>
