@@ -18,8 +18,30 @@
   <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
 
-  <!-- ========== CSS (keep external or inline later) ========== -->
+   <!-- ========== CSS (predictable + Vite fallback) ========== -->
   <link id="treatz-css" rel="stylesheet" href="/static/style.css">
+
+  <!-- Also load hashed Vite CSS from manifest (covers cases where style.css is stale/empty) -->
+  <script>
+    (async () => {
+      try {
+        const res = await fetch("/static/.vite/manifest.json");
+        if (!res.ok) return;                      // if no manifest, skip quietly
+        const mf = await res.json();
+        for (const v of Object.values(mf)) {
+          if (Array.isArray(v.css)) {
+            for (const href of v.css) {
+              const l = document.createElement("link");
+              l.rel = "stylesheet";
+              l.href = "/static/" + href;         // e.g. /static/assets/main-XYZ.css
+              document.head.appendChild(l);
+            }
+          }
+        }
+      } catch (_) {}
+    })();
+  </script>
+
 
   <!-- ========== CONFIG (kept as-is so app.js can read) ========== -->
   <script>
