@@ -4,7 +4,7 @@
   "description": "Frontend for the TREATZ dApp — Solana-powered fun & games",
   "main": "app.js",
   "type": "module",
-    "scripts": {
+  "scripts": {
     "dev": "vite",
     "build:app": "node ./build-app.js",
     "build": "vite build",
@@ -13,20 +13,14 @@
   },
   "dependencies": {
     "@solana/web3.js": "^1.95.3",
-    "@solana/spl-token": "^0.4.7"
+    "@solana/spl-token": "^0.4.7",
+    "buffer": "^6.0.3"
   },
   "devDependencies": {
     "vite": "^5.4.0",
     "esbuild": "^0.18.0"
-    "buffer": "^6.0.3" 
   },
-  "keywords": [
-    "solana",
-    "spl-token",
-    "treatz",
-    "web3",
-    "dapp"
-  ],
+  "keywords": ["solana", "spl-token", "treatz", "web3", "dapp"],
   "author": "Treatz Devs",
   "license": "MIT"
 }
