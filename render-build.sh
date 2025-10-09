@@ -28,15 +28,6 @@ else
   npm install --no-audit --no-fund
 fi
 
-# ---- Build app.js ONCE (optional) ----
-if npm run | grep -q "build:app"; then
-  echo "[TREATZ] 🧩 Building standalone runtime (app.js)…"
-  # If this fails, keep going so Vite still runs.
-  npm run build:app || echo "[TREATZ] ⚠️ build:app failed — continuing with Vite build"
-else
-  echo "[TREATZ] (no build:app script) — skipping standalone runtime build"
-fi
-
 # ---- Vite build ----
 echo "[TREATZ] 🛠️  Building site with Vite…"
 npm run build
@@ -51,6 +42,14 @@ if [ -d "dist" ]; then
   mkdir -p static/assets
   if [ -d "assets" ]; then
     cp -a assets/. static/assets/
+  fi
+
+  # ---- Build app.js NOW so dist→static copy didn’t delete it ----
+  if npm run | grep -q "build:app"; then
+    echo "[TREATZ] 🧩 Building standalone runtime (app.js)…"
+    npm run build:app || echo "[TREATZ] ⚠️ build:app failed — continuing"
+  else
+    echo "[TREATZ] (no build:app script) — skipping standalone runtime build"
   fi
 
   # Ensure /static/app.js exists (fallback to Vite manifest if needed)
