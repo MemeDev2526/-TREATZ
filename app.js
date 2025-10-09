@@ -7,6 +7,17 @@
 // NOTE: This is intended as a drop-in replacement for the original app.js at:
 // https://github.com/MemeDev2526/-TREATZ/blob/9a0930dc1809002caca7111194c6d2c34ac27c6f/app.js
 
+// [polyfills] -------------------------------------------------
+import { Buffer } from "buffer";
+if (typeof window !== "undefined") {
+  if (!window.Buffer) window.Buffer = Buffer;
+  if (!window.global) window.global = window; // some libs expect global
+  if (!window.process) window.process = { env: { NODE_ENV: "production" } };
+}
+// ------------------------------------------------------------
+
+// app.js — … (rest of your file continues)
+
 // 1) Solana + SPL Token imports (ESM)
 import { Connection, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import {
