@@ -134,18 +134,14 @@ if os.path.isdir(REPO_ASSETS_DIR):
 # ✅ Serve a favicon if present in static
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
-    # prefer static/favicon.ico, then built assets/favicon.png/ico, else 404
+    # prefer static/favicon.ico, then built assets favicon.ico, else 404
     p1 = os.path.join(STATIC_DIR, "favicon.ico")
-    p2 = os.path.join(STATIC_ASSETS_DIR, "favicon.ico")
-    p3 = os.path.join(STATIC_ASSETS_DIR, "favicon.png")  # common case in your repo
+    p2 = os.path.join(STATIC_ASSETS_DIR, "favicon.ico")  # <— fix var name
     if os.path.exists(p1):
         return FileResponse(p1)
     if os.path.exists(p2):
         return FileResponse(p2)
-    if os.path.exists(p3):
-        return FileResponse(p3)
     raise HTTPException(status_code=404, detail="favicon not found")
-
 
 
 # ✅ Serve index.html at root (for SPA routing)
