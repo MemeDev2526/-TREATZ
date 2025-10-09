@@ -848,14 +848,14 @@ async def latest_blockhash():
         async with AsyncClient(RPC_URL) as c:
             resp = await c.get_latest_blockhash()  # default commitment
             # solders object?
-           val = getattr(resp, "value", None)
-           if val is not None:
-           bh = _as_str_blockhash(getattr(val, "blockhash", None))
-           lvh = getattr(val, "last_valid_block_height", None) or getattr(val, "lastValidBlockHeight", None)
-           return {
-               "blockhash": bh,
-               "last_valid_block_height": int(lvh) if lvh is not None else None
-           }
+            val = getattr(resp, "value", None)
+            if val is not None:
+            bh = _as_str_blockhash(getattr(val, "blockhash", None))
+            lvh = getattr(val, "last_valid_block_height", None) or getattr(val, "lastValidBlockHeight", None)
+            return {
+                "blockhash": bh,
+                "last_valid_block_height": int(lvh) if lvh is not None else None
+            }
 
             # dict shape
             if isinstance(resp, dict):
