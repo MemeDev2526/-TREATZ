@@ -886,13 +886,14 @@ async def get_config(include_balances: bool = False):
         "token": {
             "mint": settings.TREATZ_MINT,
             "decimals": getattr(settings, "TOKEN_DECIMALS", 6),
-            "ticket_price": settings.TICKET_PRICE,  # base units
+            "ticket_price": settings.TICKET_PRICE,  # (back-compat)
         },
         "raffle": {
-            "round_minutes": ROUND_MIN,             # keep existing key
-            "duration_minutes": ROUND_MIN,          # add to match app.js expectation
+            "round_minutes": ROUND_MIN,
+            "duration_minutes": ROUND_MIN,
             "break_minutes": ROUND_BREAK,
             "splits": {"winner": SPLT_WIN, "dev": SPLT_DEV, "burn": SPLT_BURN},
+            "ticket_price": settings.TICKET_PRICE,  # <— added here for frontend
             "dev_wallet": DEV_WALLET or None,
             "burn_address": BURN_ADDRESS or None,
         },
