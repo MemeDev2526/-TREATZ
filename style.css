@@ -261,6 +261,11 @@ a, .btn--outline { color: var(--slime); }
 /* =========================================================
    Navigation & Token Action Bar
    ========================================================= */
+.site-title{
+  max-width: var(--max-width);
+  margin: 12px auto 2px;
+  padding: 0 16px;
+}
 .treatz-title {
   font-family: "Creepster", "Chakra Petch", sans-serif;
   font-size: clamp(1.8rem, 2.8vw, 2.8rem);
@@ -307,7 +312,7 @@ a, .btn--outline { color: var(--slime); }
 /* Nav container */
 .nav { position: relative; z-index: 5; }
 .nav__wrap{
-  max-width: var(--max-width); margin: 12px auto 0; padding: 0 16px;
+  max-width: var(--max-width); margin: 6px auto 0; padding: 0 16px;
   display:flex; align-items:center; justify-content:space-between; gap:16px;
 }
 .nav__brand{ display:flex; align-items:center; gap:10px; }
@@ -339,7 +344,7 @@ a, .btn--outline { color: var(--slime); }
 
 /* Tokenbar */
 .tokenbar{
-  max-width: var(--max-width); margin: 10px auto 16px; padding: 8px 16px;
+  max-width: var(--max-width); margin: 12px auto 16px; padding: 8px 16px;
   display: flex; align-items: center; justify-content: space-between; gap:16px; flex-wrap: wrap;
   background: linear-gradient(180deg, rgba(13,13,13,.85), rgba(13,13,13,.6));
   border: 1px solid var(--card-border); border-radius: 16px;
