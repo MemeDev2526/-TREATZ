@@ -36,6 +36,9 @@ else
 fi
 
 # Frontend build (Vite)
+echo "[TREATZ] 🧩 Building standalone runtime (app.js)..."
+npm run build:app
+
 echo "[TREATZ] 🛠️  Building site with Vite..."
 npm run build
 
