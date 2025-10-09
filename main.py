@@ -1261,48 +1261,48 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
         round_server_seed = secrets.token_hex(32)
         await dbmod.kv_set(app.state.db, f"round:{rid}:server_seed", round_server_seed)
 
-   # External entropy = blockhash at finalize_slot; robust fallback with slot correction
-   entropy: Optional[str] = None
-   effective_slot: Optional[int] = None
+    # External entropy = blockhash at finalize_slot; robust fallback with slot correction
+    entropy: Optional[str] = None
+    effective_slot: Optional[int] = None
 
-   if finalize_slot:
-       try:
-           entropy, effective_slot = await _rpc_get_blockhash_fallback(finalize_slot)
-       except Exception:
-           entropy, effective_slot = None, None
+    if finalize_slot:
+        try:
+            entropy, effective_slot = await _rpc_get_blockhash_fallback(finalize_slot)
+        except Exception:
+            entropy, effective_slot = None, None
 
-   if not entropy:
-       # final fallback — use newest entry tx or random token
-       async with app.state.db.execute(
-           "SELECT tx_sig FROM entries WHERE round_id=? ORDER BY id DESC LIMIT 1",
-           (rid,)
-       ) as cur:
-           last = await cur.fetchone()
-       entropy = last[0] if last and last[0] else secrets.token_hex(16)
-       # (finalize_slot remains whatever was stored previously)
-   else:
-       # We found a usable blockhash; if it wasn't the planned slot, persist the slot we actually used
-       if effective_slot is not None and effective_slot != finalize_slot:
-           try:
-               await app.state.db.execute(
-                   "UPDATE rounds SET finalize_slot=? WHERE id=?",
-                   (effective_slot, rid)
-               )
-               finalize_slot = effective_slot
-               await app.state.db.commit()  # ensure slot change is durable
-           except Exception:
-               traceback.print_exc()
+    if not entropy:
+        # final fallback — use newest entry tx or random token
+        async with app.state.db.execute(
+            "SELECT tx_sig FROM entries WHERE round_id=? ORDER BY id DESC LIMIT 1",
+            (rid,)
+        ) as cur:
+            last = await cur.fetchone()
+        entropy = last[0] if last and last[0] else secrets.token_hex(16)
+        # (finalize_slot remains whatever was stored previously)
+    else:
+        # We found a usable blockhash; if it wasn't the planned slot, persist the slot we actually used
+        if effective_slot is not None and effective_slot != finalize_slot:
+            try:
+                await app.state.db.execute(
+                    "UPDATE rounds SET finalize_slot=? WHERE id=?",
+                    (effective_slot, rid)
+                )
+                finalize_slot = effective_slot
+                await app.state.db.commit()  # ensure slot change is durable
+            except Exception:
+                traceback.print_exc()
 
-   # Persist fairness bits for the UI
-   await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy)
-   if finalize_slot:
-       await dbmod.kv_set(app.state.db, f"round:{rid}:entropy_slot", str(finalize_slot))
+    # Persist fairness bits for the UI
+    await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy)
+    if finalize_slot:
+        await dbmod.kv_set(app.state.db, f"round:{rid}:entropy_slot", str(finalize_slot))
 
-   # Optional: trace which path we used
-   try:
-       print(f"[round_close] entropy={'blockhash' if effective_slot else 'fallback'} slot={finalize_slot}", flush=True)
-   except Exception:
-       pass
+    # Optional: trace which path we used
+    try:
+        print(f"[round_close] entropy={'blockhash' if effective_slot else 'fallback'} slot={finalize_slot}", flush=True)
+    except Exception:
+        pass
 
     # Weighted draw
     total_tix = sum(int(t or 0) for _u, t in entries)
