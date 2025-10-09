@@ -753,6 +753,7 @@ export async function getAta(owner, mint) {
       openBtns.forEach(b => b && (b.hidden = true));
     }
     updateDeepLinkVisibility(PUBKEY);
+    refreshWalletBalance().catch(() => {});
   }
 
   async function ensureConfig() {
@@ -771,6 +772,53 @@ export async function getAta(owner, mint) {
     return CONFIG;
   }
 
+  // --- Wallet balance updater + event ---
+  async function refreshWalletBalance() {
+    try {
+      const wrap = document.getElementById("wallet-balance-wrap");
+      const out  = document.getElementById("wallet-balance");
+      if (!out) return;
+
+      if (!PUBKEY) {
+        if (wrap) wrap.hidden = true;
+        out.textContent = "—";
+        window.dispatchEvent(new CustomEvent("treatz-wallet-change", {
+          detail: { pubkey: null, balance: 0, balanceBase: 0 }
+        }));
+        return;
+      }
+
+      await ensureConfig();
+      const mint  = new PublicKey(CONFIG.token.mint);
+      const owner = new PublicKey(PUBKEY);
+      const ata   = await getAssociatedTokenAddress(mint, owner);
+
+      let ui = 0;
+      try {
+        const bal = await connection.getTokenAccountBalance(ata, "confirmed");
+        ui = Number(bal?.value?.uiAmount || 0);
+      } catch {
+        // ATA may not exist yet; treat as 0
+        ui = 0;
+      }
+
+      // Render
+      out.textContent = ui.toLocaleString(undefined, { maximumFractionDigits: 0 });
+      if (wrap) wrap.hidden = false;
+
+      // Broadcast for any listeners
+      window.dispatchEvent(new CustomEvent("treatz-wallet-change", {
+        detail: { pubkey: PUBKEY, balance: ui, balanceBase: Math.floor(ui * TEN_POW) }
+      }));
+    } catch (e) {
+      console.warn("refreshWalletBalance failed", e);
+    }
+  }
+
+  // optional: expose for console/tests
+  window.refreshWalletBalance = refreshWalletBalance;
+
+  
   // Minimal connect toggles — real wallet plumbing used elsewhere
   $$("#btn-connect, #btn-connect-2").forEach(btn => btn?.addEventListener("click", async () => {
     try {
