@@ -27,6 +27,7 @@
   --radius-lg: 16px;
   --radius-md: 12px;
   --focus-green: rgba(57,255,20,.85);
+  --coin-size: 200px;
 
   /* FX default color (used as fallback) */
   --fx-color: #FF6B00;
@@ -359,6 +360,16 @@ a, .btn--outline { color: var(--slime); }
 .btn--ghost{ background: transparent; color: var(--white); opacity: .9; }
 .btn:disabled{ opacity: .6; cursor: not-allowed; }
 
+.btn--flip{
+  position: relative;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  border: 2px solid rgba(0,0,0,.75);
+  box-shadow: 0 10px 28px rgba(255,107,0,.35), 0 0 22px rgba(0,255,163,.18);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.btn--flip:hover{ transform: translateY(-2px); box-shadow: 0 14px 36px rgba(255,107,0,.45), 0 0 26px rgba(0,255,163,.22); }
+
 /* Back to top button */
 .about-backtop-wrap { display:flex; justify-content: center; padding: 28px 12px 48px; }
 .btn-back-to-top {
@@ -423,7 +434,7 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 
 /* Coin visuals */
 .coin{
-  position: relative; width: 180px; height: 180px;
+  position: relative; width: var(--coin-size); height: var(--coin-size);
   perspective: 900px;
   border-radius: 50%;
   transform-style: preserve-3d;
