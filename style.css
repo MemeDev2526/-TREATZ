@@ -267,7 +267,7 @@ a, .btn--outline { color: var(--slime); }
   letter-spacing: 0.95px;
   margin: 0;
   text-align: left;
-  line-height: 2.25;
+  line-height: 1.5;
   display: flex;
   align-items: baseline;
   gap: 7px;
