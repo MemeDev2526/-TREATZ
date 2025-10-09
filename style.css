@@ -579,7 +579,9 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 /* generic wrapper piece used by JS */
 .fx-wrapper {
   width:48px; height:48px;
-  background-position:center; background-repeat:no-repeat; background-size:contain;
+  background-position:center;
+  background-repeat:no-repeat;
+  background-size:contain;
   transform-origin:center;
 }
 
