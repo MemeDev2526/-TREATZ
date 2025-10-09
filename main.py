@@ -39,7 +39,7 @@ def _rfc3339(dt: Optional[datetime]) -> Optional[str]:
     return iso + "Z"
 from typing import Literal, Optional
 import os
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -134,14 +134,18 @@ if os.path.isdir(REPO_ASSETS_DIR):
 # ✅ Serve a favicon if present in static
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
-    # prefer static/favicon.ico, then assets/favicon.ico, else 404
+    # prefer static/favicon.ico, then built assets/favicon.png/ico, else 404
     p1 = os.path.join(STATIC_DIR, "favicon.ico")
-    p2 = os.path.join(ASSETS_DIR, "favicon.ico")
+    p2 = os.path.join(STATIC_ASSETS_DIR, "favicon.ico")
+    p3 = os.path.join(STATIC_ASSETS_DIR, "favicon.png")  # common case in your repo
     if os.path.exists(p1):
         return FileResponse(p1)
     if os.path.exists(p2):
         return FileResponse(p2)
+    if os.path.exists(p3):
+        return FileResponse(p3)
     raise HTTPException(status_code=404, detail="favicon not found")
+
 
 
 # ✅ Serve index.html at root (for SPA routing)
@@ -1372,10 +1376,10 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
     except Exception:
         pass
 
-    # Weighted draw
+   # Weighted draw
     total_tix = sum(int(t or 0) for _u, t in entries)
     if pot > 0 and total_tix > 0:
-        pick_space = int.from_bytes(_hmac(round_server_seed, f"{entropy}{rid}"), "big") % total_tix
+        pick_space = int.from_bytes(_hmac(round_server_seed, f"{entropy_str}{rid}"), "big") % total_tix
         acc = 0
         for u, t in entries:
             acc += int(t or 0)
@@ -1394,8 +1398,8 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
             traceback.print_exc()
             raise
         # ensure entropy is a plain string for SQLite
-        entropy_str = _as_str_blockhash(entropy) if entropy is not None else None
-        await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", str(entropy))
+        entropy_str = _as_str_blockhash(entropy_str) if entropy_str is not None else None
+        await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", str(entropy_str))
         if finalize_slot:
             await dbmod.kv_set(app.state.db, f"round:{rid}:entropy_slot", str(finalize_slot))
 
