@@ -81,9 +81,9 @@
         <a href="#" id="link-telegram"  target="_blank" rel="noopener">Telegram</a>
         <a href="#" id="link-tiktok"    target="_blank" rel="noopener">TikTok</a>
         <a href="/static/whitepaper.html" id="link-whitepaper" target="_blank" rel="noopener">Whitepaper</a>
-        <a href="#" class="nav__link--disabled" id="link-nft" aria-disabled="true" title="Coming soon">NFT (coming soon)</a>
+        <a href="#" class="nav__link--disabled" id="link-nft" aria-disabled="true" title="Coming soon">NFT</a>
+        <a id="btn-open-in-phantom" href="#" target="_blank" rel="noopener" hidden>Open in Phantom</a>
       </nav>
-    </div>
 
     <div class="tokenbar" role="group" aria-label="Token & Buy">
       <div class="tokenbar__address">
@@ -128,6 +128,7 @@
 
           <div class="wallet wallet--inline" style="margin:.4rem 0 .6rem">
             <button class="btn btn--primary" id="btn-connect" type="button" title="Connect your wallet">Connect Wallet</button>
+            <a id="btn-open-in-phantom-2" class="btn btn--ghost" href="#" target="_blank" rel="noopener" hidden>Open in Phantom</a>
           </div>
 
           <!-- 8) GAME UI CARD AREA (form) -->
@@ -179,7 +180,14 @@
             <div><span class="stat__label">Closes In</span> <span class="stat__value" id="round-countdown">—</span></div>
             <div><span class="stat__label">Next Draw Starts In</span> <span class="stat__value" id="round-next-countdown">—</span></div>
             <div><span class="stat__label">Ticket Price</span> <span class="stat__value"><strong id="ticket-price">—</strong> $TREATZ</span></div>
-            <div><span class="stat__label">Seed</span> <span class="stat__value" id="round-seed">commit: — / reveal: — (salt on results)</span></div>
+            <div>
+              <span class="stat__label">Seed</span>
+              <span class="stat__value">
+                commit: <code id="seed-commit">—</code> /
+                reveal: <code id="seed-reveal">—</code>
+                <span class="muted">(salt on results)</span>
+            </span>
+          </div>
           </div>
           <div class="progress" aria-label="Time remaining">
             <div class="progress__bar" id="jp-progress" style="width:0%"></div>
@@ -191,6 +199,7 @@
         <div class="card__col">
           <div class="wallet wallet--inline" style="margin-bottom:.75rem;">
             <button class="btn btn--primary" id="btn-connect-2" type="button" title="Connect your wallet">Connect Wallet</button>
+            <a id="btn-open-in-phantom-2" class="btn btn--ghost" href="#" target="_blank" rel="noopener" hidden>Open in Phantom</a>
           </div>
 
           <div class="form">
@@ -215,6 +224,7 @@
           <div id="player-stats" class="card small" hidden style="margin-top:.75rem;">
             <div><strong>Your tickets (current round):</strong> <span id="ps-tickets">0</span></div>
             <div><strong>Ticket credit:</strong> <span id="ps-credit">0</span> $TREATZ</div>
+            <div><strong>Total spent:</strong> <span id="ps-spent">0</span> $TREATZ</div>
             <div><strong>Total won:</strong> <span id="ps-won">0</span> $TREATZ</div>
           </div>
         </div>
