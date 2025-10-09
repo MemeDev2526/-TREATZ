@@ -14,12 +14,12 @@
   "dependencies": {
     "@solana/web3.js": "^1.95.3",
     "@solana/spl-token": "^0.4.7",
-    "buffer": "^6.0.3"
+    "buffer": "^6.0.3"                     // ⬅ move buffer into deps (ships to prod)
   },
   "devDependencies": {
     "vite": "^5.4.0",
-    "esbuild": "^0.18.0"
-  },
+    "esbuild": "^0.21.5"                   // ⬅ any 0.20+ is fine
+  }
   "keywords": ["solana", "spl-token", "treatz", "web3", "dapp"],
   "author": "Treatz Devs",
   "license": "MIT"
