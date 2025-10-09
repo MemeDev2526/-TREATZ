@@ -323,8 +323,8 @@
       }
     } catch {}
 
-    // 2) Fall back to Vite manifest (try both mount points)
-    const mfs = ["/static/.vite/manifest.json", "/.vite/manifest.json"];
+    // 2) Fall back to Vite manifest (standard + legacy locations)
+    const mfs = ["/static/manifest.json", "/static/.vite/manifest.json", "/.vite/manifest.json"];
     for (const m of mfs) {
       try {
         const res = await fetch(m, { cache: "no-store" });
@@ -344,6 +344,6 @@
 
     console.error("[TREATZ] Failed to load entry JS from all sources");
   })();
-  </script>
+</script>
 </body>
 </html>
