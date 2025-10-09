@@ -175,13 +175,12 @@ export async function getAta(owner, mint) {
   // FX: fx-layer root and primitives
   // -------------------------
   const fxRoot = (() => {
-    try {
+      try {
       let n = document.getElementById("fx-layer");
       if (!n) {
-       if (!n) {
         n = document.createElement("div");
         n.id = "fx-layer";
-        n.classList.add("fx-layer");            // <-- add this line
+        n.classList.add("fx-layer");          // ensure CSS hooks apply
         n.setAttribute("aria-hidden", "true");
         document.body.appendChild(n);
         console.log("[TREATZ] fx-layer created");
@@ -206,6 +205,7 @@ export async function getAta(owner, mint) {
       return null;
     }
   })();
+
 
   // Ensure top-level to avoid transformed ancestor clipping
   (function ensureFxRootTopLevel() {
@@ -302,6 +302,7 @@ export async function getAta(owner, mint) {
         // fallback: create it (very defensive)
         root = document.createElement("div");
         root.id = "fx-layer";
+        root.classList.add("fx-layer"); // <-- add this
         root.setAttribute("aria-hidden", "true");
         document.body.appendChild(root);
         Object.assign(root.style, {
