@@ -260,16 +260,31 @@ async def _rpc_get_slot() -> int:
         val = getattr(s, "value", None)
         return val if val is not None else s["result"]
 
+def _as_str_blockhash(h) -> Optional[str]:
+    """Return a plain string for blockhash objects (solders.Hash, etc.)."""
+    if h is None:
+        return None
+    if isinstance(h, str):
+        return h
+    try:
+        return str(h)  # solders.Hash implements __str__
+    except Exception:
+        try:
+            return h.decode() if isinstance(h, (bytes, bytearray)) else None
+        except Exception:
+            return None
+
 async def _rpc_get_blockhash(slot: int) -> Optional[str]:
     """Fetch blockhash at a specific slot; None if unavailable."""
     async with AsyncClient(RPC_URL) as c:
         b = await c.get_block(slot, max_supported_transaction_version=0)
         val = getattr(b, "value", None)
         if val and hasattr(val, "blockhash"):
-            return val.blockhash
+            return _as_str_blockhash(val.blockhash)
         if isinstance(b, dict) and b.get("result") and b["result"].get("blockhash"):
-            return b["result"]["blockhash"]
+            return _as_str_blockhash(b["result"]["blockhash"])
         return None
+
 
 
 async def _rpc_get_blockhash_fallback(
@@ -277,19 +292,14 @@ async def _rpc_get_blockhash_fallback(
     search_back: int = 2048,
     search_forward: int = 128
 ) -> tuple[Optional[str], Optional[int]]:
-    """
-    Try to fetch a blockhash at `slot`. If the slot was skipped or pruned by the RPC,
-    search backward (and then a small forward range). As a last resort, return the
-    latest blockhash (with slot=None to signal “not the planned finalize_slot”).
-    """
     async with AsyncClient(RPC_URL) as c:
         async def _slot_hash(s: int) -> Optional[str]:
             b = await c.get_block(s, max_supported_transaction_version=0)
             v = getattr(b, "value", None)
             if v and hasattr(v, "blockhash"):
-                return v.blockhash
+                return _as_str_blockhash(v.blockhash)
             if isinstance(b, dict) and b.get("result") and b["result"].get("blockhash"):
-                return b["result"]["blockhash"]
+                return _as_str_blockhash(b["result"]["blockhash"])
             return None
 
         # 1) exact slot
@@ -300,7 +310,7 @@ async def _rpc_get_blockhash_fallback(
         except Exception:
             pass
 
-        # 2) walk backward (most skipped-slot cases are solved by a short backscan)
+        # 2) walk backward
         for off in range(1, search_back + 1):
             s = slot - off
             if s <= 0:
@@ -322,16 +332,16 @@ async def _rpc_get_blockhash_fallback(
             except Exception:
                 continue
 
-        # 4) last resort: latest finalized blockhash (slot unknown here)
+        # 4) latest finalized blockhash
         try:
             latest = await c.get_latest_blockhash()
             val = getattr(latest, "value", None)
             if val and hasattr(val, "blockhash"):
-                return val.blockhash, None
+                return _as_str_blockhash(val.blockhash), None
             if isinstance(latest, dict):
                 v = ((latest.get("result") or {}).get("value") or {})
                 if v.get("blockhash"):
-                    return v["blockhash"], None
+                    return _as_str_blockhash(v["blockhash"]), None
         except Exception:
             pass
 
@@ -838,14 +848,15 @@ async def latest_blockhash():
         async with AsyncClient(RPC_URL) as c:
             resp = await c.get_latest_blockhash()  # default commitment
             # solders object?
-            val = getattr(resp, "value", None)
-            if val is not None:
-                bh = getattr(val, "blockhash", None)
-                lvh = getattr(val, "last_valid_block_height", None) or getattr(val, "lastValidBlockHeight", None)
-                return {
-                    "blockhash": str(bh),
-                    "last_valid_block_height": int(lvh) if lvh is not None else None
-                }
+           val = getattr(resp, "value", None)
+           if val is not None:
+           bh = _as_str_blockhash(getattr(val, "blockhash", None))
+           lvh = getattr(val, "last_valid_block_height", None) or getattr(val, "lastValidBlockHeight", None)
+           return {
+               "blockhash": bh,
+               "last_valid_block_height": int(lvh) if lvh is not None else None
+           }
+
             # dict shape
             if isinstance(resp, dict):
                 v = ((resp.get("result") or {}).get("value") or resp.get("result") or {})
@@ -1325,7 +1336,9 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
             print("[admin_close_round] failed UPDATE server_seed_reveal for round:", rid, "params:", (round_server_seed, rid), flush=True)
             traceback.print_exc()
             raise
-        await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy)
+        # ensure entropy is a plain string for SQLite
+        entropy_str = _as_str_blockhash(entropy) if entropy is not None else None
+        await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy_str or "")
         if finalize_slot:
             await dbmod.kv_set(app.state.db, f"round:{rid}:entropy_slot", str(finalize_slot))
 
