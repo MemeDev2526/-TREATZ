@@ -7,12 +7,22 @@ const cwd = process.cwd();
 const ENTRY = path.resolve(cwd, 'app.js');
 const OUTFILE = path.resolve(cwd, 'static', 'app.js');
 
-async function ensureDir(dirPath) {
-  try {
-    await fs.promises.mkdir(dirPath, { recursive: true });
-  } catch (err) {
-    if (err.code !== 'EEXIST') throw err;
+const IgnoreCssPlugin = {
+  name: 'ignore-css',
+  setup(build) {
+    build.onResolve({ filter: /\.css$/ }, args => ({
+      path: args.path,
+      namespace: 'ignore-css'
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'ignore-css' }, () => ({
+      contents: '', loader: 'js'
+    }));
   }
+};
+
+async function ensureDir(dirPath) {
+  try { await fs.promises.mkdir(dirPath, { recursive: true }); }
+  catch (err) { if (err.code !== 'EEXIST') throw err; }
 }
 
 async function run() {
@@ -27,22 +37,22 @@ async function run() {
     await build({
       entryPoints: [ENTRY],
       bundle: true,
-      format: 'esm',                    // <<< make output an ES MODULE
+      format: 'esm',                 // ES module output
       platform: 'browser',
       target: ['es2019'],
       minify: true,
       sourcemap: false,
       outfile: OUTFILE,
       define: { 'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production') },
-      // IMPORTANT: do not transform CSS in this bundle; you're linking style.css separately
       loader: {
         '.svg': 'dataurl',
         '.png': 'file',
         '.jpg': 'file',
         '.jpeg': 'file',
         '.gif': 'file',
-        // (no '.css': 'css' here)
+        // (no '.css' loader)
       },
+      plugins: [IgnoreCssPlugin],
       logLevel: 'info',
     });
 
