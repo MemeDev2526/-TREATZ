@@ -28,19 +28,14 @@ export default defineConfig({
         main: resolve(__dirname, "index.html"),
         whitepaper: resolve(__dirname, "whitepaper.html"),
       },
-
-      // <<< keep treat runtime /static/app.js (and optional /static/style.css) as externals
-      // This prevents Rollup from trying to resolve them at build time.
-      external: ["/static/app.js", "/static/style.css"],
-
+      external: id => id.startsWith("/static/"),
       output: {
-        // keep asset file names readable and grouped under assets/
-        // the default hashing is preserved, but this ensures structure
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/chunk-[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
       },
     },
+    cssCodeSplit: false,
 
     // optional: increase chunk warning limit if you get warnings for big deps like @solana/web3.js
     chunkSizeWarningLimit: 2000,
