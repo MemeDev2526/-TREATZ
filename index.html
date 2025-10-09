@@ -323,7 +323,7 @@
       }
     } catch {}
 
-    // 2) Fall back to Vite manifest (standard + legacy locations)
+    // 2) Fall back to Vite manifest (try standard + legacy paths)
     const mfs = ["/static/manifest.json", "/static/.vite/manifest.json", "/.vite/manifest.json"];
     for (const m of mfs) {
       try {
@@ -331,12 +331,12 @@
         if (!res.ok) continue;
         const mf = await res.json();
         const entries = Object.values(mf).filter(Boolean);
-        const main = (entries.find(x => /index|main|app/i.test(String(x.file))) || entries[0] || {}).file;
+        const main = (entries.find(x => x.isEntry && x.file) || entries.find(x => x.file) || {}).file;
         if (!main) continue;
         const prefix = m.startsWith("/static/") ? "/static/" : "/";
         const s = document.createElement("script");
         s.type = "module";
-        s.src = prefix + main;   // e.g. /static/assets/index-XYZ.js or /assets/index-XYZ.js
+        s.src = prefix + main;   // e.g. /static/assets/index-XYZ.js
         document.body.appendChild(s);
         return;
       } catch {}
