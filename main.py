@@ -850,12 +850,12 @@ async def latest_blockhash():
             # solders object?
             val = getattr(resp, "value", None)
             if val is not None:
-            bh = _as_str_blockhash(getattr(val, "blockhash", None))
-            lvh = getattr(val, "last_valid_block_height", None) or getattr(val, "lastValidBlockHeight", None)
-            return {
-                "blockhash": bh,
-                "last_valid_block_height": int(lvh) if lvh is not None else None
-            }
+                bh = _as_str_blockhash(getattr(val, "blockhash", None))
+                lvh = getattr(val, "last_valid_block_height", None) or getattr(val, "lastValidBlockHeight", None)
+                return {
+                    "blockhash": bh,
+                    "last_valid_block_height": int(lvh) if lvh is not None else None
+                }
 
             # dict shape
             if isinstance(resp, dict):
