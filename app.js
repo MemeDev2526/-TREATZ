@@ -1131,7 +1131,7 @@ export async function getAta(owner, mint) {
             console.log("[TREATZ] (SIM) coin flip result:", { chosen, landed, win });
           }
         } catch (err) {
-        console.error("coin flip settle handler error", err);
+          console.error("coin flip settle handler error", err);
       }
     }, getSpinMs());
   }
@@ -1472,6 +1472,8 @@ export async function getAta(owner, mint) {
         try {
           const up = await jfetchStrict(`${API}/rounds/current`);
           if (up && up.round_id && up.round_id !== round.round_id) {
+            __recentCache = []; // invalidate history cache on new round
+            loadHistory();      // re-render with fresh data
             round = up;
             const newOpensAt = new Date(iso(round.opens_at));
             const newClosesAt = new Date(iso(round.closes_at));
