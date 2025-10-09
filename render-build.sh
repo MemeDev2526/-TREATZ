@@ -44,6 +44,22 @@ if [ -d "dist" ]; then
     cp -a assets/. static/assets/
   fi
 
+  # ---- Vite build ----
+echo "[TREATZ] 🛠️  Building site with Vite…"
+npm run build
+
+# ---- Install build into /static ----
+if [ -d "dist" ]; then
+  rm -rf static
+  mkdir -p static
+  cp -a dist/. static/
+
+  # also keep raw repo assets under /static/assets
+  mkdir -p static/assets
+  if [ -d "assets" ]; then
+    cp -a assets/. static/assets/
+  fi
+
   # ---- Build app.js NOW so dist→static copy didn’t delete it ----
   if npm run | grep -q "build:app"; then
     echo "[TREATZ] 🧩 Building standalone runtime (app.js)…"
