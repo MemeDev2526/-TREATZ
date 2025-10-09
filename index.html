@@ -310,39 +310,48 @@
 
   <!-- Robust entry loader: try /static/app.js, else Vite manifest -->
   <script>
-(async () => {
-  // 1) Prefer the hand-built bundle if present
-  try {
-    const head = await fetch("/static/app.js", { method: "HEAD", cache: "no-store" });
-    if (head.ok) {
-      const s = document.createElement("script");
-      s.type = "module";
-      s.src = "/static/app.js";
-      document.body.appendChild(s);
-      return;
-    }
-  } catch {}
-
-  // 2) Fall back to the Vite manifest at the correct path
-  try {
-    const res = await fetch("/static/manifest.json", { cache: "no-store" });
-    if (res.ok) {
-      const mf = await res.json();
-      // Try to find the main entry: prefer index.html entry; else any isEntry
-      const entries = Object.values(mf);
-      const main = (entries.find(e => e && e.isEntry) || entries[0] || {}).file;
-      if (main) {
+  (async () => {
+    // 1) Prefer the hand-built bundle if present
+    try {
+      const head = await fetch("/static/app.js", { method: "HEAD", cache: "no-store" });
+      if (head.ok) {
         const s = document.createElement("script");
         s.type = "module";
-        s.src = "/static/" + main; // e.g. /static/assets/index-XYZ.js
+        s.src = "/static/app.js";
         document.body.appendChild(s);
         return;
       }
-    }
-  } catch {}
+    } catch {}
 
-  console.error("[TREATZ] Failed to load entry JS from app.js or manifest.json");
-})();
-</script>
+    // 2) Fall back to Vite manifest — REAL location is /static/manifest.json
+    const manifests = [
+      "/static/manifest.json",        // <— ADD THIS LINE
+      "/static/.vite/manifest.json",
+      "/.vite/manifest.json",
+    ];
+
+    for (const m of manifests) {
+      try {
+        const res = await fetch(m, { cache: "no-store" });
+        if (!res.ok) continue;
+        const mf = await res.json();
+        const entries = Object.values(mf).filter(Boolean);
+        const main =
+          (entries.find(x => x && x.isEntry && x.file) ||
+           entries.find(x => x && x.file) || {}).file;
+        if (!main) continue;
+
+        const prefix = m.startsWith("/static/") ? "/static/" : "/";
+        const s = document.createElement("script");
+        s.type = "module";
+        s.src = prefix + main; // e.g. /static/assets/index-XYZ.js
+        document.body.appendChild(s);
+        return;
+      } catch {}
+    }
+
+    console.error("[TREATZ] Failed to load entry JS from all sources");
+  })();
+  </script>
 </body>
 </html>
