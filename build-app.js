@@ -34,12 +34,20 @@ async function run() {
 
   console.log('[TREATZ] 🧩 esbuild bundling app.js → static/app.js');
   try {
+    // --- add the tiny plugin right above the build() call ---
+    const IgnoreCssPlugin = {
+      name: 'ignore-css',
+      setup(b) {
+        b.onLoad({ filter: /\.css$/ }, () => ({ contents: '', loader: 'js' }));
+      }
+    };
+
     await build({
       entryPoints: [ENTRY],
       bundle: true,
-      format: 'esm',                 // ES module output
+      format: 'esm',
       platform: 'browser',
-      target: ['es2019'],
+      target: ['es2020'],            // ✅ ES2020 or 'esnext' fixes the BigInt errors
       minify: true,
       sourcemap: false,
       outfile: OUTFILE,
@@ -50,11 +58,11 @@ async function run() {
         '.jpg': 'file',
         '.jpeg': 'file',
         '.gif': 'file',
-        // (no '.css' loader)
       },
-      plugins: [IgnoreCssPlugin],
+      plugins: [IgnoreCssPlugin],    // keep this so app.js never tries to import CSS
       logLevel: 'info',
     });
+
 
     console.log('[TREATZ] ✅ Bundled to static/app.js');
     process.exit(0);
