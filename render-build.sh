@@ -28,17 +28,17 @@ else
   npm install --no-audit --no-fund
 fi
 
-# ---- Build site with Vite (HTML/CSS/assets go to dist/) ----
+# ---- Build site with Vite (puts files in dist/) ----
 echo "[TREATZ] 🛠️  Building site with Vite…"
 npm run build
 
-# ---- Copy dist → static (this wipes/creates static fresh) ----
+# ---- Copy dist → static (fresh) ----
 if [ -d "dist" ]; then
   rm -rf static
   mkdir -p static
   cp -a dist/. static/
 
-  # keep raw repo assets under /static/assets too (images/audio you keep in /assets)
+  # keep raw repo assets (images/audio in /assets) under /static/assets too
   mkdir -p static/assets
   if [ -d "assets" ]; then
     cp -a assets/. static/assets/
@@ -48,76 +48,29 @@ else
   exit 1
 fi
 
+# ---- Overwrite the built index.html with our repo root index.html ----
+# This avoids Vite inserting a hashed HTML entry that imports /static/app.js and /static/style.css.
+if [ -f "index.html" ]; then
+  cp -f index.html static/index.html
+  echo "[TREATZ] Overrode Vite-built index.html with repo-root index.html"
+fi
+
 # ---- Build standalone runtime AFTER the dist→static copy ----
-# This ensures static/app.js is created last and not deleted by the copy above.
-if npm run | grep -q "build:app"; then
-  echo "[TREATZ] 🧩 Building standalone runtime (app.js)…"
-  npm run build:app || echo "[TREATZ] ⚠️ build:app failed — continuing"
-else
-  echo "[TREATZ] (no build:app script) — skipping standalone runtime build"
-fi
+echo "[TREATZ] 🧩 Building standalone runtime (app.js)…"
+npm run build:app || echo "[TREATZ] ⚠️ build:app failed — continuing"
 
-# ---- Ensure /static/app.js exists; if not, fallback to Vite manifest entry ----
-if [ -f "static/app.js" ]; then
-  echo "[TREATZ] ✅ static/app.js present."
-else
-  echo "[TREATZ] ℹ️ static/app.js not found; attempting manifest fallback…"
-  PICK_JS_FROM_MANIFEST() {
-    local mf="$1"
-    node -e '
-      const fs=require("fs");
-      const mf=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-      const vals=Object.values(mf||{});
-      // Prefer entries that look like main/app/index
-      const prefer = v => v && v.isEntry && /(?:^|\/)(index|main|app)\.[-\w]*\.js$/i.test(v.file||"");
-      const ok = vals.find(prefer) || vals.find(v=>v && v.isEntry && /\.js$/i.test(v.file||"")) || vals.find(v=>v && /\.js$/i.test(v.file||""));
-      if (ok && ok.file) process.stdout.write(ok.file);
-    ' "$mf"
-  }
+# ---- NEVER copy from a manifest into app.js (that caused the regression) ----
 
-  JS_ENTRY=""
-  if [ -f "static/manifest.json" ]; then
-    JS_ENTRY=$(PICK_JS_FROM_MANIFEST "static/manifest.json" || true)
-  elif [ -f "static/.vite/manifest.json" ]; then
-    JS_ENTRY=$(PICK_JS_FROM_MANIFEST "static/.vite/manifest.json" || true)
-  fi
-
-  if [ -n "${JS_ENTRY:-}" ] && [ -f "static/$JS_ENTRY" ]; then
-    cp -f "static/$JS_ENTRY" static/app.js
-    echo "[TREATZ] Copied static/$JS_ENTRY -> static/app.js (fallback)"
-  else
-    echo "[TREATZ] ⚠️ Couldn’t determine a JS entry from manifest; runtime will load via manifest at run-time."
-  fi
-fi
-
-# ---- Always ship a stable /static/style.css (your repo-root author CSS) ----
+# ---- Always ship a stable /static/style.css (author CSS from repo root) ----
 if [ -f "style.css" ]; then
-  cp -f "style.css" static/style.css
+  cp -f style.css static/style.css
   echo "[TREATZ] Copied repo-root style.css -> /static/style.css"
-else
-  echo "[TREATZ] ⚠️ repo-root style.css not found; page will rely on Vite CSS only"
-fi
-
-# ---- Ensure /static/index.html actually references /static/style.css ----
-if [ -f static/index.html ]; then
-  if ! grep -q '/static/style.css' static/index.html; then
-    echo "[TREATZ] Injecting <link> for /static/style.css into static/index.html"
-    VER="${RENDER_GIT_COMMIT:-$(date +%s)}"
-    awk -v ver="$VER" '
-      BEGIN { injected=0 }
-      /<\/head>/ && !injected {
-        print "  <link rel=\"stylesheet\" href=\"/static/style.css?v=" ver "\">"
-        injected=1
-      }
-      { print }
-    ' static/index.html > static/index.html.tmp && mv static/index.html.tmp static/index.html
-  fi
 fi
 
 # ---- Sanity logs ----
 echo "[TREATZ] 📦 Contents of static/:"
 ls -la static || true
-echo "[TREATZ] 🔎 Manifest exists?"
+echo "[TREATZ] 🔎 Has .vite manifest for other assets?"
 [ -f static/.vite/manifest.json ] && echo "Yes (.vite/manifest.json)" || echo "No"
 
 echo "[TREATZ] ✅ Build complete!"
