@@ -103,6 +103,7 @@ export async function getAta(owner, mint) {
     if (!window.__TREATZ_DEBUG) return;
 
     function showDiag(msg, kind) {
+      if (!window.__TREATZ_DEBUG) return;   // <— added guard
       if (!document.body) {
         document.addEventListener("DOMContentLoaded", () => showDiag(msg, kind));
         return;
@@ -1073,71 +1074,73 @@ export async function getAta(owner, mint) {
   }
 
   // -------------------------
-  // Coin flip UI (local animation)
+  // Coin flip UI — simulate when no wallet, on-chain when connected
   // -------------------------
   (function wireCoinFlipUI() {
     const cfPlay = document.getElementById("cf-play");
     if (!cfPlay) return;
 
-    cfPlay.addEventListener("click", async (e) => {
-      try {
-        e.preventDefault();
+    function simulateFlip() {
+      const coin = document.getElementById("coin") || document.querySelector(".coin");
+      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
 
-        const coin = document.getElementById("coin") || document.querySelector(".coin");
-        if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+      // read chosen side from form (defensive)
+      const form = document.getElementById("bet-form");
+      const side = (form ? (new FormData(form)).get("side") : null) || "TRICK";
 
-        // read chosen side from form (defensive)
-        const form = document.getElementById("bet-form");
-        const side = (form ? (new FormData(form)).get("side") : null) || "TRICK";
+      // simulate spin/settle delay to match CSS .spin duration
+      setTimeout(() => {
+        try {
+          const landedTreat = Math.random() < 0.5;
+          const landed = landedTreat ? "TREAT" : "TRICK";
+          const chosen = String(side || "TRICK").toUpperCase();
+          const win = (landed === chosen);
 
-        // small helper for logging (no-op in prod)
-        if (window.__TREATZ_DEBUG) {
-          console.log("[TREATZ] coin flip clicked — chosen:", side);
-        }
-
-        // simulate spin/settle delay to match CSS .spin duration
-        setTimeout(() => {
-          try {
-            const landedTreat = Math.random() < 0.5;
-            const landed = landedTreat ? "TREAT" : "TRICK";
-            const chosen = String(side || "TRICK").toUpperCase();
-            const win = (landed === chosen);
-
-            // stop the spin animation and set final visual state (use the same classes used by setCoinVisual)
-            if (coin) {
-              coin.classList.remove("spin", "coin--show-trick", "coin--show-treat");
-              coin.classList.add(landedTreat ? "coin--show-treat" : "coin--show-trick");
-              // force reflow so CSS transitions settle predictably
-              void coin.offsetWidth;
-            }
-
-            // update visuals first (face images & classes)
-            try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
-
-            
-            // trigger FX and banner based on actual comparison
-            try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
-            try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
-
-            // update status text under coin
-            const statusEl = document.getElementById("cf-status");
-            if (statusEl) {
-              statusEl.textContent = (win ? `WIN — ${landed}` : `LOSS — ${landed}`);
-              // accessibility: announce via aria-live if present
-              statusEl.setAttribute("role", "status");
-              statusEl.setAttribute("aria-live", "polite");
-            }
-
-            if (window.__TREATZ_DEBUG) {
-              console.log("[TREATZ] coin flip result:", { chosen, landed, win });
-            }
-          } catch (err) {
-            console.error("coin flip settle handler error", err);
+          // stop the spin animation and set final visual state (use the same classes used by setCoinVisual)
+          if (coin) {
+            coin.classList.remove("spin", "coin--show-trick", "coin--show-treat");
+            coin.classList.add(landedTreat ? "coin--show-treat" : "coin--show-trick");
+            void coin.offsetWidth; // force reflow so CSS transitions settle predictably
           }
-        }, 1150); // matches CSS spin animation duration
 
+          // update visuals first (face images & classes)
+          try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
+
+          // trigger FX and banner based on actual comparison
+          try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
+          try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
+
+          // update status text under coin
+          const statusEl = document.getElementById("cf-status");
+          if (statusEl) {
+            statusEl.textContent = (win ? `WIN — ${landed}` : `LOSS — ${landed}`);
+            statusEl.setAttribute("role", "status");
+            statusEl.setAttribute("aria-live", "polite");
+          }
+
+          if (window.__TREATZ_DEBUG) {
+            console.log("[TREATZ] (SIM) coin flip result:", { chosen, landed, win });
+          }
+        } catch (err) {
+          console.error("coin flip settle handler error", err);
+        }
+      }, 1150); // matches CSS spin animation duration
+    }
+
+    cfPlay.addEventListener("click", async (e) => {
+      e.preventDefault();
+      try {
+        const connected = !!(PUBKEY || window.PUBKEY);
+        const canTransact = connected && !!(WALLET || window.WALLET);
+        if (canTransact) {
+          await placeCoinFlip();  // builds transferChecked + Memo and requests signature
+        } else {
+          toast("Simulating — connect wallet to play for real");
+          simulateFlip();
+        }
       } catch (err) {
         console.error("cfPlay handler error", err);
+        alert(err?.message || "Failed to place bet.");
       }
     }, { passive: false });
   })();
@@ -1161,6 +1164,7 @@ export async function getAta(owner, mint) {
       const amountHuman = Number(document.getElementById("bet-amount").value || "0");
       const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
       if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
+      // app.js — placeCoinFlip()
       const bet = await jfetch(`${API}/bets`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1169,6 +1173,15 @@ export async function getAta(owner, mint) {
       const betId = bet.bet_id;
       $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
       $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
+
+      // ⬇️ NEW: show commit (server_seed_hash) for fairness right away
+      {
+        const edge = document.getElementById("edge-line");
+        if (edge && bet.server_seed_hash) {
+          edge.textContent = `Commit: ${bet.server_seed_hash.slice(0, 12)}… (revealed on settle)`;
+        }
+      }
+
       const mintPk = new PublicKey(CONFIG.token.mint);
       const destAta = new PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
       const payerRaw = PUBKEY;
@@ -1195,7 +1208,7 @@ export async function getAta(owner, mint) {
       $("#cf-status")?.replaceChildren(document.createTextNode(signature ? `Sent: ${signature.slice(0, 10)}…` : "Sent"));
       const coin = $("#coin");
       if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
-      rainTreatz({ count: 22 });
+      // FX will trigger on actual result inside pollBetUntilSettle()
       pollBetUntilSettle(betId).catch(() => { });
     } catch (e) {
       console.error(e);
@@ -1282,11 +1295,9 @@ export async function getAta(owner, mint) {
       if (!roundId) throw new Error("No active raffle round");
   
       // ticket price from config (server uses base units)
-      const ticketBase = Number(CONFIG?.token?.ticket_price || 0);
-      if (!ticketBase) throw new Error("Ticket price not available");
-
-      // Compute amount to transfer for chosen number of tickets
-      const amountBase = ticketBase * Number(tickets || 1);
+      // ticket price (fallback) — server will return definitive amount in purchase.amount
+      const ticketBase = Number(CONFIG?.raffle?.ticket_price ?? CONFIG?.token?.ticket_price ?? 0);
+      if (!ticketBase) console.warn("Ticket price not in config; will rely on purchase.amount");
 
       // create purchase order on backend - adapt endpoint if needed
       // expected response should include deposit/memo like bets flow
@@ -1304,6 +1315,9 @@ export async function getAta(owner, mint) {
         // use purchase2 instead if available
         throw new Error("Purchase API did not return required payment payload. Confirm endpoint /rounds/:id/buy exists.");
       }
+
+      // Use server-declared amount (exact), fallback to client calc
+      const amountBase = Number(purchase.amount ?? (ticketBase * Number(tickets || 1)));
   
       // Show deposit/memo for debugging
       $("#jp-deposit")?.replaceChildren(document.createTextNode(purchase.deposit || "—"));
@@ -1363,9 +1377,19 @@ export async function getAta(owner, mint) {
       TEN_POW = 10 ** DECIMALS;
       const durationMin = Number(cfg?.raffle?.duration_minutes ?? cfg?.raffle?.round_minutes ?? 10);
       const breakMin = Number(cfg?.raffle?.break_minutes ?? 2);
-      const priceBase = Number(cfg?.token?.ticket_price ?? 0);
-      if (priceBase && document.getElementById("ticket-price")) {
-        document.getElementById("ticket-price").textContent = (priceBase / TEN_POW).toLocaleString();
+      const priceBase = Number(cfg?.raffle?.ticket_price ?? cfg?.token?.ticket_price ?? 0);
+      if (priceBase) {
+        const human = priceBase / TEN_POW;
+        const tpEl = document.getElementById("ticket-price");
+        if (tpEl) tpEl.textContent = human.toLocaleString();
+        window.__TREATZ_TICKET_BASE = priceBase;
+        const inp = document.getElementById("jp-amount");
+        const totalEl = document.getElementById("jp-total");
+        const setTotal = () => {
+          const t = Number(inp?.value || 1);
+          if (totalEl) totalEl.textContent = (human * t).toLocaleString();
+        };
+        if (inp) { inp.addEventListener("input", setTotal); setTotal(); }
       }
       let round = await jfetchStrict(`${API}/rounds/current`);
       const elPot = document.getElementById("round-pot");
@@ -1509,12 +1533,22 @@ export async function getAta(owner, mint) {
     try {
       await ensureConfig();
       if (CONFIG?.raffle?.splits) {
-        const s = CONFIG.raffle.splits;
-        const bps = 10000 - (s.winner + s.dev + s.burn);
+        const s = CONFIG.raffle.splits || {};
+        // you confirmed SPLT_* are in percent; this is robust if someone later sets BPS
+        const pct = (x) => {
+          const n = Number(x || 0);
+          return !isFinite(n) ? 0 : (n <= 1 ? n * 100 : n); // allow 0.10 -> 10%
+        };
+        const winner = pct(s.winner);
+        const dev    = pct(s.dev);
+        const burn   = pct(s.burn);
+        const protocol = Math.max(0, dev + burn); // what users care about most
         const el = document.getElementById("edge-line");
-        if (el) el.textContent = `House edge: ${(bps / 100).toFixed(2)}%`;
+        if (el) {
+          el.textContent = `Protocol fee: ${protocol.toFixed(2)}% — Splits: ${winner.toFixed(2)}% winner • ${burn.toFixed(2)}% burn • ${dev.toFixed(2)}% dev`;
+        }
       }
-    } catch (e) { console.warn("could not load edge info", e); }
+    } catch (e) { console.warn("could not load fee/splits info", e); }
   })();
 
   async function announceLastWinner() {
