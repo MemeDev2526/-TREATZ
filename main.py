@@ -578,6 +578,49 @@ async def create_bet(body: NewBet):
     return {"bet_id": bet_id, "server_seed_hash": server_seed_hash, "deposit": deposit, "memo": memo}
 
 # =========================================================
+# Endpoints — Raffle: Buy Tickets (client builds SPL transfer)
+# =========================================================
+@app.post(f"{API}/rounds/{{round_id}}/buy")
+async def rounds_buy_tickets(round_id: str, payload: dict):
+    """
+    Return deposit + memo (and amounts) for the client to pay with SPL tokens.
+    Frontend sends `tickets` (int). We compute amount in base units using settings.TICKET_PRICE.
+    """
+    try:
+        tickets = int(payload.get("tickets", 1))
+    except Exception:
+        raise HTTPException(400, "tickets must be an integer")
+
+    if tickets < 1:
+        raise HTTPException(400, "tickets must be >= 1")
+
+    ticket_price = int(getattr(settings, "TICKET_PRICE", 0))
+    if ticket_price <= 0:
+        raise HTTPException(500, "TICKET_PRICE not configured")
+
+    amount = ticket_price * tickets
+
+    # Make a memo that your ingest can parse (JP = jackpot)
+    # Format: JP:<round_id>:<nonce>
+    nonce = secrets.token_hex(4)
+    memo = f"JP:{round_id}:{nonce}"
+
+    # Prefer ATA; fall back to raw vault if ATA is not set
+    deposit = (getattr(settings, "GAME_VAULT_ATA", None) or
+               getattr(settings, "GAME_VAULT", None))
+    if not deposit:
+        raise HTTPException(500, "Game vault address not configured")
+
+    return {
+        "deposit": deposit,
+        "memo": memo,
+        "amount": amount,          # base units
+        "ticket_base": ticket_price,
+        "tickets": tickets
+    }
+
+
+# =========================================================
 # Endpoints — Rounds (current / recent)
 # =========================================================
 class RoundCurrentResp(BaseModel):
