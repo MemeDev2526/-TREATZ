@@ -48,14 +48,24 @@ if [ -d "dist" ]; then
   if [ -f "static/app.js" ]; then
     echo "[TREATZ] static/app.js present."
   else
-    echo "[TREATZ] ℹ️ static/app.js not found; attempting manifest fallback…"
-    if [ -f "static/.vite/manifest.json" ]; then
-      JS_ENTRY=$(node -e 'const m=require("./static/.vite/manifest.json"); const e=Object.values(m).find(v=>v&&v.isEntry&&v.file)||Object.values(m).find(v=>v&&v.file); if(e&&e.file) process.stdout.write(e.file);')
+        echo "[TREATZ] ℹ️ static/app.js not found; attempting manifest fallback…"
+    # Prefer standard Vite location: /static/manifest.json
+    if [ -f "static/manifest.json" ]; then
+      JS_ENTRY=$(node -e 'const m=require("./static/manifest.json"); const vals=Object.values(m); const e=vals.find(v=>v&&v.isEntry&&v.file)||vals.find(v=>v&&v.file); if(e&&e.file) process.stdout.write(e.file);')
       if [ -n "${JS_ENTRY:-}" ] && [ -f "static/$JS_ENTRY" ]; then
         cp -f "static/$JS_ENTRY" static/app.js
         echo "[TREATZ] Copied static/$JS_ENTRY -> static/app.js (fallback)"
       else
-        echo "[TREATZ] ⚠️ Couldn’t determine entry from manifest; runtime will use manifest at load."
+        echo "[TREATZ] ⚠️ Couldn’t determine entry from /static/manifest.json; runtime will use manifest at load."
+      fi
+    elif [ -f "static/.vite/manifest.json" ]; then
+      # Back-compat if someone moves manifest under .vite
+      JS_ENTRY=$(node -e 'const m=require("./static/.vite/manifest.json"); const vals=Object.values(m); const e=vals.find(v=>v&&v.isEntry&&v.file)||vals.find(v=>v&&v.file); if(e&&e.file) process.stdout.write(e.file);')
+      if [ -n "${JS_ENTRY:-}" ] && [ -f "static/$JS_ENTRY" ]; then
+        cp -f "static/$JS_ENTRY" static/app.js
+        echo "[TREATZ] Copied static/$JS_ENTRY -> static/app.js (fallback from .vite manifest)"
+      else
+        echo "[TREATZ] ⚠️ Couldn’t determine entry from .vite manifest; runtime will use manifest at load."
       fi
     else
       echo "[TREATZ] ⚠️ No manifest present; runtime will rely on /static/app.js only if created."
