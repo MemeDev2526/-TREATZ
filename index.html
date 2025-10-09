@@ -9,8 +9,8 @@
   <meta name="theme-color" content="#0D0D0D" />
  
    <!-- ========== FAVICON ========== -->
-  <link rel="icon" type="image/png" href="/assets/favicon.png" sizes="512x512" />
-  <link rel="apple-touch-icon" href="/assets/favicon.png" />
+  <link rel="icon" type="image/png" href="/static/assets/favicon.png" sizes="512x512" />
+  <link rel="apple-touch-icon" href="/static/assets/favicon.png" />
   
   <!-- ========== FONTS (unchanged) ========== -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,27 +19,27 @@
   <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
 
   <!-- ========== CSS (keep external or inline later) ========== -->
-  <link id="treatz-css" rel="stylesheet" href="style.css?v={{ site.github.build_revision }}">
+  <link id="treatz-css" rel="stylesheet" href="/static/style.css">
 
   <!-- ========== CONFIG (kept as-is so app.js can read) ========== -->
   <script>
     window.__TREATZ_DEBUG = false;
     window.TREATZ_BUILD = "__BUILD__";
     window.TREATZ_CONFIG = {
-      apiBase: "https://treatz-de1d.onrender.com/api",
+      apiBase: "/api",
       token: { symbol: "$TREATZ", decimals: 6 },
       links: {
         telegram: "https://t.me/trickortreatsol",
         twitter:  "https://x.com/trickortreatsol?s=21",
         tiktok:   "https://www.tiktok.com/@sol_treatz",
-        whitepaper: "static/whitepaper.html"
+        whitepaper: "/whitepaper"
       },
       buyUrl: "#",
       tokenAddress: "4EyHCxM2ZzHcNBRVCoFwb69rx3V62rQagMrU9dLwpump",
       assets: {
-        ambient: "/assets/ambient_loop.mp3",
-        logo: "/assets/TREATZ_Logo.png",
-        mascot: "/assets/Mascot.png"
+        ambient: "/static/assets/ambient_loop.mp3",
+        logo: "/static/assets/TREATZ_Logo.png",
+        mascot: "/static/assets/Mascot.png"
       }
     };
   </script>
@@ -51,7 +51,7 @@
 
   <!-- 1) TOP BANNER -->
   <div class="brand-banner">
-    <img src="assets/Banner_Top.png" alt="$TREATZ banner" />
+    <img src="/static/assets/Banner_Top.png" alt="$TREATZ banner" />
   </div>
 
   <!-- 2) HALLOWEEN COUNTDOWN BANNER -->
@@ -293,6 +293,43 @@
     </div>
   </div>
   <!-- If app.js uses `import` (ESM), load it as a module. Modern browsers will load and execute ESM modules. -->
-  <script type="module" src="/static/app.js"></script>
+  <!-- Force local API (no CORS) -->
+  <script>
+    if (window.TREATZ_CONFIG) window.TREATZ_CONFIG.apiBase = "/api";
+  </script>
+
+  <!-- Robust entry loader: try /static/app.js, else Vite manifest -->
+  <script>
+  (async () => {
+    // 1) Prefer the hand-built bundle if present
+    try {
+      const head = await fetch("/static/app.js", { method: "HEAD" });
+      if (head.ok) {
+        const s = document.createElement("script");
+        s.type = "module";
+        s.src = "/static/app.js";
+        document.body.appendChild(s);
+        return;
+      }
+    } catch (_) {}
+
+    // 2) Fall back to Vite's hashed entry via manifest
+    try {
+      const res = await fetch("/static/.vite/manifest.json");
+      if (!res.ok) throw new Error("manifest missing");
+      const mf = await res.json();
+      const files = Object.values(mf).map(x => x && x.file).filter(Boolean);
+      const main = files.find(f => /index|main|app/i.test(f)) || files.find(f => f.endsWith(".js"));
+      if (!main) throw new Error("no JS entry in manifest");
+      const s = document.createElement("script");
+      s.type = "module";
+      s.src = "/static/" + main;   // e.g. /static/assets/index-XYZ.js
+      document.body.appendChild(s);
+    } catch (e) {
+      console.error("[TREATZ] Failed to load entry JS:", e);
+    }
+  })();
+</script>
+
 </body>
 </html>
