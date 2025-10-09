@@ -3,19 +3,23 @@ set -euo pipefail
 
 echo "[TREATZ] 🚀 Starting Render build…"
 
-# ---- Python venv ----
-if [ -f .venv/bin/activate ]; then
-  # shellcheck disable=SC1091
-  source .venv/bin/activate
-else
-  python3 -m venv .venv
-  # shellcheck disable=SC1091
-  source .venv/bin/activate
-fi
+# ---- Python venv (optional) ----
+if [ -f requirements.txt ]; then
+  if [ -f .venv/bin/activate ]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+  else
+    python3 -m venv .venv
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+  fi
 
-python3 -V
-pip install --upgrade pip
-pip install -r requirements.txt
+  python3 -V
+  pip install --upgrade pip
+  pip install -r requirements.txt
+else
+  echo "[TREATZ] (no requirements.txt) — skipping Python deps"
+fi
 
 # ---- Frontend deps ----
 if [ -f package-lock.json ]; then
@@ -24,9 +28,14 @@ else
   npm install --no-audit --no-fund
 fi
 
-# ---- Build app.js ONCE (standalone runtime) ----
-echo "[TREATZ] 🧩 Building standalone runtime (app.js)…"
-npm run build:app
+# ---- Build app.js ONCE (optional) ----
+if npm run | grep -q "build:app"; then
+  echo "[TREATZ] 🧩 Building standalone runtime (app.js)…"
+  # If this fails, keep going so Vite still runs.
+  npm run build:app || echo "[TREATZ] ⚠️ build:app failed — continuing with Vite build"
+else
+  echo "[TREATZ] (no build:app script) — skipping standalone runtime build"
+fi
 
 # ---- Vite build ----
 echo "[TREATZ] 🛠️  Building site with Vite…"
@@ -48,24 +57,22 @@ if [ -d "dist" ]; then
   if [ -f "static/app.js" ]; then
     echo "[TREATZ] static/app.js present."
   else
-        echo "[TREATZ] ℹ️ static/app.js not found; attempting manifest fallback…"
-    # Prefer standard Vite location: /static/manifest.json
+    echo "[TREATZ] ℹ️ static/app.js not found; attempting manifest fallback…"
     if [ -f "static/manifest.json" ]; then
-      JS_ENTRY=$(node -e 'const m=require("./static/manifest.json"); const vals=Object.values(m); const e=vals.find(v=>v&&v.isEntry&&v.file)||vals.find(v=>v&&v.file); if(e&&e.file) process.stdout.write(e.file);')
+      JS_ENTRY=$(node -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync("./static/manifest.json","utf8"));const vals=Object.values(m);const e=vals.find(v=>v&&v.isEntry&&v.file)||vals.find(v=>v&&v.file);if(e&&e.file)process.stdout.write(e.file);')
       if [ -n "${JS_ENTRY:-}" ] && [ -f "static/$JS_ENTRY" ]; then
         cp -f "static/$JS_ENTRY" static/app.js
         echo "[TREATZ] Copied static/$JS_ENTRY -> static/app.js (fallback)"
       else
-        echo "[TREATZ] ⚠️ Couldn’t determine entry from /static/manifest.json; runtime will use manifest at load."
+        echo "[TREATZ] ⚠️ Couldn’t determine entry from /static/manifest.json; runtime will load via manifest at run-time."
       fi
     elif [ -f "static/.vite/manifest.json" ]; then
-      # Back-compat if someone moves manifest under .vite
-      JS_ENTRY=$(node -e 'const m=require("./static/.vite/manifest.json"); const vals=Object.values(m); const e=vals.find(v=>v&&v.isEntry&&v.file)||vals.find(v=>v&&v.file); if(e&&e.file) process.stdout.write(e.file);')
+      JS_ENTRY=$(node -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync("./static/.vite/manifest.json","utf8"));const vals=Object.values(m);const e=vals.find(v=>v&&v.isEntry&&v.file)||vals.find(v=>v&&v.file);if(e&&e.file)process.stdout.write(e.file);')
       if [ -n "${JS_ENTRY:-}" ] && [ -f "static/$JS_ENTRY" ]; then
         cp -f "static/$JS_ENTRY" static/app.js
         echo "[TREATZ] Copied static/$JS_ENTRY -> static/app.js (fallback from .vite manifest)"
       else
-        echo "[TREATZ] ⚠️ Couldn’t determine entry from .vite manifest; runtime will use manifest at load."
+        echo "[TREATZ] ⚠️ Couldn’t determine entry from .vite manifest; runtime will load via manifest at run-time."
       fi
     else
       echo "[TREATZ] ⚠️ No manifest present; runtime will rely on /static/app.js only if created."
@@ -79,6 +86,12 @@ if [ -d "dist" ]; then
   else
     echo "[TREATZ] ⚠️ repo-root style.css not found; page will load without /static/style.css"
   fi
+
+  # Sanity logs
+  echo "[TREATZ] 📦 Contents of static/:"
+  ls -la static || true
+  echo "[TREATZ] 🔎 Manifest exists?"
+  [ -f static/manifest.json ] && echo "Yes" || echo "No"
 
 else
   echo "[TREATZ] ⚠️ dist/ not found after build — aborting" >&2
