@@ -115,15 +115,21 @@ app = FastAPI(title="$TREATZ Backend", version="0.1.0")
 # Paths
 BASE_DIR = os.path.dirname(__file__)
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+STATIC_ASSETS_DIR = os.path.join(STATIC_DIR, "assets")   # <— Vite build outputs here
+REPO_ASSETS_DIR = os.path.join(BASE_DIR, "assets")       # <— optional legacy assets
 
-# ✅ Serve built frontend (Vite output) under /static (if present)
+# Serve the built site (HTML lives in /static)
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# ✅ Also serve the raw repo assets folder under /assets so legacy references work
-if os.path.isdir(ASSETS_DIR):
-    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+# IMPORTANT: Vite index.html references /assets/... (absolute),
+# so point /assets to the *built* assets inside /static.
+if os.path.isdir(STATIC_ASSETS_DIR):
+    app.mount("/assets", StaticFiles(directory=STATIC_ASSETS_DIR), name="assets")
+
+# Optional: still expose the raw repo assets somewhere (if you need them)
+if os.path.isdir(REPO_ASSETS_DIR):
+    app.mount("/repo-assets", StaticFiles(directory=REPO_ASSETS_DIR), name="repo-assets")
 
 # ✅ Serve a favicon if present in static
 @app.get("/favicon.ico", include_in_schema=False)
