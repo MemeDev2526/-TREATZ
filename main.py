@@ -316,38 +316,42 @@ def _as_str_blockhash(h) -> Optional[str]:
             return None
 
 async def _rpc_get_blockhash(slot: int) -> Optional[str]:
-    """Fetch blockhash at a specific slot; returns a normalized string or None."""
     async with AsyncClient(RPC_URL) as c:
         b = await c.get_block(slot, max_supported_transaction_version=0)
         val = getattr(b, "value", None)
         if val and hasattr(val, "blockhash"):
-            return _bh_str(val.blockhash)
+            return str(val.blockhash)
         if isinstance(b, dict) and b.get("result") and b["result"].get("blockhash"):
-            return _bh_str(b["result"]["blockhash"])
+            return str(b["result"]["blockhash"])
         return None
-
 
 async def _rpc_get_blockhash_fallback(
     slot: int,
     search_back: int = 2048,
     search_forward: int = 128
 ) -> tuple[Optional[str], Optional[int]]:
-    """
-    Try to fetch a blockhash at `slot`. If skipped/pruned, search backward, then forward.
-    As a last resort, return the latest blockhash (slot=None).
-    Always returns a string for the blockhash (or None).
-    """
     async with AsyncClient(RPC_URL) as c:
+        def _to_str(bh) -> Optional[str]:
+            if bh is None:
+                return None
+            try:
+                return str(bh)
+            except Exception:
+                try:
+                    return bh.to_string()
+                except Exception:
+                    return None
+
         async def _slot_hash(s: int) -> Optional[str]:
             b = await c.get_block(s, max_supported_transaction_version=0)
             v = getattr(b, "value", None)
             if v and hasattr(v, "blockhash"):
-                return _bh_str(v.blockhash)
+                return _to_str(v.blockhash)
             if isinstance(b, dict) and b.get("result") and b["result"].get("blockhash"):
-                return _bh_str(b["result"]["blockhash"])
+                return _to_str(b["result"]["blockhash"])
             return None
 
-        # 1) exact
+        # 1) exact slot
         try:
             h = await _slot_hash(slot)
             if h:
@@ -377,16 +381,16 @@ async def _rpc_get_blockhash_fallback(
             except Exception:
                 continue
 
-        # 4) last resort: latest
+        # 4) latest finalized
         try:
             latest = await c.get_latest_blockhash()
-            v = getattr(latest, "value", None)
-            if v and hasattr(v, "blockhash"):
-                return _bh_str(v.blockhash), None
+            val = getattr(latest, "value", None)
+            if val and hasattr(val, "blockhash"):
+                return _to_str(val.blockhash), None
             if isinstance(latest, dict):
-                vv = ((latest.get("result") or {}).get("value") or {})
-                if vv.get("blockhash"):
-                    return _bh_str(vv["blockhash"]), None
+                v = ((latest.get("result") or {}).get("value") or {})
+                if v.get("blockhash"):
+                    return _to_str(v["blockhash"]), None
         except Exception:
             pass
 
@@ -1318,27 +1322,25 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
         await dbmod.kv_set(app.state.db, f"round:{rid}:server_seed", round_server_seed)
 
     # External entropy = blockhash at finalize_slot; robust fallback with slot correction
-    entropy: Optional[str] = None
+    entropy_str: Optional[str] = None
     effective_slot: Optional[int] = None
 
     if finalize_slot:
         try:
-            entropy, effective_slot = await _rpc_get_blockhash_fallback(finalize_slot)
+            entropy_str, effective_slot = await _rpc_get_blockhash_fallback(finalize_slot)
         except Exception:
-            entropy, effective_slot = None, None
+            entropy_str, effective_slot = None, None
 
-    if not entropy:
-        # final fallback: newest entry tx sig (or random) — already a str
+    if not entropy_str:
+        # final fallback: newest entry tx sig (or random) — keeps the round moving
         async with app.state.db.execute(
             "SELECT tx_sig FROM entries WHERE round_id=? ORDER BY id DESC LIMIT 1",
             (rid,)
         ) as cur:
             last = await cur.fetchone()
-        entropy = last[0] if last and last[0] else secrets.token_hex(16)
+        entropy_str = last[0] if last and last[0] else secrets.token_hex(16)
     else:
-        # Normalize whatever we got to a plain string
-        entropy = _bh_str(entropy) or secrets.token_hex(16)
-        # If we used a different slot, persist it
+        # We found a usable blockhash; if it wasn't the planned slot, persist the slot we actually used
         if effective_slot is not None and effective_slot != finalize_slot:
             try:
                 await app.state.db.execute(
@@ -1349,13 +1351,14 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
             except Exception:
                 traceback.print_exc()
 
-    # >>> entropy is guaranteed to be a str from here on <<<
-
-
-    # Persist fairness bits for the UI
-    await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy)
-    if finalize_slot:
-        await dbmod.kv_set(app.state.db, f"round:{rid}:entropy_slot", str(finalize_slot))
+    # Ensure we ALWAYS store a string in KV (sqlite cannot bind solders.Hash)
+    try:
+        await dbmod.kv_set(app.state.db, f"round:{rid}:entropy", entropy_str)
+        if finalize_slot:
+            await dbmod.kv_set(app.state.db, f"round:{rid}:entropy_slot", str(finalize_slot))
+    except Exception:
+        # non-fatal; keep going
+        traceback.print_exc()
 
     # Optional: trace which path we used
     try:
