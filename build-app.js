@@ -47,22 +47,26 @@ async function run() {
       bundle: true,
       format: 'esm',
       platform: 'browser',
-      target: ['es2020'],            // ✅ ES2020 or 'esnext' fixes the BigInt errors
+      target: ['es2020'],
       minify: true,
       sourcemap: false,
       outfile: OUTFILE,
       define: { 'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production') },
-      loader: {
-        '.svg': 'dataurl',
-        '.png': 'file',
-        '.jpg': 'file',
-        '.jpeg': 'file',
-        '.gif': 'file',
+      loader: { '.svg': 'dataurl', '.png': 'file', '.jpg': 'file', '.jpeg': 'file', '.gif': 'file' },
+      plugins: [IgnoreCssPlugin],
+      // ⬇⬇⬇ inject Buffer + minimal process shim into the browser bundle
+      banner: {
+        js: `
+          import { Buffer as BufferPolyfill } from "buffer";
+          if (typeof globalThis !== "undefined") {
+            if (!globalThis.Buffer) globalThis.Buffer = BufferPolyfill;
+            if (!globalThis.process) globalThis.process = { env: {} };
+            if (!globalThis.global)  globalThis.global  = globalThis; // some libs expect 'global'
+          }
+        `.trim()
       },
-      plugins: [IgnoreCssPlugin],    // keep this so app.js never tries to import CSS
       logLevel: 'info',
     });
-
 
     console.log('[TREATZ] ✅ Bundled to static/app.js');
     process.exit(0);
