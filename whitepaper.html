@@ -1,19 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<!--
-  $TREATZ — “Whitepaper” Jump Scare (v3.1 mobile-safe)
-
-  QUICK CONFIG (edit on <body>):
-    data-halloween-iso   - Countdown target
-    data-cta-coinflip    - CTA link to coin flip
-    data-cta-jackpot     - CTA link to jackpot
-    data-bg-src          - Background image path (e.g., assets/bg_spooky.jpg)
-    data-scream-src      - Jump-scare scream SFX
-    data-ambient-src     - Eerie background loop
-    data-use-emojis      - "true" emojis | "false" PNG/SVGs
-    data-sfx-ghost/bat/ghoul/zombie - Per-flyer SFX
-    data-run-seconds     - How long flyers+SFX run before stopping (default 5s)
--->
+<!-- $TREATZ — “Whitepaper” Jump Scare (v3.1 mobile-safe) -->
 <head>
   <!-- ========== META / TITLE ========== -->
   <meta charset="utf-8" />
@@ -22,12 +9,26 @@
 
   <!-- ========== FONTS & BASE STYLES ========== -->
   <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
-  <!-- Prefer built site CSS under /static/assets/ — fallback to /assets/style.css if you copy core CSS into /assets -->
   <link rel="stylesheet" href="/static/style.css">
-  
-  <!-- Inline visual fallback in case the external CSS path is not present (keeps button + countdown readable) -->
+
+  <!-- ======= SAFETY VARS (always define brand tokens) ======= -->
   <style>
-    /* minimal whitepaper overrides for guaranteed readability */
+    :root{
+      /* Brand palette */
+      --orange:#FF6B00; --orange-hi:#FF9500; --pumpkin:var(--orange);
+      --witch:#6A00FF; --slime:#39FF14;
+      --jet:#0D0D0D; --white:#FFFFFF; --gray:#AAAAAA;
+      /* Background gradient stops */
+      --bg-a:#2C0A44; --bg-b:#4D0D57;
+      /* Surfaces / shadows */
+      --card:rgba(13,13,13,.72);
+      --card-border:rgba(255,255,255,.12);
+      --shadow:0 10px 30px rgba(0,0,0,.45);
+    }
+  </style>
+
+  <!-- Minimal fallback so page is readable even if main CSS fails -->
+  <style>
     body { background: black; color: #f7f7fb; }
     .countdown { background: rgba(0,0,0,.85); border-bottom:1px solid rgba(255,255,255,.06); }
     .countdown__timer { color: #fff; font-family:'Luckiest Guy',cursive; font-size: 52px; }
@@ -37,55 +38,34 @@
     .bgimg { background: center/cover no-repeat; filter: saturate(1.05) brightness(.9); }
   </style>
 
-  <!-- ========== PAGE-SPECIFIC STYLES ========== -->
+  <!-- ========== PAGE-SPECIFIC STYLES (cleaned; no nested <style>) ========== -->
   <style>
-    /* -------------------------
-       1) BASE LAYOUT
-    --------------------------*/
+    /* 1) BASE LAYOUT */
     body{
       margin:0; color:var(--white);
       background:linear-gradient(180deg,var(--bg-a),var(--bg-b));
       font-family:Rubik,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
       overflow:hidden;
     }
+    .bgimg{ position:fixed; inset:0; z-index:-2; background:#000 center/cover no-repeat; filter:saturate(1.05) brightness(.9); opacity:.85; }
+    .bgfx{ position:fixed; inset:-10%; z-index:-1; background:
+      radial-gradient(1200px 600px at 20% 10%, rgba(106,0,255,.22), transparent 60%),
+      radial-gradient(900px 500px at 80% 70%, rgba(0,255,163,.16), transparent 55%);
+      pointer-events:none; }
 
-    /* Background image layer */
-    .bgimg{
-      position:fixed; inset:0; z-index:-2;
-      background:#000 center/cover no-repeat;
-      filter: saturate(1.05) brightness(.9);
-      opacity:.85;
-    }
-    /* Brand fog overlay */
-    .bgfx{
-      position:fixed; inset:-10%; z-index:-1;
-      background:
-        radial-gradient(1200px 600px at 20% 10%, rgba(106,0,255,.22), transparent 60%),
-        radial-gradient(900px 500px at 80% 70%, rgba(0,255,163,.16), transparent 55%);
-      pointer-events:none;
-    }
-
-    /* Countdown (background line FIXED) */
+    /* Countdown */
     .countdown{position:sticky; top:0; z-index:1000; background:#000; border-bottom:1.25px solid rgba(255,255,255,.2)}
     .countdown__inner{max-width:1200px; margin:0 auto; padding:.55rem .9rem; display:flex; gap:.75rem; align-items:center; justify-content:center; flex-wrap:wrap}
     .countdown__label{font-weight:700; letter-spacing:.3px}
     .countdown__timer{font-family:"Luckiest Guy", cursive; font-size:1.75rem; padding:0 .25rem}
     .countdown__omen{font-size:.95rem; opacity:.9}
-    .countdown__logo {
-      height: 90px;               /* adjust as needed */
-      width: auto;
-      margin-right: .5rem;
-      display: inline-block;
-    }
-    @media (max-width: 480px) {
-      .countdown__logo { height: 24px; }
-    }
+    .countdown__logo{height:90px; width:auto; margin-right:.5rem; display:inline-block}
+    @media (max-width:480px){ .countdown__logo{height:24px} }
 
-    /* Stage + Card (hidden until start) */
+    /* Stage + Card */
     .stage{ position:fixed; inset:0; display:grid; place-items:center; pointer-events:none; }
     .cardy{
-      pointer-events:auto;
-      max-width:900px; margin:6vh auto 10vh; padding:34px;
+      pointer-events:auto; max-width:900px; margin:6vh auto 10vh; padding:34px;
       background:linear-gradient(180deg, rgba(13,13,13,.90), rgba(13,13,13,.62));
       border:1px solid var(--card-border); border-radius:18px; box-shadow:var(--shadow);
       text-align:center; position:relative; z-index:10;
@@ -96,201 +76,96 @@
     /* Headline */
     .boo{
       font-family:"Luckiest Guy",cursive;
-      font-size:clamp(42px,10vw,128px); line-height:.9;
-      color:var(--orange);
-      text-shadow:
-        0 0 6px rgba(255,149,0,.45),
-        0 0 16px rgba(106,0,255,.45),
-        0 4px 0 rgba(0,0,0,.45);
-      transform:scale(.98); opacity:0;
-      transition:opacity .9s ease, transform .9s cubic-bezier(.2,.7,.2,1);
+      font-size:clamp(42px,10vw,128px); line-height:.9; color:var(--orange);
+      text-shadow:0 0 6px rgba(255,149,0,.45), 0 0 16px rgba(106,0,255,.45), 0 4px 0 rgba(0,0,0,.45);
+      transform:scale(.98); opacity:0; transition:opacity .9s ease, transform .9s cubic-bezier(.2,.7,.2,1);
       user-select:none;
     }
     .boo.show{ opacity:1; transform:scale(1); }
 
-    /* Punchier subline */
+    /* Subline */
     .sub{
-      margin:14px auto 12px;
-      font-family:"Luckiest Guy", cursive;
-      font-size:clamp(20px,3.6vw,34px);
-      letter-spacing:.6px;
-      color:#fff;
-      text-wrap: balance;
-      text-shadow:
-        0 0 14px rgba(0,255,163,.55),
-        0 0 24px rgba(106,0,255,.35),
-        0 2px 0 rgba(0,0,0,.65);
+      margin:14px auto 12px; font-family:"Luckiest Guy",cursive;
+      font-size:clamp(20px,3.6vw,34px); letter-spacing:.6px; color:#fff;
+      text-wrap:balance;
+      text-shadow:0 0 14px rgba(0,255,163,.55), 0 0 24px rgba(106,0,255,.35), 0 2px 0 rgba(0,0,0,.65);
     }
+    .sub.fright-paper{
+      animation:spookyPulse 2.8s infinite ease-in-out; color:var(--slime);
+      text-shadow:0 0 10px rgba(255,107,0,.7), 0 0 20px rgba(106,0,255,.6), 0 0 30px rgba(57,255,20,.5);
+    }
+    @keyframes spookyPulse{ 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:.85} }
 
     /* Copy */
-    .explain{
-      margin:14px auto 0; max-width:780px; text-align:left;
-      opacity:0; transition:opacity 1.2s ease 250ms;
-      font-size: 1.125rem;         /* ~18px base */
-      line-height: 1.75;           /* comfy line height */
-      letter-spacing: .1px;
-    }
-    .explain.show{opacity:1;}
-    .explain p{ margin: .7rem 0 1.25rem; }
-    .explain ul{margin: .75rem 0 0 1.2rem;}
-    .explain li{margin:.45rem 0;}
+    .explain{ margin:14px auto 0; max-width:780px; text-align:left; opacity:0; transition:opacity 1.2s ease 250ms; font-size:1.125rem; line-height:1.75; letter-spacing:.1px; }
+    .explain.show{opacity:1;} .explain p{margin:.7rem 0 1.25rem;} .explain ul{margin:.75rem 0 0 1.2rem;} .explain li{margin:.45rem 0;}
     .explain em{color:#94DAFF; font-style:normal; font-weight:700}
 
-    /* CTA Buttons */
+    /* Buttons */
     .cta{ margin-top:18px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
     .btn{cursor:pointer; border:none; padding:.9rem 1.25rem; border-radius:16px; font-weight:900;}
     .btn--primary{background:linear-gradient(180deg,var(--orange),var(--orange-hi)); color:#1a0b00}
     .btn--outline{background:transparent; color:var(--white); border:1px solid var(--white); opacity:.95}
     .muted{opacity:.85; font-size:.9rem; margin-top:8px; text-align:center;}
 
-    .sub.fright-paper{
-      animation: spookyPulse 2.8s infinite ease-in-out;
-      color: var(--slime);
-      text-shadow: 
-        0 0 10px rgba(255,107,0,.7),
-        0 0 20px rgba(106,0,255,.6),
-        0 0 30px rgba(57,255,20,.5);
-    }
-    @keyframes spookyPulse {
-      0%,100% { transform: scale(1); opacity:1; }
-      50%     { transform: scale(1.08); opacity:.85; }
-    }
-
-    /* Veil (keep page hidden until click) */
-    .veil{
-      position:fixed; inset:0; display:grid; place-items:center; z-index:20;
-      background:rgba(9,9,9,.72); backdrop-filter:blur(6px);
-    }
-    .veil__card{
-      background:linear-gradient(180deg, rgba(13,13,13,.95), rgba(13,13,13,.78));
-      border:1px solid var(--card-border); padding:22px 26px; border-radius:18px; text-align:center;
-      box-shadow:var(--shadow); max-width:520px;
-    }
-    .veil__title{ 
-      transform: scale(2.25);  /* Warning!! up 2.25x */
-      font-family:"Luckiest Guy"; font-size:clamp(20px,3.4vw,34px);
-      margin:0 0 10px; color:var(--orange);
-      text-shadow:0 0 14px rgba(255,149,0,.4), 0 0 22px rgba(106,0,255,.4);
-    }
-    .veil__subtitle{
-      transform: scale(1.5);   /* “Only the brave…” up 1.5x */
-    }
-    .veil__btn{
-      margin-top:14px; 
-      font-size: clamp(16px, 3vw, 22px);
-      padding:.95rem 1.6rem; border-radius:16px;
-      background:linear-gradient(180deg,var(--orange),var(--orange-hi));
-      color:#1a0b00; font-weight:900; border:none; cursor:pointer;
-      box-shadow:0 10px 30px rgba(0,0,0,.45);
-    }
+    /* Veil */
+    .veil{ position:fixed; inset:0; display:grid; place-items:center; z-index:20; background:rgba(9,9,9,.72); backdrop-filter:blur(6px); }
+    .veil__card{ background:linear-gradient(180deg, rgba(13,13,13,.95), rgba(13,13,13,.78)); border:1px solid var(--card-border); padding:22px 26px; border-radius:18px; text-align:center; box-shadow:var(--shadow); max-width:520px; }
+    .veil__title{ transform:scale(2.25); font-family:"Luckiest Guy"; font-size:clamp(20px,3.4vw,34px); margin:0 0 10px; color:var(--orange); text-shadow:0 0 14px rgba(255,149,0,.4), 0 0 22px rgba(106,0,255,.4); }
+    .veil__subtitle{ transform:scale(1.5); }
+    .veil__btn{ margin-top:14px; font-size:clamp(16px,3vw,22px); padding:.95rem 1.6rem; border-radius:16px; background:linear-gradient(180deg,var(--orange),var(--orange-hi)); color:#1a0b00; font-weight:900; border:none; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.45); }
     .veil__btn:hover{ transform:translateY(-1px); }
 
-    .narrative{
-      font-size:1.25rem; font-weight:600; color:var(--orange);
-      text-shadow:0 0 12px rgba(255,107,0,.6), 0 0 18px rgba(106,0,255,.4);
-      margin-top:1.2rem;
-    }
+    .narrative{ font-size:1.25rem; font-weight:600; color:var(--orange); text-shadow:0 0 12px rgba(255,107,0,.6), 0 0 18px rgba(106,0,255,.4); margin-top:1.2rem; }
 
     /* Flyers */
-    .flyer{
-      position:fixed;
-      transform:scale(.2);
-      filter:drop-shadow(0 8px 24px rgba(0,0,0,.55));
-      opacity:0; pointer-events:none; z-index:1000;
-      will-change:transform, opacity, filter;
-      animation:swoop 1.2s cubic-bezier(.2,.6,.2,1) forwards;
-    }
+    .flyer{ position:fixed; transform:scale(.2); filter:drop-shadow(0 8px 24px rgba(0,0,0,.55)); opacity:0; pointer-events:none; z-index:1000; will-change:transform,opacity,filter; animation:swoop 1.2s cubic-bezier(.2,.6,.2,1) forwards; }
     .flyer--ghost{ font-size:80px; text-shadow:0 0 18px rgba(148,218,255,.6); }
-    .flyer--bat  { font-size:56px; text-shadow:0 0 14px rgba(255,255,255,.25); }
+    .flyer--bat{ font-size:56px; text-shadow:0 0 14px rgba(255,255,255,.25); }
     .flyer--ghoul{ font-size:84px; text-shadow:0 0 18px rgba(106,0,255,.45); color:#bba0ff; }
-    .flyer--zomb { font-size:84px; text-shadow:0 0 18px rgba(0,255,163,.35); color:#b6ffd9; }
+    .flyer--zomb{ font-size:84px; text-shadow:0 0 18px rgba(0,255,163,.35); color:#b6ffd9; }
+    @keyframes swoop{ 0%{opacity:0;transform:scale(.2) rotate(0deg)} 5%{opacity:1} 80%{opacity:1;filter:blur(0)} 100%{opacity:0;transform:scale(6) rotate(3deg);filter:blur(4px)} }
 
-    @keyframes swoop{
-      0%{opacity:0; transform:scale(.2) rotate(0deg);}
-      5%{opacity:1;}
-      80%{opacity:1; filter:blur(0px);}
-      100%{opacity:0; transform:scale(6) rotate(3deg); filter:blur(4px);}
+    /* Mobile tweaks */
+    @media (max-width:480px){ .explain{ font-size:1.2rem; line-height:1.8 } }
+    @media (max-width:420px){ .veil{ backdrop-filter:none; background: rgba(9,9,9,.82) } }
+    @media (prefers-reduced-motion:reduce){ .flyer{animation:none; opacity:.85; transform:scale(1)} }
+
+    /* --- Scroll fix overrides --- */
+    body{ overflow-x:hidden; overflow-y:auto; }
+    .stage{ position:relative; inset:auto; min-height:100vh; padding:6vh 0 12vh; }
+
+    /* --- Lock brand accents --- */
+    .cardy{ background:linear-gradient(180deg,rgba(13,13,13,.90),rgba(13,13,13,.62))!important; color:var(--white) }
+    .explain h2,.explain .narrative,.explain strong,.explain em,.veil__title,.boo{
+      color:var(--pumpkin)!important; text-shadow:0 0 12px rgba(255,107,0,.45), 0 0 18px rgba(106,0,255,.35);
     }
-
-    /* Lists read great with a tad bigger font on mobile */
-    @media (max-width: 480px){
-      .explain{ font-size: 1.2rem; line-height: 1.8; }
+    .btn--primary,.veil__btn{
+      background:linear-gradient(180deg,var(--pumpkin),var(--orange-hi))!important; color:#1a0b00!important; box-shadow:0 8px 30px rgba(255,107,0,.08);
     }
-    /* Tone down heavy blur on very small screens (perf-friendly) */
-    @media (max-width: 420px){
-      .veil{ backdrop-filter:none; background: rgba(9,9,9,.82); }
+    .explain *{ background:transparent!important; }
+
+    /* --- Roadmap/Tokenomics (moved to head so it styles immediately) --- */
+    .rtx-wrap { margin: 2.5rem 0 0; }
+    .rtx { background: rgba(13,13,13,.72); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; overflow: hidden; }
+    .rtx details { background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.15)); }
+    .rtx summary {
+      display:flex; align-items:center; gap:.75rem; padding:1rem 1.25rem; cursor:pointer; user-select:none;
+      color:var(--white); font-weight:700; background:linear-gradient(90deg, var(--pumpkin), var(--witch)); -webkit-tap-highlight-color:transparent;
     }
-    
-    @media (prefers-reduced-motion: reduce){
-      .flyer{animation:none; opacity:.85; transform:scale(1);}
-    }
-
-    /* --- Whitepaper scroll fix overrides --- */
-    body{
-      overflow-x: hidden;
-      overflow-y: auto;             /* allow scrolling */
-    }
-    .stage{
-      position: relative;           /* was fixed */
-      inset: auto;                  /* clear fixed positioning */
-      min-height: 100vh;
-      padding: 6vh 0 12vh;
-    }
-
-    /* ---------- LOCK PUMPKIN COLOR (place at end of page-specific styles) ---------- */
-
-    /* Ensure variables exist if external CSS hasn't loaded yet */
-    <style>
-    :root{
-      /* Brand palette */
-      --orange:#FF6B00; --orange-hi:#FF9500; --pumpkin:var(--orange);
-      --witch:#6A00FF; --slime:#39FF14;
-      --jet:#0D0D0D; --white:#FFFFFF; --gray:#AAAAAA;
-
-      /* Background gradient stops */
-      --bg-a:#2C0A44; --bg-b:#4D0D57;
-
-      /* Surfaces / shadows */
-      --card:rgba(13,13,13,.72);
-      --card-border:rgba(255,255,255,.12);
-      --shadow:0 10px 30px rgba(0,0,0,.45);
-    }
-    </style>
-
-    /* Keep the card dark — prevent accidental orange backgrounds */
-    .cardy {
-      background: linear-gradient(180deg, rgba(13,13,13,.90), rgba(13,13,13,.62)) !important;
-      color: var(--white);
-    }
-
-    /* Explicit pumpkin for primary brand copy & accents */
-    .explain h2,
-    .explain .narrative,
-    .explain strong,
-    .explain em,
-    .veil__title,
-    .boo {
-      color: var(--pumpkin) !important;
-      text-shadow: 0 0 12px rgba(255,107,0,.45), 0 0 18px rgba(106,0,255,.35);
-    }
-
-    /* Make CTA primary gradient use exact pumpkin variables */
-    .btn--primary,
-    .veil__btn {
-      background: linear-gradient(180deg, var(--pumpkin), var(--orange-hi)) !important;
-      color: #1a0b00 !important;
-      box-shadow: 0 8px 30px rgba(255,107,0,.08);
-    }
-
-    /* If small elements accidentally inherit orange as a background, force transparent */
-    .explain * { background: transparent !important; }
-
-    /* Accessibility nudge: if orange text doesn't meet contrast, fallback to white on small screens */
-    @media (max-width: 480px) {
-      .explain .narrative, .explain h2 {
-        color: color-contrast(var(--pumpkin) vs var(--white) , var(--white), var(--pumpkin));
-      }
-    }
+    .rtx summary::-webkit-details-marker { display:none; }
+    .rtx .rtx-caret { width:10px; height:10px; border-right:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(-45deg); transition:transform .25s ease; }
+    .rtx details[open] .rtx-caret { transform: rotate(45deg); }
+    .rtx .rtx-badge { margin-left:auto; font-size:.85rem; opacity:.9; background:rgba(0,0,0,.25); padding:.25rem .5rem; border-radius:8px; }
+    .rtx .rtx-body { padding:1rem 1.25rem 1.25rem; color:var(--white); }
+    .rtx h3 { margin:.5rem 0 .5rem; font-size:1.1rem; color:var(--slime); }
+    .rtx h4 { margin:1rem 0 .25rem; font-size:1rem; color:var(--witch); }
+    .rtx p,.rtx li,.rtx small { color:rgba(255,255,255,.92); }
+    .rtx ul { margin:.35rem 0 .5rem 1.25rem; }
+    .rtx .muted { color:rgba(255,255,255,.7); }
+    .rtx .chip { display:inline-block; font-size:.85rem; border:1px solid rgba(255,255,255,.18); padding:.15rem .5rem; border-radius:999px; margin-left:.5rem; }
+    .rtx .grid { display:grid; gap:.75rem; }
+    @media (min-width:720px){ .rtx .grid { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
 
@@ -324,47 +199,39 @@
   <div class="bgfx"  aria-hidden="true"></div>
 
   <!-- C) MAIN CONTENT (hidden until click) -->
-<main class="stage" role="main">
-  <section class="cardy" id="cardy" aria-live="polite">
-    <h1 class="boo" id="boo" aria-label="Boo! Jump Scare">👻 BOO! 👻</h1>
+  <main class="stage" role="main">
+    <section class="cardy" id="cardy" aria-live="polite">
+      <h1 class="boo" id="boo" aria-label="Boo! Jump Scare">👻 BOO! 👻</h1>
+      <p class="sub fright-paper">You expected a whitepaper. You got a fright-paper.</p>
 
-    <p class="sub fright-paper">You expected a whitepaper. You got a fright-paper.</p>
+      <div class="explain" id="explain">
+        <h2 style="margin:.2rem 0 .6rem">Why no “whitepaper”?</h2>
+        <p><strong>Because it’s Halloween</strong>—and because <strong>$TREATZ</strong> is simple, on-chain, and player-driven:</p>
+        <p>🎃 The trenches can be spooky with FUD, rugs, and trolls lurking about. But <strong>$TREATZ</strong> is the bag worth braving the night for.</p>
+        <p>Just like trick-or-treating, nothing hits harder than spotting the best wrapper in your bag. 
+        <strong>$TREATZ</strong> glow orange, purple, and green across Solana streets — instantly recognized, impossible to ignore.</p>
+        <p><strong>$TREATZ</strong> isn’t just another bag—it’s <em>the</em> Halloween bag. 
+        The one kids brag about, the one degens ape for, the one CT remembers when the lights go out.</p>
+        <p>Other coins dress up in costumes. <strong>$TREATZ</strong> <em>is</em> the costume, the candy, and the chaos all rolled into one glowing wrapper.</p>
+        <p>This October, there’s no trick. Only <strong>$TREATZ</strong>. And behind the wrappers? More surprises waiting in the dark…</p>
 
-    <div class="explain" id="explain">
-      <h2 style="margin:.2rem 0 .6rem">Why no “whitepaper”?</h2>
-      <p><strong>Because it’s Halloween</strong>—and because <strong>$TREATZ</strong> is simple, on-chain, and player-driven:</p>
+        <ul class="treatz-list">
+          <li>🎃 <em>Trick or Treat Coin Toss</em> — Pick TRICK or TREAT, send your wager, find your fate.</li>
+          <li>🕯️ <em>Jackpot Raffle</em> — 80% winner • 10% burned • 10% dev. Pots glow, chains know.</li>
+          <li>💨 <strong>Grab a bag and play now</strong> — fill it with candy… and wins.</strong></li>
+        </ul>
 
-      <p>🎃 The trenches can be spooky with FUD, rugs, and trolls lurking about. But <strong>$TREATZ</strong> is the bag worth braving the night for.</p>
+        <p><strong>The chain is the proof.</strong> The code is the contract. The community lights the lanterns.</p>
 
-      <p>Just like trick-or-treating, nothing hits harder than spotting the best wrapper in your bag. 
-      <strong>$TREATZ</strong> glow orange, purple, and green across Solana streets — instantly recognized, impossible to ignore.</p>
+        <div class="cta" id="cta">
+          <a class="btn btn--primary" id="cta-coinflip" href="#">Play Trick or Treat</a>
+          <a class="btn btn--primary" id="cta-jackpot" href="#">Enter the Jackpot</a>
+        </div>
 
-      <p><strong>$TREATZ</strong> isn’t just another bag—it’s <em>the</em> Halloween bag. 
-      The one kids brag about, the one degens ape for, the one CT remembers when the lights go out.</p>
-
-      <p>Other coins dress up in costumes. 
-      <strong>$TREATZ</strong> <em>is</em> the costume, the candy, and the chaos all rolled into one glowing wrapper.</p>
-
-      <p>This October, there’s no trick. Only <strong>$TREATZ</strong>.  
-      And behind the wrappers? More surprises waiting in the dark…</p>
-
-      <ul class="treatz-list">
-        <li>🎃 <em>Trick or Treat Coin Toss</em> — Pick TRICK or TREAT, send your wager, find your fate.</li>
-        <li>🕯️ <em>Jackpot Raffle</em> — 80% winner • 10% burned • 10% dev. Pots glow, chains know.</li>
-        <li>💨 <strong>Grab a bag and play now</strong> — fill it with candy… and wins.</li>
-      </ul>
-
-      <p><strong>The chain is the proof.</strong> The code is the contract. The community lights the lanterns.</p>
-
-      <div class="cta" id="cta">
-        <a class="btn btn--primary" id="cta-coinflip" href="#">Play Trick or Treat</a>
-        <a class="btn btn--primary" id="cta-jackpot" href="#">Enter the Jackpot</a>
+        <p class="muted">Want docs later? We’ll post a short overview—but for now, follow the lanterns and play.</p>
       </div>
-
-      <p class="muted">Want docs later? We’ll post a short overview—but for now, follow the lanterns and play.</p>
-    </div>
-  </section>
-</main>
+    </section>
+  </main>
 
   <!-- D) VEIL (keeps page hidden + unlocks audio) -->
   <div class="veil" id="veil" role="dialog" aria-modal="true" aria-labelledby="veil-title">
@@ -403,8 +270,7 @@
 
     const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-     /* Fallback shim: define formatDHMS if app.js hasn't loaded yet.
-       Safe: will NOT overwrite if a real one from app.js exists. */
+    /* Fallback shim: formatDHMS (only if app.js didn't define it) */
     if (typeof window.formatDHMS !== 'function') {
       window.formatDHMS = function(ms) {
         const rem = Math.max(0, Number(ms) || 0);
@@ -424,7 +290,7 @@
         );
       };
     }
-  
+
     /* 2) COUNTDOWN */
     (function countdown(){
       const target  = new Date(CFG.halloweenISO);
@@ -440,14 +306,11 @@
         'Beware the spooky slippage.'
       ];
       function tick(){
-        const now = new Date();
-        const diff = Math.max(0, target - now);
+        const diff = Math.max(0, target - new Date());
         const s = Math.floor(diff/1000);
-        const d = Math.floor(s/86400);
-        const h = Math.floor((s%86400)/3600);
-        const m = Math.floor((s%3600)/60);
         const sec = s%60;
-        timerEl.innerHTML = formatDHMS(target - Date.now ? target - Date.now() : (new Date(CFG.halloweenISO) - Date.now()));
+        /* FIX: call Date.now() properly */
+        timerEl.innerHTML = formatDHMS(target - Date.now());
         if (Math.random() < 0.01)      omenEl.textContent = '??? A strange puff passes by…';
         else if (sec % 10 === 0)       omenEl.textContent = omens[Math.floor(Math.random()*omens.length)];
       }
@@ -458,8 +321,6 @@
     $('#cta-coinflip').href = CFG.ctaCoinflip;
     $('#cta-jackpot').href  = CFG.ctaJackpot;
     if (CFG.bgSrc) {
-      // If the path is absolute or already starts with '/', use as-is.
-      // Otherwise assume repo path and rewrite to /static/assets/... to match build output.
       const bgPath = (CFG.bgSrc.startsWith('http') || CFG.bgSrc.startsWith('/'))
         ? CFG.bgSrc
         : `/static/${CFG.bgSrc.replace(/^\/+/, '')}`;
@@ -482,351 +343,249 @@
 
     /* 5) FLYERS + SFX (pooled & throttled for mobile) */
     const EMOJIS = ['👻','🦇','🧟','🧟‍♀️','🧟‍♂️','🧌'];
-    const IMGS   = [
-      // { src: 'assets/ghost.png', cls: 'flyer flyer--ghost', size: 96, type:'ghost' },
-      // { src: 'assets/bat.png',   cls: 'flyer flyer--bat',   size: 72, type:'bat'   },
-      // { src: 'assets/ghoul.png', cls: 'flyer flyer--ghoul', size:104, type:'ghoul' },
-      // { src: 'assets/zombie.png',cls: 'flyer flyer--zomb',  size:104, type:'zombie'},
-    ];
-
+    const IMGS   = [ /* optional sprite images, kept empty by default */ ];
     const SFX = { ghost: CFG.sfx.ghost, bat: CFG.sfx.bat, ghoul: CFG.sfx.ghoul, zombie: CFG.sfx.zombie };
-    const sfxPool = {};   // one Audio per type
-    const sfxLast = {};   // last play timestamp per type
+    const sfxPool = {}, sfxLast = {};
 
     function getSfx(kind){
-      const src = SFX[kind];
-      if (!src) return null;
-      if (!sfxPool[kind]) {
-        const a = new Audio(src);
-        a.preload = 'auto';
-        a.volume = IS_MOBILE ? 0.35 : 0.55;
-        sfxPool[kind] = a;
-        sfxLast[kind] = 0;
-      }
+      const src = SFX[kind]; if (!src) return null;
+      if (!sfxPool[kind]){ const a = new Audio(src); a.preload='auto'; a.volume = IS_MOBILE ? 0.35 : 0.55; sfxPool[kind]=a; sfxLast[kind]=0; }
       return sfxPool[kind];
     }
-
     function playSfx(kind){
-      const now = performance.now();
-      const minGap = IS_MOBILE ? 180 : 80; // throttle per type
+      const now = performance.now(), minGap = IS_MOBILE ? 180 : 80;
       if ((now - (sfxLast[kind] || 0)) < minGap) return;
-      const a = getSfx(kind);
-      if (!a) return;
+      const a = getSfx(kind); if (!a) return;
       try { a.currentTime = 0; a.play().catch(()=>{}); } catch(e){}
       sfxLast[kind] = now;
     }
-
     function randomPos(){
-      const w = window.innerWidth, h = window.innerHeight;
-      const marginX = Math.max(24, w * 0.06);
-      const marginY = Math.max(24, h * 0.06);
-      const x = Math.random() * (w - marginX*2) + marginX;
-      const y = Math.random() * (h - marginY*2) + marginY;
-      return { x, y };
+      const w = innerWidth, h = innerHeight, mx = Math.max(24, w*.06), my = Math.max(24, h*.06);
+      return { x: Math.random()*(w-mx*2)+mx, y: Math.random()*(h-my*2)+my };
     }
 
-    let runFlyers = false;
-    let keepAliveInterval = null;
+    let runFlyers = false, keepAliveInterval = null;
 
     function spawnFlyer(){
       if (!runFlyers) return;
       let el, type = 'ghoul';
       if (CFG.useEmojis){
-        el = document.createElement('div');
-        el.className = 'flyer';
+        el = document.createElement('div'); el.className='flyer';
         const pick = EMOJIS[Math.floor(Math.random()*EMOJIS.length)];
         el.textContent = pick;
         if (pick === '👻'){ el.classList.add('flyer--ghost'); type='ghost'; }
         else if (pick === '🦇'){ el.classList.add('flyer--bat'); type='bat'; }
         else if (pick.startsWith('🧟')){ el.classList.add('flyer--zomb'); type='zombie'; }
         else { el.classList.add('flyer--ghoul'); type='ghoul'; }
-      } else {
+      } else if (IMGS.length){
         const pick = IMGS[Math.floor(Math.random()*IMGS.length)];
-        el = document.createElement('img');
-        el.src = pick.src; el.alt = 'spook';
-        el.className = pick.cls || 'flyer';
-        el.style.width = (pick.size || 96) + 'px';
+        el = document.createElement('img'); el.src = pick.src; el.alt = 'spook'; el.className = pick.cls || 'flyer'; el.style.width = (pick.size || 96) + 'px';
         type = pick.type || 'ghoul';
-      }
-      const {x,y} = randomPos();
-      el.style.left = x + 'px';
-      el.style.top  = y + 'px';
-      document.body.appendChild(el);
-      playSfx(type);
-      el.addEventListener('animationend', ()=> el.remove());
+      } else { return; }
+      const {x,y} = randomPos(); el.style.left = x + 'px'; el.style.top = y + 'px';
+      document.body.appendChild(el); playSfx(type); el.addEventListener('animationend', ()=> el.remove());
     }
-
     function burst(count=10, spreadMs=420){
       if (!runFlyers) return;
       const target = IS_MOBILE ? Math.min(8, count) : count;
-      let i = 0;
-      const t = setInterval(()=>{
-        if (!runFlyers) { clearInterval(t); return; }
-        spawnFlyer();
-        if (++i >= target) clearInterval(t);
-      }, Math.max(40, Math.floor(spreadMs/target)));
+      let i=0; const t=setInterval(()=>{ if (!runFlyers){clearInterval(t);return;} spawnFlyer(); if (++i>=target) clearInterval(t); }, Math.max(40, Math.floor(spreadMs/target)));
     }
+    function stopFlyersAndSfx(){ runFlyers=false; if (keepAliveInterval){ clearInterval(keepAliveInterval); keepAliveInterval=null; } }
 
-    function stopFlyersAndSfx(){
-      runFlyers = false;
-      if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
-      // flyers will auto-remove on animationend
-    }
-
-    /* 6) JUMP-SCARE SEQUENCE + HIDE/SHOW CONTENT */
-    const veil  = $('#veil');
-    const begin = $('#begin');
-    const booEl = $('#boo');
-    const txtEl = $('#explain');
-    const cardy = $('#cardy');
+    /* 6) JUMP-SCARE SEQUENCE */
+    const veil  = $('#veil'), begin = $('#begin'), booEl = $('#boo'), txtEl = $('#explain'), cardy = $('#cardy');
 
     async function startShow(){
-      // Show card container now (but headline/paragraph still animate)
       cardy.classList.add('show');
-
-      // Jump-scare scream
       try { scream.currentTime = 0; await scream.play(); } catch(e){}
-
-      // Reveal headline + flyer burst
       requestAnimationFrame(()=> booEl.classList.add('show'));
-      runFlyers = true;
-      burst(IS_MOBILE ? 10 : 18, IS_MOBILE ? 520 : 560);
+      runFlyers = true; burst(IS_MOBILE ? 10 : 18, IS_MOBILE ? 520 : 560);
       setTimeout(()=> txtEl.classList.add('show'), 800);
-
-      // Ambient loop fades in after scream
-      const startAmbient = async()=>{
-        try { await ambient.play(); fadeInAmbient(1800, 0.18); } catch(e){}
-      };
+      const startAmbient = async()=>{ try { await ambient.play(); fadeInAmbient(1800, 0.18); } catch(e){} };
       if ('onended' in scream){ scream.onended = startAmbient; } else { setTimeout(startAmbient, 1200); }
-
-      // Keep a few flyers coming… then stop after runSeconds
       keepAliveInterval = setInterval(()=> burst(IS_MOBILE ? 2 : 3, 220), IS_MOBILE ? 1700 : 1400);
-      setTimeout(stopFlyersAndSfx, (CFG.runSeconds * 1000) - (IS_MOBILE ? 1200 : 0));
+      setTimeout(stopFlyersAndSfx, (CFG.runSeconds*1000) - (IS_MOBILE ? 1200 : 0));
     }
 
-    begin.addEventListener('click', ()=>{
-      veil.remove();     // unlock page + audio
-      startShow();       // run the sequence
-    });
+    begin.addEventListener('click', ()=>{ veil.remove(); startShow(); });
     document.addEventListener('keydown', (e)=>{ if ($('#veil') && e.key === 'Enter') begin.click(); });
   </script>
+
+  <!-- Your app bundle (if present) -->
   <script type="module" src="/static/app.js"></script>
 
-  <style>
-  /* Minimal, scoped styles (respects your CSS vars if present) */
-  .rtx-wrap { margin: 2.5rem 0 0; }
-  .rtx { 
-    background: rgba(13,13,13,.72);
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 14px;
-    overflow: hidden;
-  }
-  .rtx details { background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.15)); }
-  .rtx summary {
-    display: flex; align-items: center; gap: .75rem;
-    padding: 1rem 1.25rem; cursor: pointer; user-select: none;
-    color: var(--white, #fff); font-weight: 700;
-    background: linear-gradient(90deg, var(--pumpkin, #FF6B00), var(--witch, #6A00FF));
-    -webkit-tap-highlight-color: transparent;
-  }
-  .rtx summary::-webkit-details-marker { display: none; }
-  .rtx .rtx-caret { 
-    width: 10px; height: 10px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
-    transform: rotate(-45deg); transition: transform .25s ease;
-  }
-  .rtx details[open] .rtx-caret { transform: rotate(45deg); }
-  .rtx .rtx-badge {
-    margin-left: auto; font-size: .85rem; opacity: .9;
-    background: rgba(0,0,0,.25); padding: .25rem .5rem; border-radius: 8px;
-  }
-  .rtx .rtx-body { padding: 1rem 1.25rem 1.25rem; color: var(--white, #fff); }
-  .rtx h3 { margin: .5rem 0 0.5rem; font-size: 1.1rem; color: var(--slime, #39FF14); }
-  .rtx h4 { margin: 1rem 0 .25rem; font-size: 1rem; color: var(--witch, #6A00FF); }
-  .rtx p, .rtx li, .rtx small { color: rgba(255,255,255,.92); }
-  .rtx ul { margin: .35rem 0 .5rem 1.25rem; }
-  .rtx .muted { color: rgba(255,255,255,.7); }
-  .rtx .chip { display:inline-block; font-size:.85rem; border:1px solid rgba(255,255,255,.18); padding:.15rem .5rem; border-radius:999px; margin-left:.5rem; }
-  .rtx .grid { display: grid; gap: .75rem; }
-  @media (min-width: 720px){ .rtx .grid { grid-template-columns: 1fr 1fr; } }
-</style>
+  <!-- ========== ROADMAP & TOKENOMICS (Expandable) ========== -->
+  <section class="rtx-wrap" id="roadmap-tokenomics">
+    <div class="rtx">
+      <details>
+        <summary>
+          <span class="rtx-caret" aria-hidden="true"></span>
+          <span>$TREATZ — Roadmap & Tokenomics</span>
+          <span class="rtx-badge">Tap to expand</span>
+        </summary>
+        <div class="rtx-body">
+          <div class="grid">
+            <!-- ROADMAP -->
+            <div>
+              <h3>Roadmap</h3>
 
-<section class="rtx-wrap" id="roadmap-tokenomics">
-  <div class="rtx">
-    <details>
-      <summary>
-        <span class="rtx-caret" aria-hidden="true"></span>
-        <span>$TREATZ — Roadmap & Tokenomics</span>
-        <span class="rtx-badge">Tap to expand</span>
-      </summary>
-      <div class="rtx-body">
-        <div class="grid">
-          <!-- ROADMAP -->
-          <div>
-            <h3>Roadmap</h3>
+              <h4>Phase 0 — Pre-Launch <span class="chip">complete</span></h4>
+              <ul>
+                <li>Brand lock (cinematic Halloween foil), exact “$TREATZ” mark.</li>
+                <li>Web stack live (FastAPI + Vite), countdown, ambient FX, coin visuals.</li>
+                <li>Community scaffolding: X, TikTok, Telegram, sticker packs.</li>
+              </ul>
 
-            <h4>Phase 0 — Pre-Launch <span class="chip">complete</span></h4>
-            <ul>
-              <li>Brand lock (cinematic Halloween foil), exact “$TREATZ” mark.</li>
-              <li>Web stack live (FastAPI + Vite), countdown, ambient FX, coin visuals.</li>
-              <li>Community scaffolding: X, TikTok, Telegram, sticker packs.</li>
-            </ul>
+              <h4>Phase 1 — Launch Week</h4>
+              <ul>
+                <li><strong>Trickz or $TREATZ</strong> coin flip — public beta.</li>
+                <li><strong>Jack’O’Lantern Jackpot</strong> — round cadence online.</li>
+                <li>Public health/status endpoints; daily promo cadence.</li>
+              </ul>
 
-            <h4>Phase 1 — Launch Week</h4>
-            <ul>
-              <li><strong>Trickz or $TREATZ</strong> coin flip — public beta.</li>
-              <li><strong>Jack’O’Lantern Jackpot</strong> — round cadence online.</li>
-              <li>Public health/status endpoints; daily promo cadence.</li>
-            </ul>
+              <h4>Phase 2 — Week 2</h4>
+              <ul>
+                <li>Raffle history explorer + player stats panel.</li>
+                <li>Auto-burn wire-up + live burn counter.</li>
+              </ul>
 
-            <h4>Phase 2 — Week 2</h4>
-            <ul>
-              <li>Raffle history explorer + player stats panel.</li>
-              <li>Auto-burn wire-up + live burn counter.</li>
-            </ul>
+              <h4>Phase 3 — Mid-October</h4>
+              <ul>
+                <li>Wrapper NFTs (Genesis) with holder perks.</li>
+                <li>Dev/Treasury dashboard (buybacks, burns, grants).</li>
+                <li>DAO-lite votes on burn %, boosts, promos.</li>
+              </ul>
 
-            <h4>Phase 3 — Mid-October</h4>
-            <ul>
-              <li>Wrapper NFTs (Genesis) with holder perks.</li>
-              <li>Dev/Treasury dashboard (buybacks, burns, grants).</li>
-              <li>DAO-lite votes on burn %, boosts, promos.</li>
-            </ul>
+              <h4>Phase 4 — Halloween Week</h4>
+              <ul>
+                <li>Mega-Jackpot event & themed challenges.</li>
+                <li>Community showcase: sticker pack v2, costume meme run, live spaces.</li>
+              </ul>
 
-            <h4>Phase 4 — Halloween Week</h4>
-            <ul>
-              <li>Mega-Jackpot event & themed challenges.</li>
-              <li>Community showcase: sticker pack v2, costume meme run, live spaces.</li>
-            </ul>
+              <h4>Phase 5 — Post-Halloween (“Season 2”)</h4>
+              <ul>
+                <li>New mini-game; integrations (chart bots, buy alerts, tip bot).</li>
+                <li>Sustained burns & buybacks guided by DAO-lite polls.</li>
+              </ul>
+            </div>
 
-            <h4>Phase 5 — Post-Halloween (“Season 2”)</h4>
-            <ul>
-              <li>New mini-game; integrations (chart bots, buy alerts, tip bot).</li>
-              <li>Sustained burns & buybacks guided by DAO-lite polls.</li>
-            </ul>
+            <!-- TOKENOMICS -->
+            <div>
+              <h3>Tokenomics</h3>
+              <p><strong>Ticker:</strong> $TREATZ &nbsp;•&nbsp; <strong>Decimals:</strong> <span id="tk-decimals">6</span></p>
+              <p class="muted"><strong>Ethos:</strong> No presale. No VC. Community-first. Team funded by transparent game flows.</p>
+
+              <h4>Supply & Distribution</h4>
+              <ul>
+                <li><strong>Fair launch</strong> (market-owned liquidity; no team premine).</li>
+                <li><strong>Team/Treasury:</strong> 0% premine; funded via game revenue split.</li>
+                <li><strong>Circulating:</strong> 100% market-driven post-launch.</li>
+              </ul>
+
+              <h4>Game-Driven Flows</h4>
+              <ul>
+                <li><strong>Coin Flip house edge:</strong> <span id="edge-bps" data-default="150">150</span> bps (<span id="edge-pct">1.5%</span>) fuels jackpots, buybacks & burns.</li>
+                <li><strong>Jackpot ticket price:</strong> <span id="ticket-price">1 $TREATZ</span>.</li>
+                <li><strong>Jackpot split:</strong>
+                  <ul>
+                    <li><span id="split-winner" data-default="80">80</span>% → Winner</li>
+                    <li><span id="split-dev" data-default="10">10</span>% → Dev/Treasury</li>
+                    <li><span id="split-burn" data-default="10">10</span>% → Burn</li>
+                  </ul>
+                </li>
+              </ul>
+
+              <h4>Wallets (published)</h4>
+              <ul>
+                <li><strong>Dev/Treasury:</strong> public & tracked on-site (buybacks, burns, prizes, grants).</li>
+                <li><strong>Burn:</strong> Solana incinerator; all burn txs linkable.</li>
+              </ul>
+
+              <h4>Utility & Sinks</h4>
+              <ul>
+                <li>Automated burns (jackpot split) + discretionary buyback-and-burn events.</li>
+                <li>Holder perks via wrapper NFTs; mini-games as soft sinks.</li>
+              </ul>
+
+              <h4>Safety & Transparency</h4>
+              <ul>
+                <li>Commit/Reveal for bets & rounds; public health & proof endpoints.</li>
+                <li>No admin “god mode” on results; config only affects economics/timing.</li>
+                <li>Clear disclosures in footer (entertainment only, DYOR).</li>
+              </ul>
+
+              <h4>At a glance</h4>
+              <ul>
+                <li>0% premine • Games fund growth • Coin flip edge: <span id="edge-pct-compact">1.5%</span></li>
+                <li>Jackpot split: <span id="split-winner-compact">80</span>/<span id="split-dev-compact">10</span>/<span id="split-burn-compact">10</span> (W/Dev/Burn)</li>
+                <li>Tickets: <span id="ticket-price-compact">1 $TREATZ</span></li>
+              </ul>
+            </div>
           </div>
 
-          <!-- TOKENOMICS -->
-          <div>
-            <h3>Tokenomics</h3>
-            <p><strong>Ticker:</strong> $TREATZ &nbsp;•&nbsp; <strong>Decimals:</strong> <span id="tk-decimals">6</span></p>
-            <p class="muted"><strong>Ethos:</strong> No presale. No VC. Community-first. Team funded by transparent game flows.</p>
-
-            <h4>Supply & Distribution</h4>
-            <ul>
-              <li><strong>Fair launch</strong> (market-owned liquidity; no team premine).</li>
-              <li><strong>Team/Treasury:</strong> 0% premine; funded via game revenue split.</li>
-              <li><strong>Circulating:</strong> 100% market-driven post-launch.</li>
-            </ul>
-
-            <h4>Game-Driven Flows</h4>
-            <ul>
-              <li><strong>Coin Flip house edge:</strong> <span id="edge-bps" data-default="150">150</span> bps (<span id="edge-pct">1.5%</span>) fuels jackpots, buybacks & burns.</li>
-              <li><strong>Jackpot ticket price:</strong> <span id="ticket-price">1 $TREATZ</span>.</li>
-              <li><strong>Jackpot split:</strong>
-                <ul>
-                  <li><span id="split-winner" data-default="80">80</span>% → Winner</li>
-                  <li><span id="split-dev" data-default="10">10</span>% → Dev/Treasury</li>
-                  <li><span id="split-burn" data-default="10">10</span>% → Burn</li>
-                </ul>
-              </li>
-            </ul>
-
-            <h4>Wallets (published)</h4>
-            <ul>
-              <li><strong>Dev/Treasury:</strong> public & tracked on-site (buybacks, burns, prizes, grants).</li>
-              <li><strong>Burn:</strong> Solana incinerator; all burn txs linkable.</li>
-            </ul>
-
-            <h4>Utility & Sinks</h4>
-            <ul>
-              <li>Automated burns (jackpot split) + discretionary buyback-and-burn events.</li>
-              <li>Holder perks via wrapper NFTs; mini-games as soft sinks.</li>
-            </ul>
-
-            <h4>Safety & Transparency</h4>
-            <ul>
-              <li>Commit/Reveal for bets & rounds; public health & proof endpoints.</li>
-              <li>No admin “god mode” on results; config only affects economics/timing.</li>
-              <li>Clear disclosures in footer (entertainment only, DYOR).</li>
-            </ul>
-
-            <h4>At a glance</h4>
-            <ul>
-              <li>0% premine • Games fund growth • Coin flip edge: <span id="edge-pct-compact">1.5%</span></li>
-              <li>Jackpot split: <span id="split-winner-compact">80</span>/<span id="split-dev-compact">10</span>/<span id="split-burn-compact">10</span> (W/Dev/Burn)</li>
-              <li>Tickets: <span id="ticket-price-compact">1 $TREATZ</span></li>
-            </ul>
-          </div>
+          <small class="muted">
+            *Numbers are defaults and may update from live config. All games are for entertainment; nothing herein is financial advice.
+          </small>
         </div>
+      </details>
+    </div>
+  </section>
 
-        <small class="muted">
-          *Numbers are defaults and may update from live config. All games are for entertainment; nothing herein is financial advice.
-        </small>
-      </div>
-    </details>
-  </div>
-</section>
+  <!-- Optional live config sync -->
+  <script>
+  (function(){
+    const $id = (id) => document.getElementById(id);
+    const setText = (id, v) => { const n = $id(id); if (n && v != null && v !== "") n.textContent = String(v); };
 
-<script>
-/* Optional live config sync — safe to remove if undesired */
-(function(){
-  const $ = (id) => document.getElementById(id);
-  const setText = (id, v) => { const n = $(id); if (n && v != null && v !== "") n.textContent = String(v); };
+    const defaults = {
+      decimals: 6,
+      edge_bps: Number(($id("edge-bps")?.dataset?.default) || 150),
+      split: {
+        winner: Number(($id("split-winner")?.dataset?.default) || 80),
+        dev: Number(($id("split-dev")?.dataset?.default) || 10),
+        burn: Number(($id("split-burn")?.dataset?.default) || 10),
+      },
+      ticket_display: "1 $TREATZ"
+    };
 
-  const defaults = {
-    decimals: 6,
-    edge_bps: Number(($("edge-bps")?.dataset?.default) || 150),
-    split: {
-      winner: Number(($("split-winner")?.dataset?.default) || 80),
-      dev: Number(($("split-dev")?.dataset?.default) || 10),
-      burn: Number(($("split-burn")?.dataset?.default) || 10),
-    },
-    ticket_display: "1 $TREATZ"
-  };
+    function render(cfg){
+      const decimals = Number(cfg?.token?.decimals ?? cfg?.token_decimals ?? defaults.decimals);
+      setText("tk-decimals", decimals);
 
-  function render(cfg){
-    const decimals =
-      Number(cfg?.token?.decimals ?? cfg?.token_decimals ?? defaults.decimals);
-    setText("tk-decimals", decimals);
+      const edgeBps = Number(cfg?.coinflip?.edge_bps ?? cfg?.edge_bps ?? defaults.edge_bps);
+      setText("edge-bps", edgeBps);
+      const edgePct = (edgeBps / 100).toFixed(2) + "%";
+      setText("edge-pct", edgePct);
+      setText("edge-pct-compact", edgePct);
 
-    const edgeBps =
-      Number(cfg?.coinflip?.edge_bps ?? cfg?.edge_bps ?? defaults.edge_bps);
-    setText("edge-bps", edgeBps);
-    const edgePct = (edgeBps / 100).toFixed(2) + "%";
-    setText("edge-pct", edgePct);
-    setText("edge-pct-compact", edgePct);
+      const sw = Number(cfg?.raffle?.split?.winner ?? defaults.split.winner);
+      const sd = Number(cfg?.raffle?.split?.dev ?? defaults.split.dev);
+      const sb = Number(cfg?.raffle?.split?.burn ?? defaults.split.burn);
+      setText("split-winner", sw); setText("split-dev", sd); setText("split-burn", sb);
+      setText("split-winner-compact", sw); setText("split-dev-compact", sd); setText("split-burn-compact", sb);
 
-    const sw = Number(cfg?.raffle?.split?.winner ?? defaults.split.winner);
-    const sd = Number(cfg?.raffle?.split?.dev ?? defaults.split.dev);
-    const sb = Number(cfg?.raffle?.split?.burn ?? defaults.split.burn);
-    setText("split-winner", sw); setText("split-dev", sd); setText("split-burn", sb);
-    setText("split-winner-compact", sw); setText("split-dev-compact", sd); setText("split-burn-compact", sb);
-
-    const ticketDisplay =
-      cfg?.raffle?.ticket_display ||
-      (cfg?.raffle?.ticket_price
-        ? String(cfg.raffle.ticket_price) + " $TREATZ"
-        : defaults.ticket_display);
-    setText("ticket-price", ticketDisplay);
-    setText("ticket-price-compact", ticketDisplay);
-  }
-
-  async function init(){
-    try {
-      const api = window.TREATZ_API || "/api";
-      const res = await fetch(api + "/config", { credentials: "omit" });
-      if (!res.ok) throw new Error("bad status");
-      const cfg = await res.json();
-      render(cfg);
-    } catch (e) {
-      // fall back to defaults silently
-      render({});
+      const ticketDisplay =
+        cfg?.raffle?.ticket_display ||
+        (cfg?.raffle?.ticket_price ? String(cfg.raffle.ticket_price) + " $TREATZ" : defaults.ticket_display);
+      setText("ticket-price", ticketDisplay);
+      setText("ticket-price-compact", ticketDisplay);
     }
-  }
-  // Defer to keep out of critical path
-  if (document.readyState === "complete") init();
-  else window.addEventListener("load", init, { once: true });
-})();
-</script>
-<!-- / end $TREATZ — Roadmap & Tokenomics (Expandable) -->
+
+    async function init(){
+      try {
+        const api = window.TREATZ_API || "/api";
+        const res = await fetch(api + "/config", { credentials: "omit" });
+        if (!res.ok) throw new Error("bad status");
+        const cfg = await res.json();
+        render(cfg);
+      } catch (e) {
+        render({});
+      }
+    }
+    if (document.readyState === "complete") init();
+    else window.addEventListener("load", init, { once: true });
+  })();
+  </script>
+  <!-- / end $TREATZ — Roadmap & Tokenomics -->
 </body>
 </html>
