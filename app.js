@@ -48,14 +48,40 @@ if (typeof window !== "undefined") {
 }
 
 // 2) RPC connection
-const RPC_URL = "https://api.mainnet-beta.solana.com";
-const connection = new Connection(RPC_URL, "confirmed");
+const RPC_URL =
+  (window.TREATZ_CONFIG && window.TREATZ_CONFIG.rpcUrl) ||
+  "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY";
+
+const connection = new Connection(RPC_URL, { commitment: "confirmed" });
+
+// Warm-up probe so we fail fast & show a friendly message if RPC blocks the browser
+(async () => {
+  try {
+    await connection.getLatestBlockhash("confirmed");
+  } catch (e) {
+    console.error("[TREATZ] RPC warmup failed:", e);
+    // Nice UX: toast instead of raw alert
+    try { 
+      (window.toast || toast || ((m)=>console.log("[toast]", m)))("RPC blocked/rate-limited. Try another RPC or use a proxy.");
+    } catch {}
+  }
+})();
+
+// 2b) Token program resolver (module-scope, used by exports and by the IIFE)
+export async function getTokenProgramForMint(mintPk) {
+  const mint = new PublicKey(mintPk);
+  const ai = await connection.getAccountInfo(mint, "confirmed");
+  // Default to classic if we can't fetch the account owner
+  if (!ai?.owner) return TOKEN_PROGRAM_ID;
+  return ai.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+}
 
 // 3) Exported helper (used by other modules / tests)
 export async function getAta(owner, mint) {
   const ownerPk = new PublicKey(owner);
-  const mintPk = new PublicKey(mint);
-  const ata = await getAssociatedTokenAddress(mintPk, ownerPk);
+  const mintPk  = new PublicKey(mint);
+  const tokenProgramId = await getTokenProgramForMint(mintPk);
+  const ata = getAssociatedTokenAddressSync(mintPk, ownerPk, true, tokenProgramId);
   console.log("ATA:", ata.toBase58());
   return ata;
 }
@@ -928,15 +954,15 @@ async function sendTxUniversal({ connection, tx }) {
       await ensureConfig();
       const mint  = new PublicKey(CONFIG.token.mint);
       const owner = new PublicKey(PUBKEY);
-      const ata   = await getAssociatedTokenAddress(mint, owner);
+      const tokenProgramId = await getTokenProgramForMint(mint);
+      const ata   = getAssociatedTokenAddressSync(mint, owner, true, tokenProgramId);
 
       let ui = 0;
       try {
         const bal = await connection.getTokenAccountBalance(ata, "confirmed");
         ui = Number(bal?.value?.uiAmount || 0);
       } catch {
-        // ATA may not exist yet; treat as 0
-        ui = 0;
+        ui = 0; // ATA may not exist yet
       }
 
       // Render
@@ -1195,48 +1221,41 @@ async function sendTxUniversal({ connection, tx }) {
     } catch (e) { console.error("loadPlayerStats", e); }
   }
   setInterval(loadPlayerStats, 15000);
-
-  async function getTokenProgramForMint(mintPk) {
-    const mint = new PublicKey(mintPk);
-    const ai = await connection.getAccountInfo(mint, "confirmed");
-    // If we can't fetch, default to classic token program
-    if (!ai?.owner) return TOKEN_PROGRAM_ID;
-    return ai.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
-  }
-
-  
+   
   // -------------------------
   // SPL token helpers (use imports when available)
   // -------------------------
   async function getOrCreateATA(owner, mintPk, payer) {
-    const ownerPk = new PublicKey(owner);
+    const ownerPk   = new PublicKey(owner);
     const mintPkObj = new PublicKey(mintPk);
 
     // pick correct token program (classic vs Token-2022)
     const tokenProgramId = await getTokenProgramForMint(mintPkObj);
 
-    // derive ATA with the SAME token program id and allow owner off-curve (works for PDAs too)
+    // derive ATA with the SAME token program id (and allow owner off-curve)
     const ata = getAssociatedTokenAddressSync(
       mintPkObj,
       ownerPk,
-      true,                       // allowOwnerOffCurve
-      tokenProgramId             // <-- critical for Token-2022 mints
+      true,            // allowOwnerOffCurve
+      tokenProgramId
     );
 
-    // fast existence check client-side (avoid CORS/API dependency)
+    // does it exist already?
     const info = await connection.getAccountInfo(ata, "confirmed");
-    if (!info) {
-      // create *idempotent* (won't fail if someone raced and created it)
-      const ix = createAssociatedTokenAccountIdempotentInstruction(
-        new PublicKey(payer),
-        ata,
-        ownerPk,
-        mintPkObj,
-        tokenProgramId
-      );
-      return { ata, ix, tokenProgramId };
+    if (info) {
+      return { ata, ix: null, tokenProgramId };
     }
-    return { ata, ix: null, tokenProgramId };
+
+    // create idempotently (won't fail if created by a race)
+    const ix = createAssociatedTokenAccountIdempotentInstruction(
+      new PublicKey(payer),
+      ata,
+      ownerPk,
+      mintPkObj,
+      tokenProgramId
+    );
+
+    return { ata, ix, tokenProgramId };
   }
 
   const MEMO_PROGRAM_ID_STR = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
@@ -1695,6 +1714,8 @@ async function sendTxUniversal({ connection, tx }) {
       throw err;
     }
   };
+
+  let __recentCache = [];
   
   (async function initRaffleUI() {
     const errOut = (where, message) => {
@@ -1821,8 +1842,6 @@ async function sendTxUniversal({ connection, tx }) {
   // -------------------------
   // History table load
   // -------------------------
-  let __recentCache = [];
-
   async function loadHistory(query = "") {
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
 
