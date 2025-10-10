@@ -1443,14 +1443,33 @@ async function sendTxUniversal({ connection, tx }) {
 
       const payerRaw = PUBKEY;
       const payerPub = (typeof payerRaw === "string") ? new PublicKey(payerRaw) : payerRaw;
-      const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
+
+      // Prefer the real token account if user holds a non-ATA; otherwise use ATA (create if needed)
+      const { ata: computedAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
+      let realSrc = computedAta;
+      try {
+        const found = await connection.getTokenAccountsByOwner(payerPub, { mint: mintPk }, "confirmed");
+        if (found?.value?.length) {
+          // Use the first existing token account for this mint
+          realSrc = new PublicKey(found.value[0].pubkey);
+        }
+      } catch (_) { /* ignore, fall back to computedAta */ }
+
+      // (Optional safety): verify the token account’s owner matches payerPub
+      try {
+        const info = await connection.getParsedAccountInfo(realSrc, "confirmed");
+        const ownerStr = info?.value?.data?.parsed?.info?.owner;
+        if (ownerStr && ownerStr !== payerPub.toBase58()) {
+          throw new Error("Token account is not owned by connected wallet");
+        }
+      } catch (_) { /* best effort */ }
 
       const ixs = [];
-      if (createSrc) ixs.push(createSrc);
-      if (createDestIx) ixs.push(createDestIx);
+      if (createSrc) ixs.push(createSrc);       // create ATA if user had none
+      if (createDestIx) ixs.push(createDestIx); // keep from your previous patch
       ixs.push(
         createTransferCheckedInstruction(
-          srcAta,
+          realSrc,            // <— use the actual token account
           mintPk,
           destAtaPk,
           payerPub,
@@ -1604,17 +1623,24 @@ async function sendTxUniversal({ connection, tx }) {
       }
 
       const payerPub = (typeof runtimePub === "string") ? new PublicKey(runtimePub) : runtimePub;
-      const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
+
+      // Resolve actual source token account (legacy TA or ATA)
+      const { ata: computedAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
+      let realSrc = computedAta;
+      try {
+        const found = await connection.getTokenAccountsByOwner(payerPub, { mint: mintPk }, "confirmed");
+        if (found?.value?.length) realSrc = new PublicKey(found.value[0].pubkey);
+      } catch (_) {}
 
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
       if (createDestIx) ixs.push(createDestIx);
       ixs.push(
         createTransferCheckedInstruction(
-          srcAta,
+          realSrc,            // <— use the actual token account
           mintPk,
           destAtaPk,
-           payerPub,
+          payerPub,
           Number(amountBase),
           DECIMALS
         ),
