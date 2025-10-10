@@ -329,31 +329,33 @@ export async function getAta(owner, mint) {
 
       // decide SVG / content by kind
       let svg = "";
+
       if (kind === "fx-wrapper") {
         const color = opts.color || opts.colorHex || "#FF6B00";
         el.style.setProperty("--fx-color", color);
         el.style.color = color; // ensure currentColor works in SVG
         el.classList.add("fx-piece--win");
         svg = svgWrapper(color);
-        else {
-          // ensure every piece has a visible currentColor fallback
-          if (!el.style.color) el.style.color = "#FF6B00";
       } else if (kind === "fx-candy") {
         el.classList.add("fx-piece--win");
+        el.style.color = "#39FF14"; // slime green for candy
         svg = svgCandy();
       } else if (kind === "fx-ghost") {
-        el.classList.add("fx-piece--loss");
-        el.classList.add("fx-piece--ghost");
+        el.classList.add("fx-piece--loss", "fx-piece--ghost");
+        el.style.color = "#94DAFF"; // ghost blue
         svg = svgGhost();
       } else if (kind === "fx-skull" || kind === "fx-loss" || kind === "fx-bone") {
         el.classList.add("fx-piece--loss");
+        el.style.color = "#FFFFFF";
         svg = svgSkull();
       } else {
         el.classList.add("fx-piece--loss");
+        el.style.color = "#FF6B00";
         svg = svgSkull();
       }
 
       // guarantee color reaches inline SVGs
+      el.innerHTML = svg;
       el.querySelectorAll("svg, path, rect, circle, text").forEach(n => {
         n.style.fill = "currentColor";
       });
