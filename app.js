@@ -8,9 +8,9 @@
 // https://github.com/MemeDev2526/-TREATZ/blob/9a0930dc1809002caca7111194c6d2c34ac27c6f/app.js
 
 // [polyfills] -------------------------------------------------
-import { Buffer } from "buffer";
+// Buffer/Process shims are injected by esbuild (see build-app.js).
+// Do not import "buffer" here—browsers cannot resolve it.
 if (typeof window !== "undefined") {
-  if (!window.Buffer) window.Buffer = Buffer;
   if (!window.global) window.global = window; // some libs expect global
   if (!window.process) window.process = { env: { NODE_ENV: "production" } };
 }
