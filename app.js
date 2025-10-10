@@ -21,8 +21,12 @@ if (typeof window !== "undefined") {
 // 1) Solana + SPL Token imports (ESM)
 import { Connection, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import {
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   getAssociatedTokenAddress,
+  getAssociatedTokenAddressSync, 
   createAssociatedTokenAccountInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
 } from "@solana/spl-token";
 
@@ -36,7 +40,9 @@ if (typeof window !== "undefined") {
   };
   window.splToken = window.splToken || {
     getAssociatedTokenAddress,
+    getAssociatedTokenAddressSync,
     createAssociatedTokenAccountInstruction,
+    createAssociatedTokenAccountIdempotentInstruction,
     createTransferCheckedInstruction,
   };
 }
@@ -1190,28 +1196,47 @@ async function sendTxUniversal({ connection, tx }) {
   }
   setInterval(loadPlayerStats, 15000);
 
+  async function getTokenProgramForMint(mintPk) {
+    const mint = new PublicKey(mintPk);
+    const ai = await connection.getAccountInfo(mint, "confirmed");
+    // If we can't fetch, default to classic token program
+    if (!ai?.owner) return TOKEN_PROGRAM_ID;
+    return ai.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+  }
+
+  
   // -------------------------
   // SPL token helpers (use imports when available)
   // -------------------------
   async function getOrCreateATA(owner, mintPk, payer) {
     const ownerPk = new PublicKey(owner);
     const mintPkObj = new PublicKey(mintPk);
-    const ata = await getAssociatedTokenAddress(mintPkObj, ownerPk);
-    let exists = false;
-    try {
-      const r = await jfetch(`${API}/accounts/${ata.toBase58()}/exists`);
-      exists = !!r?.exists;
-    } catch (_) {}
-    if (!exists) {
-      const ix = createAssociatedTokenAccountInstruction(
-        payer,
+
+    // pick correct token program (classic vs Token-2022)
+    const tokenProgramId = await getTokenProgramForMint(mintPkObj);
+
+    // derive ATA with the SAME token program id and allow owner off-curve (works for PDAs too)
+    const ata = getAssociatedTokenAddressSync(
+      mintPkObj,
+      ownerPk,
+      true,                       // allowOwnerOffCurve
+      tokenProgramId             // <-- critical for Token-2022 mints
+    );
+
+    // fast existence check client-side (avoid CORS/API dependency)
+    const info = await connection.getAccountInfo(ata, "confirmed");
+    if (!info) {
+      // create *idempotent* (won't fail if someone raced and created it)
+      const ix = createAssociatedTokenAccountIdempotentInstruction(
+        new PublicKey(payer),
         ata,
         ownerPk,
-        mintPkObj
+        mintPkObj,
+        tokenProgramId
       );
-      return { ata, ix };
+      return { ata, ix, tokenProgramId };
     }
-    return { ata, ix: null };
+    return { ata, ix: null, tokenProgramId };
   }
 
   const MEMO_PROGRAM_ID_STR = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
@@ -1445,7 +1470,7 @@ async function sendTxUniversal({ connection, tx }) {
       const payerPub = (typeof payerRaw === "string") ? new PublicKey(payerRaw) : payerRaw;
 
       // Prefer the real token account if user holds a non-ATA; otherwise use ATA (create if needed)
-      const { ata: computedAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
+      const { ata: computedAta, ix: createSrc, tokenProgramId } = await getOrCreateATA(payerPub, mintPk, payerPub);
       let realSrc = computedAta;
       try {
         const found = await connection.getTokenAccountsByOwner(payerPub, { mint: mintPk }, "confirmed");
@@ -1475,6 +1500,8 @@ async function sendTxUniversal({ connection, tx }) {
           payerPub,
           toBaseUnits(amountHuman),
           DECIMALS
+          [],                 // no multisig signers
+          tokenProgramId      // <-- critical
         ),
         memoIx(bet.memo)
       );
@@ -1625,7 +1652,7 @@ async function sendTxUniversal({ connection, tx }) {
       const payerPub = (typeof runtimePub === "string") ? new PublicKey(runtimePub) : runtimePub;
 
       // Resolve actual source token account (legacy TA or ATA)
-      const { ata: computedAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
+      const { ata: computedAta, ix: createSrc, tokenProgramId } = await getOrCreateATA(payerPub, mintPk, payerPub);
       let realSrc = computedAta;
       try {
         const found = await connection.getTokenAccountsByOwner(payerPub, { mint: mintPk }, "confirmed");
@@ -1643,6 +1670,8 @@ async function sendTxUniversal({ connection, tx }) {
           payerPub,
           Number(amountBase),
           DECIMALS
+          [],                 // no multisig
+          tokenProgramId
         ),
         memoIx(purchase.memo || "")
       );
