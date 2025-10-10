@@ -62,18 +62,24 @@ const connection = new Connection(RPC_URL, { commitment: "confirmed" });
     console.error("[TREATZ] RPC warmup failed:", e);
     // Nice UX: toast instead of raw alert
     try { 
-      (window.toast || toast || ((m)=>console.log("[toast]", m)))("RPC blocked/rate-limited. Try another RPC or use a proxy.");
+      (window.toast ? window.toast : (m)=>console.log("[toast]", m))("RPC blocked/rate-limited. Try another RPC or use a proxy.");
     } catch {}
   }
 })();
 
 // 2b) Token program resolver (module-scope, used by exports and by the IIFE)
 export async function getTokenProgramForMint(mintPk) {
-  const mint = new PublicKey(mintPk);
-  const ai = await connection.getAccountInfo(mint, "confirmed");
-  // Default to classic if we can't fetch the account owner
-  if (!ai?.owner) return TOKEN_PROGRAM_ID;
-  return ai.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+  try {
+    const mint = new PublicKey(mintPk);
+    const ai = await connection.getAccountInfo(mint, "confirmed");
+    if (!ai?.owner) return TOKEN_PROGRAM_ID;
+    return ai.owner.equals(TOKEN_2022_PROGRAM_ID)
+      ? TOKEN_2022_PROGRAM_ID
+      : TOKEN_PROGRAM_ID;
+  } catch (e) {
+    console.warn("[TREATZ] getTokenProgramForMint fallback (RPC error):", e?.message || e);
+    return TOKEN_PROGRAM_ID; // graceful fallback on 401/403/timeouts
+  }
 }
 
 // 3) Exported helper (used by other modules / tests)
@@ -1675,7 +1681,7 @@ async function sendTxUniversal({ connection, tx }) {
       let realSrc = computedAta;
       try {
         const found = await connection.getTokenAccountsByOwner(payerPub, { mint: mintPk }, "confirmed");
-        if (found?.value?.length) realSrc = new PublicKey(found.value[0].pubkey);
+        if (found?.value?.length) realSrc = found.value[0].pubkey;
       } catch (_) {}
 
       const ixs = [];
