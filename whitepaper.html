@@ -611,5 +611,222 @@
     document.addEventListener('keydown', (e)=>{ if ($('#veil') && e.key === 'Enter') begin.click(); });
   </script>
   <script type="module" src="/static/app.js"></script>
+
+  <style>
+  /* Minimal, scoped styles (respects your CSS vars if present) */
+  .rtx-wrap { margin: 2.5rem 0 0; }
+  .rtx { 
+    background: rgba(13,13,13,.72);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .rtx details { background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.15)); }
+  .rtx summary {
+    display: flex; align-items: center; gap: .75rem;
+    padding: 1rem 1.25rem; cursor: pointer; user-select: none;
+    color: var(--white, #fff); font-weight: 700;
+    background: linear-gradient(90deg, var(--pumpkin, #FF6B00), var(--witch, #6A00FF));
+    -webkit-tap-highlight-color: transparent;
+  }
+  .rtx summary::-webkit-details-marker { display: none; }
+  .rtx .rtx-caret { 
+    width: 10px; height: 10px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg); transition: transform .25s ease;
+  }
+  .rtx details[open] .rtx-caret { transform: rotate(45deg); }
+  .rtx .rtx-badge {
+    margin-left: auto; font-size: .85rem; opacity: .9;
+    background: rgba(0,0,0,.25); padding: .25rem .5rem; border-radius: 8px;
+  }
+  .rtx .rtx-body { padding: 1rem 1.25rem 1.25rem; color: var(--white, #fff); }
+  .rtx h3 { margin: .5rem 0 0.5rem; font-size: 1.1rem; color: var(--slime, #39FF14); }
+  .rtx h4 { margin: 1rem 0 .25rem; font-size: 1rem; color: var(--witch, #6A00FF); }
+  .rtx p, .rtx li, .rtx small { color: rgba(255,255,255,.92); }
+  .rtx ul { margin: .35rem 0 .5rem 1.25rem; }
+  .rtx .muted { color: rgba(255,255,255,.7); }
+  .rtx .chip { display:inline-block; font-size:.85rem; border:1px solid rgba(255,255,255,.18); padding:.15rem .5rem; border-radius:999px; margin-left:.5rem; }
+  .rtx .grid { display: grid; gap: .75rem; }
+  @media (min-width: 720px){ .rtx .grid { grid-template-columns: 1fr 1fr; } }
+</style>
+
+<section class="rtx-wrap" id="roadmap-tokenomics">
+  <div class="rtx">
+    <details>
+      <summary>
+        <span class="rtx-caret" aria-hidden="true"></span>
+        <span>$TREATZ — Roadmap & Tokenomics</span>
+        <span class="rtx-badge">Tap to expand</span>
+      </summary>
+      <div class="rtx-body">
+        <div class="grid">
+          <!-- ROADMAP -->
+          <div>
+            <h3>Roadmap</h3>
+
+            <h4>Phase 0 — Pre-Launch <span class="chip">complete</span></h4>
+            <ul>
+              <li>Brand lock (cinematic Halloween foil), exact “$TREATZ” mark.</li>
+              <li>Web stack live (FastAPI + Vite), countdown, ambient FX, coin visuals.</li>
+              <li>Community scaffolding: X, TikTok, Telegram, sticker packs.</li>
+            </ul>
+
+            <h4>Phase 1 — Launch Week</h4>
+            <ul>
+              <li><strong>Trickz or $TREATZ</strong> coin flip — public beta.</li>
+              <li><strong>Jack’O’Lantern Jackpot</strong> — round cadence online.</li>
+              <li>Public health/status endpoints; daily promo cadence.</li>
+            </ul>
+
+            <h4>Phase 2 — Week 2</h4>
+            <ul>
+              <li>Raffle history explorer + player stats panel.</li>
+              <li>Auto-burn wire-up + live burn counter.</li>
+            </ul>
+
+            <h4>Phase 3 — Mid-October</h4>
+            <ul>
+              <li>Wrapper NFTs (Genesis) with holder perks.</li>
+              <li>Dev/Treasury dashboard (buybacks, burns, grants).</li>
+              <li>DAO-lite votes on burn %, boosts, promos.</li>
+            </ul>
+
+            <h4>Phase 4 — Halloween Week</h4>
+            <ul>
+              <li>Mega-Jackpot event & themed challenges.</li>
+              <li>Community showcase: sticker pack v2, costume meme run, live spaces.</li>
+            </ul>
+
+            <h4>Phase 5 — Post-Halloween (“Season 2”)</h4>
+            <ul>
+              <li>New mini-game; integrations (chart bots, buy alerts, tip bot).</li>
+              <li>Sustained burns & buybacks guided by DAO-lite polls.</li>
+            </ul>
+          </div>
+
+          <!-- TOKENOMICS -->
+          <div>
+            <h3>Tokenomics</h3>
+            <p><strong>Ticker:</strong> $TREATZ &nbsp;•&nbsp; <strong>Decimals:</strong> <span id="tk-decimals">6</span></p>
+            <p class="muted"><strong>Ethos:</strong> No presale. No VC. Community-first. Team funded by transparent game flows.</p>
+
+            <h4>Supply & Distribution</h4>
+            <ul>
+              <li><strong>Fair launch</strong> (market-owned liquidity; no team premine).</li>
+              <li><strong>Team/Treasury:</strong> 0% premine; funded via game revenue split.</li>
+              <li><strong>Circulating:</strong> 100% market-driven post-launch.</li>
+            </ul>
+
+            <h4>Game-Driven Flows</h4>
+            <ul>
+              <li><strong>Coin Flip house edge:</strong> <span id="edge-bps" data-default="150">150</span> bps (<span id="edge-pct">1.5%</span>) fuels jackpots, buybacks & burns.</li>
+              <li><strong>Jackpot ticket price:</strong> <span id="ticket-price">1 $TREATZ</span>.</li>
+              <li><strong>Jackpot split:</strong>
+                <ul>
+                  <li><span id="split-winner" data-default="80">80</span>% → Winner</li>
+                  <li><span id="split-dev" data-default="10">10</span>% → Dev/Treasury</li>
+                  <li><span id="split-burn" data-default="10">10</span>% → Burn</li>
+                </ul>
+              </li>
+            </ul>
+
+            <h4>Wallets (published)</h4>
+            <ul>
+              <li><strong>Dev/Treasury:</strong> public & tracked on-site (buybacks, burns, prizes, grants).</li>
+              <li><strong>Burn:</strong> Solana incinerator; all burn txs linkable.</li>
+            </ul>
+
+            <h4>Utility & Sinks</h4>
+            <ul>
+              <li>Automated burns (jackpot split) + discretionary buyback-and-burn events.</li>
+              <li>Holder perks via wrapper NFTs; mini-games as soft sinks.</li>
+            </ul>
+
+            <h4>Safety & Transparency</h4>
+            <ul>
+              <li>Commit/Reveal for bets & rounds; public health & proof endpoints.</li>
+              <li>No admin “god mode” on results; config only affects economics/timing.</li>
+              <li>Clear disclosures in footer (entertainment only, DYOR).</li>
+            </ul>
+
+            <h4>At a glance</h4>
+            <ul>
+              <li>0% premine • Games fund growth • Coin flip edge: <span id="edge-pct-compact">1.5%</span></li>
+              <li>Jackpot split: <span id="split-winner-compact">80</span>/<span id="split-dev-compact">10</span>/<span id="split-burn-compact">10</span> (W/Dev/Burn)</li>
+              <li>Tickets: <span id="ticket-price-compact">1 $TREATZ</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <small class="muted">
+          *Numbers are defaults and may update from live config. All games are for entertainment; nothing herein is financial advice.
+        </small>
+      </div>
+    </details>
+  </div>
+</section>
+
+<script>
+/* Optional live config sync — safe to remove if undesired */
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const setText = (id, v) => { const n = $(id); if (n && v != null && v !== "") n.textContent = String(v); };
+
+  const defaults = {
+    decimals: 6,
+    edge_bps: Number(($("edge-bps")?.dataset?.default) || 150),
+    split: {
+      winner: Number(($("split-winner")?.dataset?.default) || 80),
+      dev: Number(($("split-dev")?.dataset?.default) || 10),
+      burn: Number(($("split-burn")?.dataset?.default) || 10),
+    },
+    ticket_display: "1 $TREATZ"
+  };
+
+  function render(cfg){
+    const decimals =
+      Number(cfg?.token?.decimals ?? cfg?.token_decimals ?? defaults.decimals);
+    setText("tk-decimals", decimals);
+
+    const edgeBps =
+      Number(cfg?.coinflip?.edge_bps ?? cfg?.edge_bps ?? defaults.edge_bps);
+    setText("edge-bps", edgeBps);
+    const edgePct = (edgeBps / 100).toFixed(2) + "%";
+    setText("edge-pct", edgePct);
+    setText("edge-pct-compact", edgePct);
+
+    const sw = Number(cfg?.raffle?.split?.winner ?? defaults.split.winner);
+    const sd = Number(cfg?.raffle?.split?.dev ?? defaults.split.dev);
+    const sb = Number(cfg?.raffle?.split?.burn ?? defaults.split.burn);
+    setText("split-winner", sw); setText("split-dev", sd); setText("split-burn", sb);
+    setText("split-winner-compact", sw); setText("split-dev-compact", sd); setText("split-burn-compact", sb);
+
+    const ticketDisplay =
+      cfg?.raffle?.ticket_display ||
+      (cfg?.raffle?.ticket_price
+        ? String(cfg.raffle.ticket_price) + " $TREATZ"
+        : defaults.ticket_display);
+    setText("ticket-price", ticketDisplay);
+    setText("ticket-price-compact", ticketDisplay);
+  }
+
+  async function init(){
+    try {
+      const api = window.TREATZ_API || "/api";
+      const res = await fetch(api + "/config", { credentials: "omit" });
+      if (!res.ok) throw new Error("bad status");
+      const cfg = await res.json();
+      render(cfg);
+    } catch (e) {
+      // fall back to defaults silently
+      render({});
+    }
+  }
+  // Defer to keep out of critical path
+  if (document.readyState === "complete") init();
+  else window.addEventListener("load", init, { once: true });
+})();
+</script>
+<!-- / end $TREATZ — Roadmap & Tokenomics (Expandable) -->
 </body>
 </html>
