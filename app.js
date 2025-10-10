@@ -435,8 +435,7 @@ async function sendTxUniversal({ connection, tx }) {
       el.querySelectorAll("svg, path, rect, circle, text").forEach(n => {
         n.style.fill = "currentColor";
       });
-      
-      el.innerHTML = svg;
+
       solidifySVG(el);   // ensure solid fills/opacity
 
       // GPU hints
@@ -1426,23 +1425,41 @@ async function sendTxUniversal({ connection, tx }) {
       }
 
       const mintPk = new PublicKey(CONFIG.token.mint);
-      const destAta = new PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
+
+      // Resolve destination ATA (create if backend didn't give one)
+      let destAtaPk, createDestIx = null;
+      if (CONFIG.vaults?.game_vault_ata) {
+        destAtaPk = new PublicKey(CONFIG.vaults.game_vault_ata);
+      } else {
+        const vaultOwner =
+          CONFIG.vaults?.game_vault ||
+          CONFIG.vaults?.game_owner ||
+          CONFIG.vaults?.receiver;
+        if (!vaultOwner) throw new Error("Vault owner not configured");
+        const got = await getOrCreateATA(vaultOwner, mintPk, new PublicKey(PUBKEY));
+        destAtaPk = got.ata;
+        createDestIx = got.ix;
+      }
+
       const payerRaw = PUBKEY;
       const payerPub = (typeof payerRaw === "string") ? new PublicKey(payerRaw) : payerRaw;
       const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
+
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
+      if (createDestIx) ixs.push(createDestIx);
       ixs.push(
         createTransferCheckedInstruction(
           srcAta,
           mintPk,
-          destAta,
+          destAtaPk,
           payerPub,
           toBaseUnits(amountHuman),
           DECIMALS
         ),
         memoIx(bet.memo)
       );
+
       const bh = (await jfetch(`${API}/cluster/latest_blockhash`)).blockhash;
       const tx = new Transaction({ feePayer: payerPub });
       tx.recentBlockhash = bh;
@@ -1572,20 +1589,32 @@ async function sendTxUniversal({ connection, tx }) {
       $("#jp-deposit")?.replaceChildren(document.createTextNode(purchase.deposit || "—"));
       $("#jp-memo")?.replaceChildren(document.createTextNode(purchase.memo || "—"));
 
-      // Build transfer tx to game vault similar to placeCoinFlip
+      // Build transfer tx to JACKPOT vault (create ATA if backend didn't provide one)
       const mintPk = new PublicKey(CONFIG.token.mint);
-      const destAta = new PublicKey(CONFIG.vaults.game_vault_ata || CONFIG.vaults.game_vault);
+
+      let destAtaPk, createDestIx = null;
+      if (CONFIG.vaults?.jackpot_vault_ata) {
+        destAtaPk = new PublicKey(CONFIG.vaults.jackpot_vault_ata);
+      } else {
+        const jackpotOwner = CONFIG.vaults?.jackpot_vault || CONFIG.vaults?.jackpot_owner;
+        if (!jackpotOwner) throw new Error("Jackpot vault owner not configured");
+        const got = await getOrCreateATA(jackpotOwner, mintPk, new PublicKey(runtimePub));
+        destAtaPk = got.ata;
+        createDestIx = got.ix;
+      }
+
       const payerPub = (typeof runtimePub === "string") ? new PublicKey(runtimePub) : runtimePub;
       const { ata: srcAta, ix: createSrc } = await getOrCreateATA(payerPub, mintPk, payerPub);
 
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
+      if (createDestIx) ixs.push(createDestIx);
       ixs.push(
         createTransferCheckedInstruction(
           srcAta,
           mintPk,
-          destAta,
-          payerPub,
+          destAtaPk,
+           payerPub,
           Number(amountBase),
           DECIMALS
         ),
