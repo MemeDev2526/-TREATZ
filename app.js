@@ -63,6 +63,82 @@ export async function getAta(owner, mint) {
   const API = (C.apiBase || "/api").replace(/\/$/, "");
   const TOKEN = C.token || { symbol: "$TREATZ", decimals: 6 };
 
+  // --- Wallet Helpers ---
+  // --- Wallet detection + universal sender ---
+function getInjectedProvider() {
+  const candidates = [
+    // Phantom first (mobile in-app injects window.phantom.solana)
+    (window.phantom && window.phantom.solana) || null,
+    (window.solana && window.solana.isPhantom ? window.solana : null) || null,
+    (window.backpack && window.backpack.isBackpack ? window.backpack : null) || null,
+    (window.solflare && window.solflare.isSolflare ? window.solflare : null) || null,
+  ].filter(Boolean);
+
+  // Prefer one that is already connected / has a pubkey
+  const connected = candidates.find(p => p.publicKey || p.isConnected);
+  return connected || candidates[0] || null;
+}
+
+async function ensureBlockhashAndPayer(connection, tx, feePayerPubkey) {
+  if (!tx.feePayer) tx.feePayer = feePayerPubkey;
+  if (!tx.recentBlockhash) {
+    const { blockhash } = await connection.getLatestBlockhash("finalized");
+    tx.recentBlockhash = blockhash;
+  }
+  return tx;
+}
+
+async function sendTxUniversal({ connection, tx }) {
+  const provider = getInjectedProvider();
+  if (!provider) {
+    throw new Error("WALLET_NOT_FOUND");
+  }
+
+  // Make sure we’re connected (Phantom etc.)
+  try {
+    if (!provider.publicKey) {
+      await provider.connect?.(); // Phantom/Backpack
+    }
+  } catch (e) {
+    throw new Error("WALLET_CONNECT_REJECTED");
+  }
+
+  await ensureBlockhashAndPayer(connection, tx, provider.publicKey);
+
+  // 1) Phantom mobile “transact” (preferred if present)
+  if (typeof provider.transact === "function") {
+    const sig = await provider.transact(async (wallet) => {
+      const res = await wallet.signAndSendTransaction(tx);
+      return res?.signature || res; // Phantom may return { signature }
+    });
+    return sig;
+  }
+
+  // 2) Modern path: signAndSendTransaction
+  if (typeof provider.signAndSendTransaction === "function") {
+    const res = await provider.signAndSendTransaction(tx);
+    return res?.signature || res;
+  }
+
+  // 3) Legacy: signTransaction -> sendRaw
+  if (typeof provider.signTransaction === "function") {
+    const signed = await provider.signTransaction(tx);
+    const raw = signed.serialize();
+    const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
+    return sig;
+  }
+
+  // 4) Really old fallback
+  if (typeof provider.signAllTransactions === "function") {
+    const [signed] = await provider.signAllTransactions([tx]);
+    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 });
+    return sig;
+  }
+
+  // No known method exposed
+  throw new Error("WALLET_NO_SEND_METHOD");
+}
+  
   // DOM helpers (defensive)
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel || ""));
@@ -1150,113 +1226,167 @@ export async function getAta(owner, mint) {
   }
 
   async function sendSignedTransaction(tx) {
-    if (tx.feePayer && typeof tx.feePayer === "string") {
-      try { tx.feePayer = new PublicKey(tx.feePayer); } catch (e) { /* ignore */ }
-    }
-    if (WALLET?.signAndSendTransaction) {
-      try {
-        const res = await WALLET.signAndSendTransaction(tx);
-        return typeof res === "string" ? res : res?.signature;
-      } catch (e) { console.warn("signAndSendTransaction failed", e); }
-    }
-    if (WALLET?.signTransaction) {
-      try {
-        const signed = await WALLET.signTransaction(tx);
-        const raw = signed.serialize();
-        const sig = await connection.sendRawTransaction(raw);
-        try { await connection.confirmTransaction(sig, "confirmed"); } catch(_) {}
-        return sig;
-      } catch (e) { console.warn("signTransaction/sendRaw failed", e); }
-    }
-    if (WALLET?.sendTransaction) {
-      try {
-        const sig = await WALLET.sendTransaction(tx, connection);
-        try { await connection.confirmTransaction(sig, "confirmed"); } catch(_) {}
-        return sig;
-      } catch (e) { console.warn("sendTransaction failed", e); }
-    }
-    throw new Error("Wallet provider does not support known transaction send methods");
+  // Prefer the active WALLET, otherwise detect an injected provider
+  const provider = WALLET || getInjectedProvider();
+  if (!provider) throw new Error("WALLET_NOT_FOUND");
+
+  // Ensure feePayer + recentBlockhash are set before any signing
+  const payerPk =
+    provider.publicKey ||
+    (PUBKEY && new PublicKey(PUBKEY)) ||
+    tx.feePayer;
+  await ensureBlockhashAndPayer(connection, tx, payerPk);
+
+  // 1) Phantom mobile preferred path
+  if (typeof provider.transact === "function") {
+    const res = await provider.transact(async (w) => w.signAndSendTransaction(tx));
+    return res?.signature || res;
   }
+
+  // 2) Modern path
+  if (typeof provider.signAndSendTransaction === "function") {
+    const res = await provider.signAndSendTransaction(tx);
+    return res?.signature || res;
+  }
+
+  // 3) Legacy path
+  if (typeof provider.signTransaction === "function") {
+    const signed = await provider.signTransaction(tx);
+    const raw = signed.serialize();
+    const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
+    try { await connection.confirmTransaction(sig, "confirmed"); } catch {}
+    return sig;
+  }
+
+  // 4) Very old fallback
+  if (typeof provider.sendTransaction === "function") {
+    const sig = await provider.sendTransaction(tx, connection);
+    try { await connection.confirmTransaction(sig, "confirmed"); } catch {}
+    return sig;
+  }
+
+  throw new Error("WALLET_NO_SEND_METHOD");
+}
 
   // -------------------------
   // Coin flip UI — simulate when no wallet, on-chain when connected
   // -------------------------
  (function wireCoinFlipUI() {
-    const cfPlay = document.getElementById("cf-play");
-    if (!cfPlay) return;
-
-    function getSpinMs() {
-      const coin = document.getElementById("coin") || document.querySelector(".coin");
-      if (!coin) return 1600;
-      const s = getComputedStyle(coin).animationDuration || "1.6s";
-      const n = parseFloat(s) || 1.6;
-      return /ms$/i.test(s) ? n : n * 1000;
-    }
-
-    function simulateFlip() {
-      const coin = document.getElementById("coin") || document.querySelector(".coin");
-      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
-
-      // read chosen side from form (defensive)
-      const form = document.getElementById("bet-form");
-      const side = (form ? (new FormData(form)).get("side") : null) || "TRICK";
-
-      // simulate spin/settle delay to match CSS .spin duration
-      setTimeout(() => {
-        try {
-          const landedTreat = Math.random() < 0.5;
-          const landed = landedTreat ? "TREAT" : "TRICK";
-          const chosen = String(side || "TRICK").toUpperCase();
-          const win = (landed === chosen);
-
-          // stop the spin animation and set final visual state (use the same classes used by setCoinVisual)
-          if (coin) {
-            coin.classList.remove("spin", "coin--show-trick", "coin--show-treat");
-            coin.classList.add(landedTreat ? "coin--show-treat" : "coin--show-trick");
-            void coin.offsetWidth; // force reflow so CSS transitions settle predictably
-          }
-
-          // update visuals first (face images & classes)
-          try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
-
-          // 🔊 FX + banner
-          try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
-          try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
-
-          // update status text under coin
-          const statusEl = document.getElementById("cf-status");
-          if (statusEl) {
-            statusEl.textContent = (win ? `WIN — ${landed}` : `LOSS — ${landed}`);
-            statusEl.setAttribute("role", "status");
-            statusEl.setAttribute("aria-live", "polite");
-          }
-          
-          if (window.__TREATZ_DEBUG) {
-            console.log("[TREATZ] (SIM) coin flip result:", { chosen, landed, win });
-          }
-        } catch (err) {
-          console.error("coin flip settle handler error", err);
-        }            // ← add this brace (closes the setTimeout arrow function body)
-      }, getSpinMs());
+  // How long the coin spin lasts (read from CSS if present)
+  function getSpinMs() {
+    const coin = document.getElementById("coin") || document.querySelector(".coin");
+    if (!coin) return 1600;
+    const s = getComputedStyle(coin).animationDuration || "1.6s";
+    const n = parseFloat(s) || 1.6;
+    return /ms$/i.test(s) ? n : n * 1000;
   }
 
-    cfPlay.addEventListener("click", async (e) => {
-      e.preventDefault();
+  // Simulated flip used when no wallet is connected
+  function simulateFlip() {
+    const coin = document.getElementById("coin") || document.querySelector(".coin");
+    if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+
+    // read chosen side from form (defensive)
+    const form = document.getElementById("bet-form");
+    const side = (form ? (new FormData(form)).get("side") : null) || "TRICK";
+
+    // simulate spin/settle delay to match CSS .spin duration
+    setTimeout(() => {
       try {
-        const connected = !!(PUBKEY || window.PUBKEY);
-        const canTransact = connected && !!(WALLET || window.WALLET);
-        if (canTransact) {
-          await placeCoinFlip();  // builds transferChecked + Memo and requests signature
-        } else {
-          toast("Simulating — connect wallet to play for real");
-          simulateFlip();
+        const landedTreat = Math.random() < 0.5;
+        const landed = landedTreat ? "TREAT" : "TRICK";
+        const chosen = String(side || "TRICK").toUpperCase();
+        const win = (landed === chosen);
+
+        // stop the spin animation and set final visual state (use the same classes used by setCoinVisual)
+        if (coin) {
+          coin.classList.remove("spin", "coin--show-trick", "coin--show-treat");
+          coin.classList.add(landedTreat ? "coin--show-treat" : "coin--show-trick");
+          void coin.offsetWidth; // force reflow so CSS transitions settle predictably
+        }
+
+        // update visuals first (face images & classes)
+        try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
+
+        // 🔊 FX + banner
+        try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
+        try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
+
+        // update status text under coin
+        const statusEl = document.getElementById("cf-status");
+        if (statusEl) {
+          statusEl.textContent = (win ? `WIN — ${landed}` : `LOSS — ${landed}`);
+          statusEl.setAttribute("role", "status");
+          statusEl.setAttribute("aria-live", "polite");
+        }
+
+        if (window.__TREATZ_DEBUG) {
+          console.log("[TREATZ] (SIM) coin flip result:", { chosen, landed, win });
         }
       } catch (err) {
-        console.error("cfPlay handler error", err);
-        alert(err?.message || "Failed to place bet.");
+        console.error("coin flip settle handler error", err);
       }
+    }, getSpinMs());
+  }
+
+  // Central handler used by all bindings
+  async function handleFlip(e) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    try {
+      const connected = !!(window.PUBKEY || window.WALLET || (typeof PUBKEY !== "undefined" && PUBKEY));
+      const canTransact = connected && !!(window.WALLET || (typeof WALLET !== "undefined" && WALLET));
+      if (canTransact) {
+        await placeCoinFlip();  // builds transferChecked + Memo and requests signature
+      } else {
+        toast("Simulating — connect wallet to play for real");
+        simulateFlip();
+      }
+    } catch (err) {
+      console.error("flip handler error", err);
+      alert(err?.message || "Failed to place bet.");
+    }
+  }
+
+  // Expose for console/inline HTML
+  window.flipNow = handleFlip;
+
+  // Try a bunch of common selectors so markup changes don’t break the game
+  const selectors = [
+    "#cf-play",
+    "#cf-place",
+    "#flip-now",
+    ".cf__play",
+    'button[name="flip"]',
+    '[data-action="flip"]'
+  ];
+
+  let bound = false;
+  for (const sel of selectors) {
+    document.querySelectorAll(sel).forEach(btn => {
+      if (!btn || btn.__treatzFlipBound) return;
+      btn.addEventListener("click", handleFlip, { passive: false });
+      btn.__treatzFlipBound = true;
+      bound = true;
+    });
+  }
+
+  // Also catch <form id="bet-form"> submit (pressing Enter, etc.)
+  const betForm = document.getElementById("bet-form");
+  if (betForm && !betForm.__treatzFlipBound) {
+    betForm.addEventListener("submit", handleFlip, { passive: false });
+    betForm.__treatzFlipBound = true;
+    bound = true;
+  }
+
+  // If nothing was found now, set up a delegated listener so late-loaded DOM still works.
+  if (!bound) {
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest?.('[data-action="flip"], #cf-play, #cf-place, #flip-now, .cf__play, button[name="flip"]');
+      if (btn) handleFlip(e);
     }, { passive: false });
-  })();
+  }
+})();
 
   // placeCoinFlip: full backend flow when wallet available
   async function placeCoinFlip() {
