@@ -1495,15 +1495,36 @@ async function sendTxUniversal({ connection, tx }) {
       const payerPub = (typeof payerRaw === "string") ? new PublicKey(payerRaw) : payerRaw;
 
       // Prefer the real token account if user holds a non-ATA; otherwise use ATA (create if needed)
-      const { ata: computedAta, ix: createSrc, tokenProgramId } = await getOrCreateATA(payerPub, mintPk, payerPub);
+      const { ata: computedAta, ix: createSrc, tokenProgramId } =
+        await getOrCreateATA(payerPub, mintPk, payerPub);
+      
       let realSrc = computedAta;
-      try {
-        const found = await connection.getTokenAccountsByOwner(payerPub, { mint: mintPk }, "confirmed");
-        if (found?.value?.length) {
-          // Use the first existing token account for this mint
-          realSrc = found.value[0].pubkey;
+      
+      // Pick the token account with the largest balance, not the first one
+      const found = await connection.getTokenAccountsByOwner(
+        payerPub,
+        { mint: mintPk },
+        "confirmed"
+      ).catch(() => null);
+      
+      if (found?.value?.length) {
+        let best = { pubkey: computedAta, amt: -1 };
+        for (const it of found.value) {
+          const b = await connection.getTokenAccountBalance(it.pubkey, "confirmed").catch(() => null);
+          const amt = Number(b?.value?.uiAmount ?? 0);
+          if (amt > best.amt) best = { pubkey: it.pubkey, amt };
         }
-      } catch (_) { /* ignore, fall back to computedAta */ }
+        realSrc = best.pubkey;
+      }
+      
+      // Preflight balance check (human units for coin-flip)
+      const bal = await connection.getTokenAccountBalance(realSrc, "confirmed").catch(() => null);
+      const uiBal = Number(bal?.value?.uiAmount || 0);
+      const needHuman = Number(amountHuman);
+      if (uiBal < needHuman) {
+        toast(`Insufficient ${TOKEN.symbol}: have ${uiBal.toLocaleString()}, need ${needHuman.toLocaleString()}`);
+        return; // stop before building the tx
+      }
 
       // (Optional safety): verify the token account’s owner matches payerPub
       try {
@@ -1677,12 +1698,38 @@ async function sendTxUniversal({ connection, tx }) {
       const payerPub = (typeof runtimePub === "string") ? new PublicKey(runtimePub) : runtimePub;
 
       // Resolve actual source token account (legacy TA or ATA)
-      const { ata: computedAta, ix: createSrc, tokenProgramId } = await getOrCreateATA(payerPub, mintPk, payerPub);
+      const { ata: computedAta, ix: createSrc, tokenProgramId } =
+        await getOrCreateATA(payerPub, mintPk, payerPub);
+      
       let realSrc = computedAta;
-      try {
-        const found = await connection.getTokenAccountsByOwner(payerPub, { mint: mintPk }, "confirmed");
-        if (found?.value?.length) realSrc = found.value[0].pubkey;
-      } catch (_) {}
+      
+      // Pick the token account with the largest balance
+      const found = await connection.getTokenAccountsByOwner(
+        payerPub,
+        { mint: mintPk },
+        "confirmed"
+      ).catch(() => null);
+      
+      if (found?.value?.length) {
+        let best = { pubkey: computedAta, amt: -1 };
+        for (const it of found.value) {
+          const b = await connection.getTokenAccountBalance(it.pubkey, "confirmed").catch(() => null);
+          const amt = Number(b?.value?.uiAmount ?? 0);
+          if (amt > best.amt) best = { pubkey: it.pubkey, amt };
+        }
+        realSrc = best.pubkey;
+      }
+      
+      // Preflight balance check (BASE UNITS for raffle)
+      const bal = await connection.getTokenAccountBalance(realSrc, "confirmed").catch(() => null);
+      const haveBase = Number(bal?.value?.amount || 0);
+      const needBase = Number(amountBase);
+      if (haveBase < needBase) {
+        const haveHuman = haveBase / (10 ** Number(DECIMALS || 6));
+        const needHuman = needBase / (10 ** Number(DECIMALS || 6));
+        toast(`Insufficient ${TOKEN.symbol}: have ${haveHuman.toLocaleString()}, need ${needHuman.toLocaleString()}`);
+        return; // stop before building the tx
+      }
 
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
