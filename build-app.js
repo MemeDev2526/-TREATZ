@@ -34,14 +34,16 @@ async function run() {
       bundle: true,
       format: 'esm',
       platform: 'browser',
-      target: ['es2022'], // ← modern features (BigInt, optional catch bindings, etc.)
+      target: ['es2020'],
       minify: true,
       sourcemap: false,
       outfile: OUTFILE,
+
       define: {
         'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
-        'global': 'window' // ← satisfy libs that reference `global` at parse-time
+        'global': 'globalThis' // some deps reference `global`
       },
+
       loader: {
         '.svg': 'dataurl',
         '.png': 'file',
@@ -49,17 +51,11 @@ async function run() {
         '.jpeg': 'file',
         '.gif': 'file'
       },
+
+      // ⬅️ This actually bundles the Buffer polyfill into the output
+      inject: [path.resolve(cwd, 'shims', 'buffer-globals.js')],
+
       plugins: [IgnoreCssPlugin],
-      banner: {
-        js: `
-          import { Buffer as BufferPolyfill } from "buffer";
-          if (typeof globalThis !== "undefined") {
-            if (!globalThis.Buffer) globalThis.Buffer = BufferPolyfill;
-            if (!globalThis.process) globalThis.process = { env: { NODE_ENV: 'production' } };
-            if (!globalThis.global)  globalThis.global  = globalThis;
-          }
-        `.trim()
-      },
       logLevel: 'info',
     });
 
