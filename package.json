@@ -19,7 +19,7 @@
   "devDependencies": {
     "vite": "^5.4.0",
     "esbuild": "^0.21.5"                 
-  }
+  },
   "keywords": ["solana", "spl-token", "treatz", "web3", "dapp"],
   "author": "Treatz Devs",
   "license": "MIT"
