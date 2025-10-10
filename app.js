@@ -1501,7 +1501,7 @@ async function sendTxUniversal({ connection, tx }) {
         const found = await connection.getTokenAccountsByOwner(payerPub, { mint: mintPk }, "confirmed");
         if (found?.value?.length) {
           // Use the first existing token account for this mint
-          realSrc = new PublicKey(found.value[0].pubkey);
+          realSrc = found.value[0].pubkey;
         }
       } catch (_) { /* ignore, fall back to computedAta */ }
 
