@@ -1499,7 +1499,7 @@ async function sendTxUniversal({ connection, tx }) {
           destAtaPk,
           payerPub,
           toBaseUnits(amountHuman),
-          DECIMALS
+          DECIMALS,
           [],                 // no multisig signers
           tokenProgramId      // <-- critical
         ),
@@ -1669,7 +1669,7 @@ async function sendTxUniversal({ connection, tx }) {
           destAtaPk,
           payerPub,
           Number(amountBase),
-          DECIMALS
+          DECIMALS,
           [],                 // no multisig
           tokenProgramId
         ),
