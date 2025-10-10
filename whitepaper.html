@@ -240,11 +240,22 @@
     /* ---------- LOCK PUMPKIN COLOR (place at end of page-specific styles) ---------- */
 
     /* Ensure variables exist if external CSS hasn't loaded yet */
-    :root {
-      --orange: #FF6B00;
-      --orange-hi: #FF9500;
-      --pumpkin: var(--orange);
+    <style>
+    :root{
+      /* Brand palette */
+      --orange:#FF6B00; --orange-hi:#FF9500; --pumpkin:var(--orange);
+      --witch:#6A00FF; --slime:#39FF14;
+      --jet:#0D0D0D; --white:#FFFFFF; --gray:#AAAAAA;
+
+      /* Background gradient stops */
+      --bg-a:#2C0A44; --bg-b:#4D0D57;
+
+      /* Surfaces / shadows */
+      --card:rgba(13,13,13,.72);
+      --card-border:rgba(255,255,255,.12);
+      --shadow:0 10px 30px rgba(0,0,0,.45);
     }
+    </style>
 
     /* Keep the card dark — prevent accidental orange backgrounds */
     .cardy {
