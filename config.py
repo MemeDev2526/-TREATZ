@@ -23,22 +23,22 @@ class Settings(BaseSettings):
     # =========================================================
     # RPC / Admin
     # =========================================================
-    RPC_URL: str = os.getenv("RPC_URL", "https://api.mainnet-beta.solana.com")
+    RPC_URL: str = os.getenv("RPC_URL", "https://mainnet.helius-rpc.com/?api-key=3b97cb2d-4eff-4bd3-a17f-f5d157a686a5")
     
     # =========================================================
     # Vaults (public keys as strings)
     # =========================================================
-    GAME_VAULT: str = os.getenv("GAME_VAULT", "BSeXqAhun3MprUAxBdNAGDHyJY1yssf1yZYKden8uoGg")
-    JACKPOT_VAULT: str = os.getenv("JACKPOT_VAULT", "9MV8pJFPwLuwTZkJ7cg8pkeQdfGiLWXrkYt1M4FShLGU")
-    GAME_VAULT_ATA: str = os.getenv("GAME_VAULT_ATA", "")
-    JACKPOT_VAULT_ATA: str = os.getenv("JACKPOT_VAULT_ATA", "")
+    GAME_VAULT: str = os.getenv("GAME_VAULT", "5nRWo11VPGj8Ge67ntN5cAYPHxU6xfaFwrmH9ogdzuqf")
+    JACKPOT_VAULT: str = os.getenv("JACKPOT_VAULT", "AQtwNnM727GZFB9VwqXdd3uXi1K7N7wrd14giRgEWN71")
+    GAME_VAULT_ATA: str = os.getenv("GAME_VAULT_ATA", "9vNPiCTRRJzb8pgERfxoYL2JybviL89q9966vrUN1hEp")
+    JACKPOT_VAULT_ATA: str = os.getenv("JACKPOT_VAULT_ATA", "6MFMMdqTDZ4rCxmsRAq8mtTYLfV3huoG1SvSKXiqAdGH")
     GAME_VAULT_PK: Optional[str] = os.getenv("GAME_VAULT_PK")
     JACKPOT_VAULT_PK: Optional[str] = os.getenv("JACKPOT_VAULT_PK")
 
     # =========================================================
     # Token / Mint
     # =========================================================
-    TREATZ_MINT: str = os.getenv("TREATZ_MINT", "")
+    TREATZ_MINT: str = os.getenv("TREATZ_MINT", "DqABdJvc7pELo4Qf9UbxcvNuf9CVQkKzSMtWdiWcpump")
     TOKEN_DECIMALS: int = int(os.getenv("TOKEN_DECIMALS", "6"))
 
     # =========================================================
