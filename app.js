@@ -335,6 +335,9 @@ export async function getAta(owner, mint) {
         el.style.color = color; // ensure currentColor works in SVG
         el.classList.add("fx-piece--win");
         svg = svgWrapper(color);
+        else {
+          // ensure every piece has a visible currentColor fallback
+          if (!el.style.color) el.style.color = "#FF6B00";
       } else if (kind === "fx-candy") {
         el.classList.add("fx-piece--win");
         svg = svgCandy();
@@ -349,7 +352,12 @@ export async function getAta(owner, mint) {
         el.classList.add("fx-piece--loss");
         svg = svgSkull();
       }
-  
+
+      // guarantee color reaches inline SVGs
+      el.querySelectorAll("svg, path, rect, circle, text").forEach(n => {
+        n.style.fill = "currentColor";
+      });
+      
       el.innerHTML = svg;
 
       // GPU hints
