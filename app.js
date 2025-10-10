@@ -361,6 +361,7 @@ export async function getAta(owner, mint) {
       });
       
       el.innerHTML = svg;
+      solidifySVG(el);   // ensure solid fills/opacity
 
       // GPU hints
       el.style.willChange = "transform, opacity";
@@ -396,6 +397,18 @@ export async function getAta(owner, mint) {
       console.warn("spawnPiece failed", e);
       return null;
     }
+  }
+
+  function solidifySVG(el){
+    try {
+      el.querySelectorAll('svg, path, rect, circle, ellipse, polygon, text, stop, g').forEach(n => {
+        const fill = n.getAttribute('fill');
+        if (!fill || fill === 'none') n.setAttribute('fill', 'currentColor');
+        n.style.opacity = '1';
+        n.setAttribute('fill-opacity', '1');
+        n.setAttribute('stroke-opacity', '1');
+      });
+    } catch(e) {}
   }
   
   const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00'];
