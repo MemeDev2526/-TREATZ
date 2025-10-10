@@ -785,8 +785,8 @@ export async function getAta(owner, mint) {
   }
 
   // call it
-  setWalletUIEnabled(false); // disable
-  // setWalletUIEnabled(true); // enable again
+  // setWalletUIEnabled(false); // disable
+   setWalletUIEnabled(true); // enable again
 
   
   // Wallet state
