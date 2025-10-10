@@ -283,9 +283,14 @@ a, .btn--outline { color: var(--slime); }
   text-shadow: 0 0 10px rgba(91,255,100,.6), 0 0 20px rgba(91,255,100,.4);
 }
 .treatz-text {
-  color: #6226c7;
+  color: #3a0c5d; 
   position: relative;
-  text-shadow: 0 0 9px rgba(255,149,0,0.9), 0 0 18px rgba(255,107,0,0.7), 0 6px 18px rgba(0,0,0,0.6);
+  /* slime-green outline + glow */
+  -webkit-text-stroke: 2px var(--slime);
+  text-shadow:
+    0 0 12px rgba(57,255,20,.60),
+    0 0 24px rgba(57,255,20,.35),
+    0 6px 18px rgba(0,0,0,.6);
   font-weight: 850;
   font-size: clamp(1.5rem, 2.5vw, 2.1rem);
   display: inline-block;
@@ -303,8 +308,13 @@ a, .btn--outline { color: var(--slime); }
   display: inline-block;
   margin-left: 8px;
   font-size: clamp(1.35rem, 1.75vw, 1.55rem);
-  color: var(--orange);
-  text-shadow: 0 0 8px rgba(255,149,0,.45);
+  color: #3a0c5d; 
+  /* slime-green outline + glow */
+  -webkit-text-stroke: 2px var(--slime);
+  text-shadow:
+    0 0 12px rgba(57,255,20,.60),
+    0 0 24px rgba(57,255,20,.35),
+    0 6px 18px rgba(0,0,0,.6);
   font-weight: 700;
   opacity: 0.95;
 }
@@ -446,6 +456,14 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   transition: transform .6s ease;
   box-shadow: 0 0 28px rgba(57,255,20,.25), inset 0 0 18px rgba(255,165,0,.35);
   background: radial-gradient(circle at 50% 40%, #1a0828 0%, #0d0d0d 60%, #000 100%);
+}
+/* image defaults so coin isn't blank before JS runs */
+.coin__face--front { /* TRICK */
+  background: center/contain no-repeat url("/static/assets/coin_trickz.png");
+}
+.coin__face--back {  /* TREAT */
+  background: center/contain no-repeat url("/static/assets/coin_treatz.png");
+  transform: rotateY(180deg);
 }
 /* Orientation helpers (front = TRICK, back = TREAT) */
 .coin--show-trick { transform: rotateY(0deg); }
