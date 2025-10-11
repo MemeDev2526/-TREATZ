@@ -1482,8 +1482,8 @@ async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
         # allocate a sequential id rather than random to match production
         rid = await alloc_next_round_id()
         # spread in the past for visible ordering (timezone-aware UTC)
-                opens_dt = _rfc3339(now - timedelta(minutes=(n - i) * 45))
-                closes_dt = _rfc3339(now - timedelta(minutes=(n - i) * 45 - 30))
+        opens_dt = _rfc3339(now - timedelta(minutes=(n - i) * 45))
+        closes_dt = _rfc3339(now - timedelta(minutes=(n - i) * 45 - 30))
         pot = secrets.randbelow(4_000_000_000)  # up to ~4 SOL in lamports
 
         await app.state.db.execute(
