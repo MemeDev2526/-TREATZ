@@ -360,7 +360,7 @@ async def pay_jackpot_split(
             tx.add(ix)
 
         # Use same transfer_checked positional form
-                if w_pub and winner_amount > 0:
+        if w_pub and winner_amount > 0:
             tx.add(transfer_checked(
                 TOKEN_PROGRAM_ID, vault_ata, mint_pk, w_ata, vault_pub,
                 winner_amount, TOKEN_DECIMALS, None
