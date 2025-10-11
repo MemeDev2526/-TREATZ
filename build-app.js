@@ -6,6 +6,9 @@ import fs from 'fs';
 const cwd = process.cwd();
 const ENTRY = path.resolve(cwd, 'app.js');
 const OUTFILE = path.resolve(cwd, 'static', 'app.js');
+const OUTDIR = path.dirname(OUTFILE);
+const SHIM = path.resolve(cwd, 'shims', 'buffer-globals.js');
+const inject = fs.existsSync(SHIM) ? [SHIM] : [];
 
 // One plugin, defined once (ignore any accidental CSS imports)
 const IgnoreCssPlugin = {
@@ -25,7 +28,7 @@ async function run() {
     console.error(`[TREATZ] ✖ Entry not found: ${ENTRY}`);
     process.exit(1);
   }
-  await ensureDir(path.dirname(OUTFILE));
+  await ensureDir(OUTDIR);
 
   console.log('[TREATZ] 🧩 esbuild bundling app.js → static/app.js');
   try {
@@ -36,27 +39,36 @@ async function run() {
       platform: 'browser',
       target: ['es2020'],
       minify: true,
-      sourcemap: false,
+      sourcemap: process.env.NODE_ENV === 'development' ? 'inline' : false,
       outfile: OUTFILE,
 
       define: {
         'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
-        'global': 'globalThis' // some deps reference `global`
+        global: 'globalThis' // some deps reference `global`
       },
 
+      // Make imported assets predictable and served from /static
+      assetNames: 'assets/[name]-[hash]',
+      publicPath: '/static',
       loader: {
         '.svg': 'dataurl',
         '.png': 'file',
         '.jpg': 'file',
         '.jpeg': 'file',
-        '.gif': 'file'
+        '.gif': 'file',   // ← comma added
+        '.webp': 'file',
+        '.woff': 'file',
+        '.woff2': 'file',
+        '.mp3': 'file'
       },
 
-      // ⬅️ This actually bundles the Buffer polyfill into the output
-      inject: [path.resolve(cwd, 'shims', 'buffer-globals.js')],
+      // Optional shim (only if file exists)
+      inject,             // ← add colon earlier; here we just reference the var
 
       plugins: [IgnoreCssPlugin],
       logLevel: 'info',
+      legalComments: 'none',
+      conditions: ['browser', 'module', 'default'],
     });
 
     console.log('[TREATZ] ✅ Bundled to static/app.js');
