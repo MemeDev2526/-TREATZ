@@ -689,7 +689,7 @@ async def create_bet(body: NewBet):
     client_seed = secrets.token_hex(8)
 
     await app.state.db.execute(
-        "INSERT INTO bets(id, user, client_seed, server_seed_hash, server_seed_reveal, wager, side, status, created_at) "
+                "INSERT INTO bets(id, user, client_seed, server_seed_hash, server_seed_reveal, wager, side, status, created_at) "
         "VALUES(?,?,?,?,?,?,?,?,?)",
         (
             bet_id,
@@ -700,7 +700,7 @@ async def create_bet(body: NewBet):
             body.amount,
             body.side,
             "PENDING",
-            datetime.utcnow().isoformat(),
+            _rfc3339(datetime.now(timezone.utc)),
         ),
     )
     await app.state.db.commit()
@@ -1250,7 +1250,7 @@ async def helius_webhook(request: Request):
 
             await app.state.db.execute(
                 "UPDATE bets SET user=?, result=?, win=?, status=?, server_seed_reveal=?, tx_sig=?, settled_at=? WHERE id=?",
-                (sender_raw, result, win, status, server_seed_reveal, tx_sig, datetime.utcnow().isoformat(), bet_id),
+                (sender_raw, result, win, status, server_seed_reveal, tx_sig, _rfc3339(datetime.now(timezone.utc)), bet_id),
             )
             await app.state.db.commit()
 
@@ -1482,8 +1482,8 @@ async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
         # allocate a sequential id rather than random to match production
         rid = await alloc_next_round_id()
         # spread in the past for visible ordering (timezone-aware UTC)
-        opens_dt = (now - timedelta(minutes=(n - i) * 45)).isoformat()
-        closes_dt = (now - timedelta(minutes=(n - i) * 45 - 30)).isoformat()
+                opens_dt = _rfc3339(now - timedelta(minutes=(n - i) * 45))
+                closes_dt = _rfc3339(now - timedelta(minutes=(n - i) * 45 - 30))
         pot = secrets.randbelow(4_000_000_000)  # up to ~4 SOL in lamports
 
         await app.state.db.execute(
