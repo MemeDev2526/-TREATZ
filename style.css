@@ -548,7 +548,7 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 /* =========================================================
    $TREATZ FX Layer (falling wrappers / ghosts / candy)
    ========================================================= */
-#fx-layer.fx-layer{ position:fixed; inset:0; pointer-events:none; z-index:100000; overflow:visible; }
+#fx-layer, .fx-layer{ position:fixed; inset:0; pointer-events:none; z-index:100000; overflow:visible; }
 /* base FX piece */
 .fx-piece{
   position: fixed; will-change: transform, opacity, left, top;
