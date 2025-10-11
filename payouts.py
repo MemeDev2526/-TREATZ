@@ -360,20 +360,20 @@ async def pay_jackpot_split(
             tx.add(ix)
 
         # Use same transfer_checked positional form
-        if w_pub and winner_amount > 0:
+                if w_pub and winner_amount > 0:
             tx.add(transfer_checked(
                 TOKEN_PROGRAM_ID, vault_ata, mint_pk, w_ata, vault_pub,
-                winner_amount, TOKEN_DECIMALS, [kp.public_key]
+                winner_amount, TOKEN_DECIMALS, None
             ))
         if d_pub and dev_amount > 0:
             tx.add(transfer_checked(
                 TOKEN_PROGRAM_ID, vault_ata, mint_pk, d_ata, vault_pub,
-                dev_amount, TOKEN_DECIMALS, [kp.public_key]
+                dev_amount, TOKEN_DECIMALS, None
             ))
         if b_pub and burn_amount > 0:
             tx.add(transfer_checked(
                 TOKEN_PROGRAM_ID, vault_ata, mint_pk, b_ata, vault_pub,
-                burn_amount, TOKEN_DECIMALS, [kp.public_key]
+                burn_amount, TOKEN_DECIMALS, None
             ))
 
         lbh = await client.get_latest_blockhash()
