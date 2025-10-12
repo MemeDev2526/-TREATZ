@@ -10,40 +10,61 @@ from solana.rpc.commitment import Confirmed
 from solana.transaction import Transaction
 
 # prefer solana-py classes; fallback to solders shapes handled below
+USING_SOLDERS = False
 try:
     from solana.publickey import PublicKey
     from solana.keypair import Keypair
 except Exception:
     # solders fallback (keep names compatible-ish)
     try:
-        from solders.pubkey import Pubkey as PublicKey
-        from solders.keypair import Keypair as SolderKeypair
+        from solders.pubkey import Pubkey as _SoldersPubkey
+        from solders.keypair import Keypair as _SolderKeypair
+        USING_SOLDERS = True
 
         # Provide a minimal shim for Keypair that exposes .public_key and .to_bytes
         class Keypair:
-            def __init__(self, kp: SolderKeypair):
+            def __init__(self, kp: _SolderKeypair):
                 self._kp = kp
 
-            @property
+            @property:
             def public_key(self):
-                # solders.pubkey object -> bytes or str depending on use; use .to_string() if available
-                try:
-                    return PublicKey(bytes(self._kp.pubkey()))
-                except Exception:
-                    return PublicKey(str(self._kp.pubkey()))
+                # solders: expose a PublicKey-compatible object
+                return _SoldersPubkey.from_bytes(bytes(self._kp.pubkey()))
 
             @classmethod
             def from_secret_key(cls, secret: bytes):
-                # solders Keypair loads from bytes
-                return cls(SolderKeypair.from_bytes(secret))
+                return cls(_SolderKeypair.from_bytes(secret))
+
+            @classmethod
+            def from_seed(cls, seed: bytes):
+                return cls(_SolderKeypair.from_seed(seed))
 
             def to_bytes(self) -> bytes:
                 return bytes(self._kp.to_bytes())
+
+        # Alias PublicKey to solders type for uniform use
+        PublicKey = _SoldersPubkey  # type: ignore
     except Exception as e:
         raise ImportError(
             "Could not import solana PublicKey/Keypair (neither solana-py nor solders usable). "
             "Install 'solana' or 'solders' packages. Inner error: " + str(e)
         )
+
+# -------- Unified PublicKey constructor (string/bytes -> PublicKey) --------
+def _pk_from_b58(s: str) -> PublicKey:
+    """
+    Construct a PublicKey from a base58 string across solana-py and solders.
+    """
+    if USING_SOLDERS:
+        # solders requires .from_string for base58
+        return PublicKey.from_string(s)  # type: ignore[attr-defined]
+    # solana-py accepts base58 string directly
+    return PublicKey(s)
+
+def _pk_from_bytes(b: bytes) -> PublicKey:
+    if USING_SOLDERS:
+        return PublicKey.from_bytes(b)  # type: ignore[attr-defined]
+    return PublicKey(b)
 
 # spl token helpers (solana-py)
 from spl.token.instructions import (
@@ -67,10 +88,10 @@ except Exception:
 from solana.rpc.types import TxOpts
 from spl.token.constants import TOKEN_PROGRAM_ID
 try:
-    from spl.token.constants import TOKEN_2022_PROGRAM_ID
+    from spl.token.constants import TOKEN_2022_PROGRAM_ID  # type: ignore
 except Exception:
-    # Use whichever PublicKey class we already imported above (solana OR solders)
-    TOKEN_2022_PROGRAM_ID = PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")  # fallback
+    # Use a cross-lib constructor for the well-known Token-2022 program id
+    TOKEN_2022_PROGRAM_ID = _pk_from_b58("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")  # fallback
 
 RPC_URL = settings.RPC_URL
 
@@ -91,15 +112,16 @@ async def _mint_owner_program_id(client: AsyncClient) -> PublicKey:
     """Return TOKEN_PROGRAM_ID or TOKEN_2022_PROGRAM_ID for the configured mint."""
     mint_pk = _token_mint()
     ai = await client.get_account_info(mint_pk, commitment=Confirmed)
+
     owner = None
     if hasattr(ai, "value") and ai.value:
         owner = getattr(ai.value, "owner", None)
     elif isinstance(ai, dict):
         owner = (((ai.get("result") or {}).get("value") or {}).get("owner"))
-    if str(owner) == str(TOKEN_2022_PROGRAM_ID):
+
+    if owner and str(owner) == str(TOKEN_2022_PROGRAM_ID):
         return TOKEN_2022_PROGRAM_ID
     return TOKEN_PROGRAM_ID
-
 
 def _require_token_mint() -> None:
     if not settings.TREATZ_MINT:
@@ -109,54 +131,43 @@ def _token_mint() -> PublicKey:
     _require_token_mint()
     return to_public_key(settings.TREATZ_MINT)
 
-def to_public_key(addr: Optional[Union[str, PublicKey]]) -> PublicKey:
+def to_public_key(addr: Optional[Union[str, PublicKey, bytes, bytearray]]) -> PublicKey:
     """
-    Robustly return a solana PublicKey instance from:
+    Robustly return a PublicKey from:
       - a PublicKey (returned as-is)
-      - a base58 string (decoded -> PublicKey)
-      - raw bytes (used directly)
+      - a base58 string
+      - raw 32 bytes
     """
     if addr is None:
         raise ValueError("Empty public key provided")
 
-    # If it's already the expected PublicKey class, return as-is
+    # Already PublicKey?
     try:
-        if isinstance(addr, PublicKey):
-            return addr
+        if isinstance(addr, PublicKey):  # type: ignore[arg-type]
+            return addr  # type: ignore[return-value]
     except Exception:
-        # isinstance may fail across solders/solana types; proceed to try other conversions
         pass
 
-    # If it's bytes (32), try constructing
+    # Bytes?
     if isinstance(addr, (bytes, bytearray)):
-        try:
-            return PublicKey(bytes(addr))
-        except Exception:
-            # some PublicKey constructors accept bytes or expect different wrapper; try str fallback
-            try:
-                return PublicKey(addr)
-            except Exception as e:
-                raise ValueError(f"Cannot convert bytes to PublicKey: {e}")
+        if len(addr) != 32:
+            raise ValueError(f"PublicKey bytes must be length 32, got {len(addr)}")
+        return _pk_from_bytes(bytes(addr))
 
-    # If it's a string, try direct constructor (works for many solana-py versions)
+    # String?
     if isinstance(addr, str):
+        # Try direct (solana) or from_string (solders) via helper
         try:
-            return PublicKey(addr)
+            return _pk_from_b58(addr)
         except Exception:
-            # fallback: base58-decode and construct from raw bytes
-            try:
-                raw = _b58.b58decode(addr)
-                if len(raw) != 32:
-                    raise ValueError(f"Decoded key length != 32 ({len(raw)})")
-                return PublicKey(raw)
-            except Exception as e:
-                raise ValueError(f"Could not convert '{addr}' to PublicKey: {e}")
+            # fallback: decode then construct
+            raw = _b58.b58decode(addr)
+            if len(raw) != 32:
+                raise ValueError(f"Decoded key length != 32 ({len(raw)})")
+            return _pk_from_bytes(raw)
 
-    # final attempt: try passing to constructor, let it raise if it must
-    try:
-        return PublicKey(addr)
-    except Exception as e:
-        raise ValueError(f"Unsupported public key type: {type(addr)} -> {e}")
+    # Final attempt: pass through (may raise)
+    return PublicKey(addr)  # type: ignore[arg-type]
 
 # ---------------- ATA utilities ----------------
 
@@ -177,48 +188,44 @@ def _get_ata(owner: PublicKey, mint: PublicKey, token_prog: PublicKey) -> Public
 def _kp_from_base58(b58: str) -> Keypair:
     """
     Decode a base58-encoded secret key and return a Keypair suitable for signing.
-    Accepts 64-byte secret keys (private+public) which solana expects.
+    Accepts 64-byte secret keys (private+public) or 32-byte seed.
     """
     if not b58:
         raise ValueError("Empty secret key provided")
     raw = _b58.b58decode(b58)
-    # Some providers export 64-byte secret key (private + public), others 32; handle both:
+
     if len(raw) == 64:
-        # solana Keypair.from_secret_key expects a bytes-like secret key (private+public)
         try:
-            return Keypair.from_secret_key(raw)
+            return Keypair.from_secret_key(raw)  # type: ignore[attr-defined]
         except Exception:
-            # try alternative constructor names
             try:
-                return Keypair.from_seed(raw[:32])
+                return Keypair.from_seed(raw[:32])  # type: ignore[attr-defined]
             except Exception as e:
                 raise ValueError(f"Could not construct Keypair from 64-byte raw key: {e}")
     elif len(raw) == 32:
-        # If only 32 bytes given, many APIs accept from_secret_key or from_seed
         try:
-            return Keypair.from_secret_key(raw)
+            return Keypair.from_secret_key(raw)  # type: ignore[attr-defined]
         except Exception:
             try:
-                # solana-py Keypair.from_seed exists
-                return Keypair.from_seed(raw)
+                return Keypair.from_seed(raw)  # type: ignore[attr-defined]
             except Exception as e:
                 raise ValueError(f"Could not construct Keypair from 32-byte seed: {e}")
     else:
         raise ValueError(f"Invalid secret key length: {len(raw)} (expected 32 or 64 bytes)")
 
 def _assert_owner_matches(vault_pub: PublicKey, kp: Keypair, label: str) -> None:
-    # vault_pub is PublicKey; kp.public_key may be PublicKey or similar - normalize to str
+    # Normalize to string for comparison
     try:
         vault_s = str(vault_pub)
-        kp_pub_s = str(kp.public_key)
     except Exception:
-        # fallback: compare bytes if possible
-        try:
-            vault_s = bytes(vault_pub)
-            kp_pub_s = bytes(kp.public_key)
-        except Exception:
-            vault_s = vault_pub
-            kp_pub_s = kp.public_key
+        vault_s = str(_b58.b58encode(bytes(vault_pub)))  # defensive
+
+    try:
+        kp_pub = kp.public_key
+        kp_pub_s = str(kp_pub)
+    except Exception:
+        kp_pub_s = str(_b58.b58encode(bytes(kp.public_key)))  # defensive
+
     if vault_s != kp_pub_s:
         raise RuntimeError(f"{label} signer does not match configured vault public key. ({vault_s} != {kp_pub_s})")
 
@@ -239,6 +246,7 @@ async def _ensure_ata_ixs(
 
     resp = await client.get_account_info(ata, commitment=Confirmed)
     ixs: List = []
+    # If account doesn't exist, add create ix (idempotent variant when available)
     if getattr(resp, "value", None) is None:
         ixs.append(
             create_ata_idem(
@@ -288,7 +296,7 @@ async def _send_spl_from_vault(
     lbh = await client.get_latest_blockhash()
     bh = None
     if hasattr(lbh, "value") and getattr(lbh, "value", None) is not None:
-        bh = getattr(lbh.value, "blockhash", None) or getattr(lbh.value, "blockhash", None)
+        bh = getattr(lbh.value, "blockhash", None)
     if not bh and isinstance(lbh, dict):
         try:
             bh = (lbh.get("result") or {}).get("value", {}).get("blockhash")
@@ -328,7 +336,6 @@ async def _send_spl_from_vault(
     try:
         await client.confirm_transaction(sig, commitment=Confirmed)
     except Exception:
-        # still return signature even if confirm failed
         return str(sig)
 
     return str(sig)
@@ -423,7 +430,6 @@ async def pay_jackpot_split(
             ))
 
         lbh = await client.get_latest_blockhash()
-        # extract blockhash robustly
         bh = getattr(getattr(lbh, "value", None), "blockhash", None) or (lbh.get("result") or {}).get("value", {}).get("blockhash") if isinstance(lbh, dict) else None
         if not bh:
             try:
@@ -433,23 +439,19 @@ async def pay_jackpot_split(
         tx.recent_blockhash = str(bh)
         tx.fee_payer = vault_pub
 
-        # sign with vault keypair
         tx.sign(kp)
         raw = tx.serialize()
         sig_resp = await client.send_raw_transaction(raw, opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed))
 
-        # Normalize signature and confirm
         sig = None
         if isinstance(sig_resp, dict):
             sig = sig_resp.get("result") or sig_resp.get("signature") or None
         else:
             sig = getattr(sig_resp, "value", None) or getattr(sig_resp, "result", None) or str(sig_resp)
 
-        # try confirm
         try:
             await client.confirm_transaction(sig, commitment=Confirmed)
         except Exception:
-            # still return the signature even if confirm failed
             return str(sig)
 
         return str(sig)
