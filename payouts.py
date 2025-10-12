@@ -8,6 +8,7 @@ from config import settings
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solana.transaction import Transaction
+
 # prefer solana-py classes; fallback to solders shapes handled below
 try:
     from solana.publickey import PublicKey
@@ -50,22 +51,26 @@ from spl.token.instructions import (
     get_associated_token_address,
     create_associated_token_account,
 )
+
 # compat: not all spl-token builds export the idempotent variant
 try:
     from spl.token.instructions import create_associated_token_account_idempotent as create_ata_idem
 except Exception:
     # fallback to classic creator (not idempotent, but safe to call once)
-    def create_ata_idem(*, payer, owner, mint, program_id=None, **_):
-        return create_associated_token_account(payer=payer, owner=owner, mint=mint, program_id=program_id)
+    def create_ata_idem(*, payer, owner, mint, token_program_id=None, program_id=None, **_):
+        # classic create_associated_token_account supports token_program_id
+        return create_associated_token_account(
+            payer=payer, owner=owner, mint=mint,
+            token_program_id=token_program_id, program_id=program_id
+        )
 
 from solana.rpc.types import TxOpts
 from spl.token.constants import TOKEN_PROGRAM_ID
 try:
     from spl.token.constants import TOKEN_2022_PROGRAM_ID
 except Exception:
-    # hardcoded well-known Program ID for Token-2022; fallback to classic if import missing
-    from solana.publickey import PublicKey as _PK
-    TOKEN_2022_PROGRAM_ID = _PK("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")  # fallback
+    # Use whichever PublicKey class we already imported above (solana OR solders)
+    TOKEN_2022_PROGRAM_ID = PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")  # fallback
 
 RPC_URL = settings.RPC_URL
 
@@ -94,7 +99,6 @@ async def _mint_owner_program_id(client: AsyncClient) -> PublicKey:
     if str(owner) == str(TOKEN_2022_PROGRAM_ID):
         return TOKEN_2022_PROGRAM_ID
     return TOKEN_PROGRAM_ID
-
 
 
 def _require_token_mint() -> None:
@@ -153,6 +157,20 @@ def to_public_key(addr: Optional[Union[str, PublicKey]]) -> PublicKey:
         return PublicKey(addr)
     except Exception as e:
         raise ValueError(f"Unsupported public key type: {type(addr)} -> {e}")
+
+# ---------------- ATA utilities ----------------
+
+def _get_ata(owner: PublicKey, mint: PublicKey, token_prog: PublicKey) -> PublicKey:
+    """
+    Derive the associated token account for (owner, mint), preferring a signature
+    that lets us specify the token program (for Token-2022).
+    """
+    try:
+        # Newer spl-token exposes token_program_id kw
+        return get_associated_token_address(owner, mint, token_program_id=token_prog)
+    except TypeError:
+        # Older builds ignore token_program_id; this will still be correct for classic Token
+        return get_associated_token_address(owner, mint)
 
 # ---------------- Keypair loader ----------------
 
@@ -217,9 +235,7 @@ async def _ensure_ata_ixs(
     mint_pk = _token_mint()
     token_prog = await _mint_owner_program_id(client)
 
-    # NOTE: python spl-token get_associated_token_address doesn’t expose allow_owner_off_curve;
-    # using default is fine for normal wallets.
-    ata = get_associated_token_address(owner, mint_pk)
+    ata = _get_ata(owner, mint_pk, token_prog)
 
     resp = await client.get_account_info(ata, commitment=Confirmed)
     ixs: List = []
@@ -229,7 +245,7 @@ async def _ensure_ata_ixs(
                 payer=payer,
                 owner=owner,
                 mint=mint_pk,
-                program_id=token_prog,   # IMPORTANT
+                token_program_id=token_prog,   # IMPORTANT for Token-2022 compatibility
             )
         )
     return ata, ixs
@@ -244,12 +260,12 @@ async def _send_spl_from_vault(
     amount_base_units: int,
 ) -> str:
     mint_pk = _token_mint()
-    token_prog = await _mint_owner_program_id(client)  # NEW
+    token_prog = await _mint_owner_program_id(client)
 
     # Ensure recipient ATA (vault pays)
     winner_ata, pre_ixs = await _ensure_ata_ixs(client, winner_wallet, payer=vault_wallet)
-    # For vault ATA, program id must match the mint’s program
-    vault_ata = get_associated_token_address(vault_wallet, mint_pk)
+    # Vault ATA must be for the same token program that owns the mint
+    vault_ata = _get_ata(vault_wallet, mint_pk, token_prog)
 
     tx = Transaction()
     for ix in pre_ixs:
@@ -257,7 +273,7 @@ async def _send_spl_from_vault(
 
     tx.add(
         transfer_checked(
-            token_prog,            # CHANGED
+            token_prog,            # token program (classic or 2022)
             vault_ata,
             mint_pk,
             winner_ata,
@@ -284,7 +300,7 @@ async def _send_spl_from_vault(
         except Exception:
             raise RuntimeError("Could not fetch latest blockhash")
 
-    tx.recent_blockhash = str(bh)  # CHANGED: ensure string
+    tx.recent_blockhash = str(bh)
     tx.fee_payer = vault_wallet
 
     # sign with vault owner keypair
@@ -296,16 +312,13 @@ async def _send_spl_from_vault(
     # Normalize signature out of the response
     sig = None
     if isinstance(resp, dict):
-        # solana RPC dict shape -> resp['result'] often contains signature string
         sig = resp.get("result") or resp.get("signature") or None
-        # some shapes: {'result': {'value': 'sig'}} -> try nested
         if isinstance(sig, dict):
             sig = sig.get("signature") or sig.get("txHash") or None
     else:
         sig = getattr(resp, "value", None) or getattr(resp, "result", None) or str(resp)
 
     if not sig:
-        # try if resp has .value and .value is signature
         try:
             sig = str(resp)
         except Exception:
@@ -386,12 +399,12 @@ async def pay_jackpot_split(
         if b_pub:
             b_ata, ixs = await _ensure_ata_ixs(client, b_pub, payer=vault_pub); pre_ixs += ixs
 
-        token_prog = await _mint_owner_program_id(client)  # NEW
-        vault_ata = get_associated_token_address(vault_pub, mint_pk)
-        
+        token_prog = await _mint_owner_program_id(client)
+        vault_ata = _get_ata(vault_pub, mint_pk, token_prog)
+
         for ix in pre_ixs:
             tx.add(ix)
-            
+
         # Use same transfer_checked positional form
         if w_pub and winner_amount > 0:
             tx.add(transfer_checked(
