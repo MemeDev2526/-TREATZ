@@ -27,7 +27,7 @@
     window.TREATZ_BUILD = "__BUILD__";
     window.TREATZ_CONFIG = {
       apiBase: "/api",
-      rpcUrl: "https://mainnet.helius-rpc.com/?api-key=3b97cb2d-4eff-4bd3-a17f-f5d157a686a5",  // or your Helius URL with a real key
+      rpcUrl: "/api/cluster", // backend proxies calls (no public key)
       token: { symbol: "$TREATZ", decimals: 6 },
       links: {
         telegram: "https://t.me/trickortreatsol",
@@ -38,9 +38,9 @@
       buyUrl: "https://pump.fun/coin/DqABdJvc7pELo4Qf9UbxcvNuf9CVQkKzSMtWdiWcpump",
       tokenAddress: "DqABdJvc7pELo4Qf9UbxcvNuf9CVQkKzSMtWdiWcpump",
       assets: {
-        ambient: "/static/assets/ambient_loop.mp3",
-        logo: "/static/assets/TREATZ_Logo.png",
-        mascot: "/static/assets/Mascot.png"
+        ambient: "/assets/ambient_loop.mp3",
+        logo: "/assets/TREATZ_Logo.png",
+        mascot: "/assets/Mascot.png"
       }
     };
   </script>
@@ -271,8 +271,10 @@
         <div class="card__col">
           <div class="help">
             <strong>Provably fair:</strong> commit/reveal seed + blockhash |
-            Cost: <b id="wheel-price">100,000</b> $TREATZ per spin
+            Cost: <b id="wheel-price">—</b> $TREATZ per spin
           </div>
+
+<button id="wheel-spin" class="btn btn--primary">Spin the Wheel (<span id="wheel-price-btn">—</span>)</button>
 
           <!-- Wallet controls for Wheel of Fate -->
           <div class="wallet wallet--inline" style="margin:.5rem 0 .6rem">
