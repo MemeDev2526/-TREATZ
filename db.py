@@ -73,6 +73,23 @@ CREATE INDEX IF NOT EXISTS idx_entries_round   ON entries(round_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_txsig ON entries(tx_sig);
 """.strip()
 
+CREATE TABLE IF NOT EXISTS spins(
+  id TEXT PRIMARY KEY,
+  user TEXT DEFAULT '',
+  wager INTEGER NOT NULL,
+  server_seed_hash TEXT NOT NULL,
+  server_seed_reveal TEXT,
+  client_seed TEXT NOT NULL,
+  tx_sig TEXT,
+  outcome_label TEXT,
+  prize_amount INTEGER,
+  free_spins INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  created_at TEXT NOT NULL,
+  settled_at TEXT
+);
+CREATE INDEX IF NOT EXISTS spins_user_created ON spins(user, created_at);
+
 # =========================================================
 # Connection
 # =========================================================
