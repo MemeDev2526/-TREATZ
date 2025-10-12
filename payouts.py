@@ -60,9 +60,10 @@ try:
         create_associated_token_account_idempotent as create_ata_idem,
     )
 except Exception:
-    def create_ata_idem(*, payer, owner, mint, program_id=None, **_):
+    # Fallback wrapper with Token-2022-compatible signature
+    def create_ata_idem(*, payer, owner, mint, token_program_id=None, **_):
         return create_associated_token_account(
-            payer=payer, owner=owner, mint=mint, program_id=program_id
+            payer=payer, owner=owner, mint=mint, program_id=token_program_id
         )
 
 from spl.token.constants import TOKEN_PROGRAM_ID
@@ -191,13 +192,13 @@ async def _ensure_ata_ixs(
 
     resp = await client.get_account_info(ata, commitment=Confirmed)
     ixs: List = []
-    if getattr(resp, "value", None) is None:
+        if getattr(resp, "value", None) is None:
         ixs.append(
             create_ata_idem(
                 payer=payer,
                 owner=owner,
                 mint=mint_pk,
-                program_id=token_prog,   # ensure correct token program
+                token_program_id=token_prog,   # ensure correct token program (SPL or Token-2022)
             )
         )
     return ata, ixs
