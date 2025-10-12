@@ -262,6 +262,55 @@
         </div>
       </div>
     </section>
+    
+        <!-- 🕯️ WHEEL OF FATE -->
+    <section class="section" id="wheel" aria-labelledby="wheel-title">
+      <h2 class="section__title" id="wheel-title">🕯️ Wheel of Fate — Spin for $TREATZ</h2>
+
+      <div class="card grid-2 wheel-card">
+        <div class="card__col">
+          <div class="help">
+            <strong>Provably fair:</strong> commit/reveal seed + blockhash |
+            Cost: <b id="wheel-price">100,000</b> $TREATZ per spin
+          </div>
+
+          <!-- Wallet controls for Wheel of Fate -->
+          <div class="wallet wallet--inline" style="margin:.5rem 0 .6rem">
+            <button class="btn btn--primary" id="wheel-connect" type="button">Connect Wallet</button>
+            <a id="wheel-open-in-phantom" class="btn btn--ghost" href="#" target="_blank" rel="noopener" hidden>Open in Phantom</a>
+            <span id="wheel-addr" class="small muted" hidden></span>
+          </div>
+
+          <div class="form">
+            <div class="btnrow">
+              <button id="wheel-spin" class="btn btn--primary">Spin the Wheel (100,000)</button>
+              <button id="wheel-freespin" class="btn btn--ghost">Use Free Spin</button>
+            </div>
+            <p class="help" id="wheel-commit">Commit: —</p>
+            <div class="small muted">
+              Free spins: <b id="wheel-free">0</b>
+              <span id="wheel-mode" class="tag" style="margin-left:.5rem;">Simulated (no wallet)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card__col">
+          <div class="wheel-wrap">
+            <div class="wheel-pointer">▲</div>
+            <svg id="wheel-svg" class="wheel" viewBox="0 0 400 400" role="img" aria-label="Wheel of Fate"></svg>
+          </div>
+          <div id="wheel-status" class="small" style="margin-top:.5rem;">Ready.</div>
+        </div>
+      </div>
+
+      <div id="wheel-toast" class="card small" hidden></div>
+
+      <!-- lightweight in-card history -->
+      <div class="card small" id="wheel-history" hidden>
+        <div class="muted small">Recent spins</div>
+        <ul id="wheel-history-list" class="list-plain"></ul>
+      </div>
+    </section>
 
     <!-- 15) ABOUT TREATZ -->
     <section class="section" id="about" aria-labelledby="about-title">
