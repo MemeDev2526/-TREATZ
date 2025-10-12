@@ -49,9 +49,11 @@ from spl.token.instructions import (
     transfer_checked,
     get_associated_token_address,
     create_associated_token_account,
+    create_associated_token_account_idempotent,  # NEW
 )
+
 from solana.rpc.types import TxOpts
-from spl.token.constants import TOKEN_PROGRAM_ID
+from spl.token.constants import TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
 
 RPC_URL = settings.RPC_URL
 
@@ -67,6 +69,21 @@ GAME_VAULT_PK_B58 = settings.GAME_VAULT_PK or ""
 JACKPOT_VAULT_PK_B58 = settings.JACKPOT_VAULT_PK or ""
 
 TOKEN_DECIMALS = settings.TOKEN_DECIMALS
+
+async def _mint_owner_program_id(client: AsyncClient) -> PublicKey:
+    """Return TOKEN_PROGRAM_ID or TOKEN_2022_PROGRAM_ID for the configured mint."""
+    mint_pk = _token_mint()
+    ai = await client.get_account_info(mint_pk, commitment=Confirmed)
+    owner = None
+    if hasattr(ai, "value") and ai.value:
+        owner = getattr(ai.value, "owner", None)
+    elif isinstance(ai, dict):
+        owner = (((ai.get("result") or {}).get("value") or {}).get("owner"))
+    if str(owner) == str(TOKEN_2022_PROGRAM_ID):
+        return TOKEN_2022_PROGRAM_ID
+    return TOKEN_PROGRAM_ID
+
+
 
 def _require_token_mint() -> None:
     if not settings.TREATZ_MINT:
@@ -183,20 +200,24 @@ async def _ensure_ata_ixs(
     payer: PublicKey,
 ) -> Tuple[PublicKey, List]:
     """
-    Ensure owner's ATA for TOKEN_MINT exists. If not, return create-ATA ix
-    where the provided payer (the vault) pays fees.
+    Ensure owner's ATA exists (idempotent), respecting Token-2022 when applicable.
     """
     mint_pk = _token_mint()
+    token_prog = await _mint_owner_program_id(client)
+
+    # NOTE: python spl-token get_associated_token_address doesn’t expose allow_owner_off_curve;
+    # using default is fine for normal wallets.
     ata = get_associated_token_address(owner, mint_pk)
+
     resp = await client.get_account_info(ata, commitment=Confirmed)
     ixs: List = []
-    # resp.value is None when missing
     if getattr(resp, "value", None) is None:
         ixs.append(
-            create_associated_token_account(
+            create_associated_token_account_idempotent(
                 payer=payer,
                 owner=owner,
                 mint=mint_pk,
+                program_id=token_prog,   # IMPORTANT
             )
         )
     return ata, ixs
@@ -211,19 +232,20 @@ async def _send_spl_from_vault(
     amount_base_units: int,
 ) -> str:
     mint_pk = _token_mint()
+    token_prog = await _mint_owner_program_id(client)  # NEW
+
     # Ensure recipient ATA (vault pays)
     winner_ata, pre_ixs = await _ensure_ata_ixs(client, winner_wallet, payer=vault_wallet)
+    # For vault ATA, program id must match the mint’s program
     vault_ata = get_associated_token_address(vault_wallet, mint_pk)
 
     tx = Transaction()
     for ix in pre_ixs:
         tx.add(ix)
 
-    # transfer_checked parameters vary across versions; use positional style compatible with spl.token.instructions:
-    # transfer_checked(program_id, source, mint, dest, owner, amount, decimals, signers=None)
     tx.add(
         transfer_checked(
-            TOKEN_PROGRAM_ID,
+            token_prog,            # CHANGED
             vault_ata,
             mint_pk,
             winner_ata,
@@ -237,22 +259,20 @@ async def _send_spl_from_vault(
     # Set recent blockhash & fee payer robustly
     lbh = await client.get_latest_blockhash()
     bh = None
-    # many response shapes: object.value.blockhash, dict -> result.value.blockhash, etc.
     if hasattr(lbh, "value") and getattr(lbh, "value", None) is not None:
         bh = getattr(lbh.value, "blockhash", None) or getattr(lbh.value, "blockhash", None)
     if not bh and isinstance(lbh, dict):
         try:
-            bh = (lbh.get("result") or {}).get("value", {}) .get("blockhash")
+            bh = (lbh.get("result") or {}).get("value", {}).get("blockhash")
         except Exception:
             bh = None
     if not bh:
-        # try nested dict fallback
         try:
             bh = lbh["result"]["value"]["blockhash"]
         except Exception:
             raise RuntimeError("Could not fetch latest blockhash")
 
-    tx.recent_blockhash = bh
+    tx.recent_blockhash = str(bh)  # CHANGED: ensure string
     tx.fee_payer = vault_wallet
 
     # sign with vault owner keypair
@@ -359,20 +379,22 @@ async def pay_jackpot_split(
         for ix in pre_ixs:
             tx.add(ix)
 
+                token_prog = await _mint_owner_program_id(client)  # NEW
+
         # Use same transfer_checked positional form
         if w_pub and winner_amount > 0:
             tx.add(transfer_checked(
-                TOKEN_PROGRAM_ID, vault_ata, mint_pk, w_ata, vault_pub,
+                token_prog, vault_ata, mint_pk, w_ata, vault_pub,
                 winner_amount, TOKEN_DECIMALS, None
             ))
         if d_pub and dev_amount > 0:
             tx.add(transfer_checked(
-                TOKEN_PROGRAM_ID, vault_ata, mint_pk, d_ata, vault_pub,
+                token_prog, vault_ata, mint_pk, d_ata, vault_pub,
                 dev_amount, TOKEN_DECIMALS, None
             ))
         if b_pub and burn_amount > 0:
             tx.add(transfer_checked(
-                TOKEN_PROGRAM_ID, vault_ata, mint_pk, b_ata, vault_pub,
+                token_prog, vault_ata, mint_pk, b_ata, vault_pub,
                 burn_amount, TOKEN_DECIMALS, None
             ))
 
