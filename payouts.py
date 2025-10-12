@@ -49,11 +49,23 @@ from spl.token.instructions import (
     transfer_checked,
     get_associated_token_address,
     create_associated_token_account,
-    create_associated_token_account_idempotent,  # NEW
 )
+# compat: not all spl-token builds export the idempotent variant
+try:
+    from spl.token.instructions import create_associated_token_account_idempotent as create_ata_idem
+except Exception:
+    # fallback to classic creator (not idempotent, but safe to call once)
+    def create_ata_idem(*, payer, owner, mint, program_id=None, **_):
+        return create_associated_token_account(payer=payer, owner=owner, mint=mint, program_id=program_id)
 
 from solana.rpc.types import TxOpts
-from spl.token.constants import TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID
+from spl.token.constants import TOKEN_PROGRAM_ID
+try:
+    from spl.token.constants import TOKEN_2022_PROGRAM_ID
+except Exception:
+    # hardcoded well-known Program ID for Token-2022; fallback to classic if import missing
+    from solana.publickey import PublicKey as _PK
+    TOKEN_2022_PROGRAM_ID = _PK("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")  # fallback
 
 RPC_URL = settings.RPC_URL
 
@@ -213,7 +225,7 @@ async def _ensure_ata_ixs(
     ixs: List = []
     if getattr(resp, "value", None) is None:
         ixs.append(
-            create_associated_token_account_idempotent(
+            create_ata_idem(
                 payer=payer,
                 owner=owner,
                 mint=mint_pk,
@@ -237,7 +249,7 @@ async def _send_spl_from_vault(
     # Ensure recipient ATA (vault pays)
     winner_ata, pre_ixs = await _ensure_ata_ixs(client, winner_wallet, payer=vault_wallet)
     # For vault ATA, program id must match the mint’s program
-    vault_ata = get_associated_token_address(vault_pub, mint_pk, token_program_id=token_prog)
+    vault_ata = get_associated_token_address(vault_wallet, mint_pk)
 
     tx = Transaction()
     for ix in pre_ixs:
@@ -374,13 +386,12 @@ async def pay_jackpot_split(
         if b_pub:
             b_ata, ixs = await _ensure_ata_ixs(client, b_pub, payer=vault_pub); pre_ixs += ixs
 
-        vault_ata = get_associated_token_address(vault_pub, mint_pk, token_program_id=token_prog)
-
+        token_prog = await _mint_owner_program_id(client)  # NEW
+        vault_ata = get_associated_token_address(vault_pub, mint_pk)
+        
         for ix in pre_ixs:
             tx.add(ix)
-
-        token_prog = await _mint_owner_program_id(client)  # NEW
-
+            
         # Use same transfer_checked positional form
         if w_pub and winner_amount > 0:
             tx.add(transfer_checked(
