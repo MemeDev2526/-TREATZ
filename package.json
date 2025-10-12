@@ -7,9 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build:app": "node ./build-app.js",
-    "build": "vite build --base=/static/ --outDir static",
-    "build:ci": "npm run build:app && npm run build",
-    "preview": "vite preview --outDir static"
+    "build": "npm run build:app && vite build --base=/static/ --outDir static && mkdir -p dist && cp -r static/* dist/",
+    "build:ci": "npm run build",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@solana/web3.js": "^1.95.3",
