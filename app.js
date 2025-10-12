@@ -16,15 +16,13 @@ if (typeof window !== "undefined") {
 }
 // ------------------------------------------------------------
 
-// app.js — … (rest of your file continues)
-
 // 1) Solana + SPL Token imports (ESM)
 import { Connection, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
   getAssociatedTokenAddress,
-  getAssociatedTokenAddressSync, 
+  getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
@@ -51,7 +49,7 @@ if (typeof window !== "undefined") {
 const RPC_URL =
   (window.TREATZ_CONFIG && window.TREATZ_CONFIG.rpcUrl) ||
   ((window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "") + "/cluster");
-  
+
 const connection = new Connection(RPC_URL, { commitment: "confirmed" });
 
 // Warm-up probe so we fail fast & show a friendly message if RPC blocks the browser
@@ -60,8 +58,7 @@ const connection = new Connection(RPC_URL, { commitment: "confirmed" });
     await connection.getLatestBlockhash("confirmed");
   } catch (e) {
     console.error("[TREATZ] RPC warmup failed:", e);
-    // Nice UX: toast instead of raw alert
-    try { 
+    try {
       (window.toast ? window.toast : (m)=>console.log("[toast]", m))("RPC blocked/rate-limited. Try another RPC or use a proxy.");
     } catch {}
   }
@@ -103,80 +100,66 @@ export async function getAta(owner, mint) {
 
   // --- Wallet Helpers ---
   // --- Wallet detection + universal sender ---
-function getInjectedProvider() {
-  const candidates = [
-    // Phantom first (mobile in-app injects window.phantom.solana)
-    (window.phantom && window.phantom.solana) || null,
-    (window.solana && window.solana.isPhantom ? window.solana : null) || null,
-    (window.backpack && window.backpack.isBackpack ? window.backpack : null) || null,
-    (window.solflare && window.solflare.isSolflare ? window.solflare : null) || null,
-  ].filter(Boolean);
-
-  // Prefer one that is already connected / has a pubkey
-  const connected = candidates.find(p => p.publicKey || p.isConnected);
-  return connected || candidates[0] || null;
-}
-
-async function ensureBlockhashAndPayer(connection, tx, feePayerPubkey) {
-  if (!tx.feePayer) tx.feePayer = feePayerPubkey;
-  if (!tx.recentBlockhash) {
-    const { blockhash } = await connection.getLatestBlockhash("finalized");
-    tx.recentBlockhash = blockhash;
-  }
-  return tx;
-}
-
-async function sendTxUniversal({ connection, tx }) {
-  const provider = getInjectedProvider();
-  if (!provider) {
-    throw new Error("WALLET_NOT_FOUND");
+  function getInjectedProvider() {
+    const candidates = [
+      (window.phantom && window.phantom.solana) || null,
+      (window.solana && window.solana.isPhantom ? window.solana : null) || null,
+      (window.backpack && window.backpack.isBackpack ? window.backpack : null) || null,
+      (window.solflare && window.solflare.isSolflare ? window.solflare : null) || null,
+    ].filter(Boolean);
+    const connected = candidates.find(p => p.publicKey || p.isConnected);
+    return connected || candidates[0] || null;
   }
 
-  // Make sure we’re connected (Phantom etc.)
-  try {
-    if (!provider.publicKey) {
-      await provider.connect?.(); // Phantom/Backpack
+  async function ensureBlockhashAndPayer(connection, tx, feePayerPubkey) {
+    if (!tx.feePayer) tx.feePayer = feePayerPubkey;
+    if (!tx.recentBlockhash) {
+      const { blockhash } = await connection.getLatestBlockhash("finalized");
+      tx.recentBlockhash = blockhash;
     }
-  } catch (e) {
-    throw new Error("WALLET_CONNECT_REJECTED");
+    return tx;
   }
 
-  await ensureBlockhashAndPayer(connection, tx, provider.publicKey);
+  async function sendTxUniversal({ connection, tx }) {
+    const provider = getInjectedProvider();
+    if (!provider) {
+      throw new Error("WALLET_NOT_FOUND");
+    }
+    try {
+      if (!provider.publicKey) {
+        await provider.connect?.();
+      }
+    } catch (e) {
+      throw new Error("WALLET_CONNECT_REJECTED");
+    }
 
-  // 1) Phantom mobile “transact” (preferred if present)
-  if (typeof provider.transact === "function") {
-    const sig = await provider.transact(async (wallet) => {
-      const res = await wallet.signAndSendTransaction(tx);
-      return res?.signature || res; // Phantom may return { signature }
-    });
-    return sig;
+    await ensureBlockhashAndPayer(connection, tx, provider.publicKey);
+
+    if (typeof provider.transact === "function") {
+      const sig = await provider.transact(async (wallet) => {
+        const res = await wallet.signAndSendTransaction(tx);
+        return res?.signature || res;
+      });
+      return sig;
+    }
+    if (typeof provider.signAndSendTransaction === "function") {
+      const res = await provider.signAndSendTransaction(tx);
+      return res?.signature || res;
+    }
+    if (typeof provider.signTransaction === "function") {
+      const signed = await provider.signTransaction(tx);
+      const raw = signed.serialize();
+      const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
+      return sig;
+    }
+    if (typeof provider.signAllTransactions === "function") {
+      const [signed] = await provider.signAllTransactions([tx]);
+      const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 });
+      return sig;
+    }
+    throw new Error("WALLET_NO_SEND_METHOD");
   }
 
-  // 2) Modern path: signAndSendTransaction
-  if (typeof provider.signAndSendTransaction === "function") {
-    const res = await provider.signAndSendTransaction(tx);
-    return res?.signature || res;
-  }
-
-  // 3) Legacy: signTransaction -> sendRaw
-  if (typeof provider.signTransaction === "function") {
-    const signed = await provider.signTransaction(tx);
-    const raw = signed.serialize();
-    const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
-    return sig;
-  }
-
-  // 4) Really old fallback
-  if (typeof provider.signAllTransactions === "function") {
-    const [signed] = await provider.signAllTransactions([tx]);
-    const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 });
-    return sig;
-  }
-
-  // No known method exposed
-  throw new Error("WALLET_NO_SEND_METHOD");
-}
-  
   // DOM helpers (defensive)
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel || ""));
@@ -184,7 +167,6 @@ async function sendTxUniversal({ connection, tx }) {
   // Number formatting helpers
   let DECIMALS = Number(TOKEN.decimals || 6);
   let TEN_POW = 10 ** DECIMALS;
-  const pow10 = (n) => Math.pow(10, n);
   const fmtUnits = (units, decimals = DECIMALS) => {
     if (units == null) return "—";
     const t = Number(units) / Math.pow(10, decimals);
@@ -228,7 +210,7 @@ async function sendTxUniversal({ connection, tx }) {
     if (!window.__TREATZ_DEBUG) return;
 
     function showDiag(msg, kind) {
-      if (!window.__TREATZ_DEBUG) return;   // <— added guard
+      if (!window.__TREATZ_DEBUG) return;
       if (!document.body) {
         document.addEventListener("DOMContentLoaded", () => showDiag(msg, kind));
         return;
@@ -289,12 +271,12 @@ async function sendTxUniversal({ connection, tx }) {
   // FX: fx-layer root and primitives
   // -------------------------
   const fxRoot = (() => {
-      try {
+    try {
       let n = document.getElementById("fx-layer");
       if (!n) {
         n = document.createElement("div");
         n.id = "fx-layer";
-        n.classList.add("fx-layer");          // ensure CSS hooks apply
+        n.classList.add("fx-layer");
         n.setAttribute("aria-hidden", "true");
         document.body.appendChild(n);
         console.log("[TREATZ] fx-layer created");
@@ -320,7 +302,6 @@ async function sendTxUniversal({ connection, tx }) {
     }
   })();
 
-  // Ensure top-level to avoid transformed ancestor clipping
   (function ensureFxRootTopLevel() {
     try {
       const fx = document.getElementById("fx-layer");
@@ -406,16 +387,14 @@ async function sendTxUniversal({ connection, tx }) {
 </svg>`;
   }
 
-  // spawn piece primitive — robust: resolves fxRoot at call time, uses animationend to cleanup
+  // spawn piece primitive
   function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
     try {
-      // resolve fxRoot dynamically so we don't rely on a closure-captured value
       let root = document.getElementById("fx-layer") || fxRoot;
       if (!root) {
-        // fallback: create it (very defensive)
         root = document.createElement("div");
         root.id = "fx-layer";
-        root.classList.add("fx-layer"); // <-- add this
+        root.classList.add("fx-layer");
         root.setAttribute("aria-hidden", "true");
         document.body.appendChild(root);
         Object.assign(root.style, {
@@ -428,7 +407,6 @@ async function sendTxUniversal({ connection, tx }) {
       const el = document.createElement("div");
       el.className = `fx-piece ${kind}`;
 
-      // sensible randomized visuals
       const rotation = Math.floor(rand(-28, 28));
       const r1 = `${Math.floor(rand(240, 720))}deg`;
       const scaleVal = Number(sizeScale) || 1;
@@ -441,22 +419,20 @@ async function sendTxUniversal({ connection, tx }) {
       el.style.setProperty("--r0", `${rotation}deg`);
       el.style.setProperty("--r1", r1);
 
-      // decide SVG / content by kind
       let svg = "";
-
       if (kind === "fx-wrapper") {
         const color = opts.color || opts.colorHex || "#FF6B00";
         el.style.setProperty("--fx-color", color);
-        el.style.color = color; // ensure currentColor works in SVG
+        el.style.color = color;
         el.classList.add("fx-piece--win");
         svg = svgWrapper(color);
       } else if (kind === "fx-candy") {
         el.classList.add("fx-piece--win");
-        el.style.color = "#39FF14"; // slime green for candy
+        el.style.color = "#39FF14";
         svg = svgCandy();
       } else if (kind === "fx-ghost") {
         el.classList.add("fx-piece--loss", "fx-piece--ghost");
-        el.style.color = "#94DAFF"; // ghost blue
+        el.style.color = "#94DAFF";
         svg = svgGhost();
       } else if (kind === "fx-skull" || kind === "fx-loss" || kind === "fx-bone") {
         el.classList.add("fx-piece--loss");
@@ -468,26 +444,19 @@ async function sendTxUniversal({ connection, tx }) {
         svg = svgSkull();
       }
 
-      // guarantee color reaches inline SVGs
       el.innerHTML = svg;
       el.querySelectorAll("svg, path, rect, circle, text").forEach(n => {
         n.style.fill = "currentColor";
       });
 
-      solidifySVG(el);   // ensure solid fills/opacity
+      solidifySVG(el);
 
-      // GPU hints
       el.style.willChange = "transform, opacity";
-
-      // append and force reflow to kick animations
       root.appendChild(el);
-      // important: ensure styles apply before we rely on animationstart
       void el.offsetWidth;
 
-      // explicit initial transform (non-blocking)
       el.style.transform = `translateY(-6%) rotate(${Math.floor(rand(-20,20))}deg) scale(${scaleVal})`;
 
-      // cleanup: prefer animationend but keep a fallback timeout
       let removed = false;
       const removeNow = () => {
         if (removed) return;
@@ -495,13 +464,10 @@ async function sendTxUniversal({ connection, tx }) {
         try {
           if (el.__treatz_rm) { clearTimeout(el.__treatz_rm); el.__treatz_rm = null; }
           el.remove();
-        } catch (e) { /* ignore */ }
+        } catch (e) {}
       };
 
-      // remove when animation ends (covers most browsers)
       el.addEventListener("animationend", () => removeNow(), { once: true });
-
-      // fallback: remove after the expected duration + safety margin
       const removeAfter = Math.max(900, Math.round(Number(duration) * 1000) + 750);
       el.__treatz_rm = setTimeout(removeNow, removeAfter);
 
@@ -523,7 +489,7 @@ async function sendTxUniversal({ connection, tx }) {
       });
     } catch(e) {}
   }
-  
+
   const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00'];
 
   function rainTreatz({ count = 24, wrappers = true, candies = true, minDur = 4.5, maxDur = 7 } = {}) {
@@ -584,7 +550,6 @@ async function sendTxUniversal({ connection, tx }) {
     const front = document.querySelector(".coin__face--front");
     const back = document.querySelector(".coin__face--back");
     if (!front || !back) return;
-    // FRONT is labeled TRICK in HTML, so front should get trickImg
     Object.assign(front.style, {
       background: `center/contain no-repeat url('${trickImg}')`,
       border: "none", textIndent: "-9999px"
@@ -595,7 +560,6 @@ async function sendTxUniversal({ connection, tx }) {
     });
   }
 
-  // Defensive wrapper to ensure consistent ordering (trick -> treat)
   function applyCoinFaces({ trickImg, treatImg } = {}) {
     try {
       trickImg = trickImg || (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
@@ -609,11 +573,6 @@ async function sendTxUniversal({ connection, tx }) {
   function setCoinVisual(landed) {
     const result = String(landed || "").toUpperCase();
     const isTreat = (result === "TREAT");
-    const treatImg = (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
-    const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
-    if (typeof setCoinFaces === "function") {
-      try { setCoinFaces(trickImg, treatImg); } catch (_) { /* ignore */ }
-    }
     const coinRoot = document.getElementById("coin") || document.querySelector(".coin");
     if (coinRoot) coinRoot.dataset.coinResult = landed;
     if (coinRoot) {
@@ -627,7 +586,6 @@ async function sendTxUniversal({ connection, tx }) {
     }
   }
 
-  // Set initial coin faces on DOMContentLoaded
   document.addEventListener("DOMContentLoaded", () => {
     const treatImg = (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
     const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
@@ -724,7 +682,7 @@ async function sendTxUniversal({ connection, tx }) {
     document.getElementById("btn-open-in-phantom-3"),
     document.getElementById("btn-open-in-phantom-modal"),
   ].filter(Boolean);
-  
+
   function updateDeepLinkVisibility(PUBKEY = null) {
     if (!deepLinks.length) return;
     const href = phantomDeepLinkForThisSite();
@@ -883,7 +841,6 @@ async function sendTxUniversal({ connection, tx }) {
     return null;
   };
 
-  // helper
   function setWalletUIEnabled(enabled = true) {
     const qs = '#btn-connect, #btn-connect-2, #btn-openwallet, #btn-openwallet-2';
     document.querySelectorAll(qs).forEach(b => {
@@ -892,17 +849,12 @@ async function sendTxUniversal({ connection, tx }) {
       b.setAttribute('aria-disabled', String(!enabled));
       b.classList.toggle('is-disabled', !enabled);
     });
-    // optional: also hide the modal trigger buttons
     const modal = document.getElementById('wallet-modal');
     if (modal && !enabled) modal.hidden = true;
     window.__WALLET_DISABLED__ = !enabled;
   }
+  setWalletUIEnabled(true);
 
-  // call it
-  // setWalletUIEnabled(false); // disable
-   setWalletUIEnabled(true); // enable again
-
-  
   // Wallet state
   let WALLET = null;
   let PUBKEY = null;
@@ -915,7 +867,8 @@ async function sendTxUniversal({ connection, tx }) {
     const connectBtns = $$("#btn-connect, #btn-connect-2");
     const openBtns = $$("#btn-openwallet, #btn-openwallet-2");
     if (PUBKEY) {
-      const short = typeof PUBKEY === "string" ? (PUBKEY.slice(0, 4) + "…" + PUBKEY.slice(-4)) : (PUBKEY.toBase58 ? (PUBKEY.toBase58().slice(0, 4) + "…" + PUBKEY.toBase58().slice(-4)) : "wallet");
+      const s = typeof PUBKEY === "string" ? PUBKEY : (PUBKEY.toBase58 ? PUBKEY.toBase58() : "wallet");
+      const short = s.slice(0,4) + "…" + s.slice(-4);
       connectBtns.forEach(b => b && (b.textContent = "Disconnect"));
       openBtns.forEach(b => { if (!b) return; b.textContent = `Wallet (${short})`; b.hidden = false; });
     } else {
@@ -942,7 +895,6 @@ async function sendTxUniversal({ connection, tx }) {
     return CONFIG;
   }
 
-  // --- Wallet balance updater + event ---
   async function refreshWalletBalance() {
     try {
       const wrap = document.getElementById("wallet-balance-wrap");
@@ -969,14 +921,12 @@ async function sendTxUniversal({ connection, tx }) {
         const bal = await connection.getTokenAccountBalance(ata, "confirmed");
         ui = Number(bal?.value?.uiAmount || 0);
       } catch {
-        ui = 0; // ATA may not exist yet
+        ui = 0;
       }
 
-      // Render
       out.textContent = ui.toLocaleString(undefined, { maximumFractionDigits: 0 });
       if (wrap) wrap.hidden = false;
 
-      // Broadcast for any listeners
       window.dispatchEvent(new CustomEvent("treatz-wallet-change", {
         detail: { pubkey: PUBKEY, balance: ui, balanceBase: Math.floor(ui * TEN_POW) }
       }));
@@ -984,19 +934,14 @@ async function sendTxUniversal({ connection, tx }) {
       console.warn("refreshWalletBalance failed", e);
     }
   }
-
-  // optional: expose for console/tests
   window.refreshWalletBalance = refreshWalletBalance;
 
-  
-  // Minimal connect toggles — real wallet plumbing used elsewhere
+  // Minimal connect toggles
   $$("#btn-connect, #btn-connect-2").forEach(btn => btn?.addEventListener("click", async () => {
     try {
-      // disconnect if currently connected
       if (PUBKEY) {
         try { await WALLET?.disconnect?.(); } catch {}
         PUBKEY = null; WALLET = null;
-        // also clear globals so other modules see the disconnect
         window.PUBKEY = null;
         window.provider = null;
         window.WALLET = null;
@@ -1011,27 +956,21 @@ async function sendTxUniversal({ connection, tx }) {
         getBackpackProvider() && "backpack",
       ].filter(Boolean);
 
-      // if only one provider available, attempt connect inline
       if (present.length === 1) {
         const name = present[0], p = getProviderByName(name);
         try {
           if (p && p.connect) {
-            // keep a global pointer to the provider
             window.provider = p;
             window.WALLET = p;
             const res = await p.connect({ onlyIfTrusted: false }).catch(() => null);
-            // resolve public key from various provider shapes
             const resolved = (res?.publicKey?.toString?.() || p.publicKey?.toString?.() || window.solana?.publicKey?.toString?.() || null);
             if (resolved) {
               PUBKEY = resolved;
               WALLET = p;
-              // mirror to globals for other modules & built bundles
               window.PUBKEY = PUBKEY;
               window.WALLET = WALLET;
               window.provider = p;
-              // expose a walletPlumbing flag for legacy guards
               window.walletPlumbingReady = !!PUBKEY && !!p;
-              // attach connect/disconnect handlers if provider supports them
               if (typeof p.on === 'function') {
                 try {
                   p.on('connect', (pk) => {
@@ -1045,7 +984,7 @@ async function sendTxUniversal({ connection, tx }) {
                     window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
                     setWalletLabels();
                   });
-                } catch (ee) { /* ignore event wiring errors */ }
+                } catch {}
               }
               setWalletLabels();
               toast("Wallet connected");
@@ -1055,12 +994,10 @@ async function sendTxUniversal({ connection, tx }) {
         } catch (e) { console.warn("wallet connect failed", e); }
       }
 
-      // fallback: open wallet modal
       const modal = document.getElementById("wallet-modal");
       if (modal) modal.hidden = false;
     } catch (err) { console.error("[btn-connect] error", err); alert(err?.message || "Failed to open wallet."); }
   }));
-
 
   // Wallet modal menu
   const menu = document.getElementById("wallet-menu") || document.querySelector(".wm__list");
@@ -1075,7 +1012,6 @@ async function sendTxUniversal({ connection, tx }) {
       try {
         const p = getProviderByName(w);
         if (p && p.connect) {
-          // keep global refs
           window.provider = p;
           window.WALLET = p;
           const res = await p.connect({ onlyIfTrusted: false }).catch(() => null);
@@ -1086,13 +1022,11 @@ async function sendTxUniversal({ connection, tx }) {
               null);
           PUBKEY = got;
           WALLET = p;
-          // mirror to globals
           window.PUBKEY = PUBKEY;
           window.WALLET = WALLET;
           window.provider = p;
           window.walletPlumbingReady = !!PUBKEY && !!p;
 
-          // attach connect/disconnect handlers if available
           if (typeof p.on === 'function') {
             try {
               p.on('connect', (pk) => {
@@ -1105,7 +1039,7 @@ async function sendTxUniversal({ connection, tx }) {
                 window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
                 setWalletLabels();
               });
-            } catch (_) { /* ignore */ }
+            } catch {}
           }
 
           setWalletLabels();
@@ -1117,46 +1051,39 @@ async function sendTxUniversal({ connection, tx }) {
     })();
   });
 
-  // On load: if an injected provider already has a publicKey, populate globals
-(function hydrateProviderOnLoad() {
-  try {
-    const p = getPhantomProvider() || getSolflareProvider() || getBackpackProvider() || window.solana;
-    // Some providers expose publicKey immediately (trusted connection) — hydrate app state with it
-    const foundPk = p?.publicKey || window.solana?.publicKey;
-    if (p && foundPk) {
-      const s = (p.publicKey && typeof p.publicKey.toString === 'function' && p.publicKey.toString()) ||
-                (window.solana?.publicKey && typeof window.solana.publicKey.toString === 'function' && window.solana.publicKey.toString()) ||
-                null;
-      if (s) {
-        PUBKEY = s;
-        WALLET = p;
-        // mirror to globals for other script modules and the built bundle to read
-        window.PUBKEY = s;
-        window.WALLET = p;
-        window.provider = p;
-        window.walletPlumbingReady = true;
-        setWalletLabels();
-        console.log("[TREATZ] hydrated provider on load ->", s);
+  // Hydrate provider on load (trusted connection)
+  (function hydrateProviderOnLoad() {
+    try {
+      const p = getPhantomProvider() || getSolflareProvider() || getBackpackProvider() || window.solana;
+      const foundPk = p?.publicKey || window.solana?.publicKey;
+      if (p && foundPk) {
+        const s = (p.publicKey && typeof p.publicKey.toString === 'function' && p.publicKey.toString()) ||
+                  (window.solana?.publicKey && typeof window.solana.publicKey.toString === 'function' && window.solana.publicKey.toString()) ||
+                  null;
+        if (s) {
+          PUBKEY = s; WALLET = p;
+          window.PUBKEY = s; window.WALLET = p; window.provider = p;
+          window.walletPlumbingReady = true;
+          setWalletLabels();
+          console.log("[TREATZ] hydrated provider on load ->", s);
 
-        // wire connect/disconnect events if provider supports them
-        if (typeof p.on === 'function') {
-          try {
-            p.on('connect', (pk) => {
-              const str = (pk && typeof pk.toString === 'function' && pk.toString()) ||
-                          (p.publicKey && typeof p.publicKey.toString === 'function' && p.publicKey.toString()) || null;
-              PUBKEY = str; window.PUBKEY = str; window.walletPlumbingReady = !!str; setWalletLabels();
-            });
-            p.on('disconnect', () => {
-              PUBKEY = null; WALLET = null; window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
-              setWalletLabels();
-            });
-          } catch (_) { /* ignore event wiring errors */ }
+          if (typeof p.on === 'function') {
+            try {
+              p.on('connect', (pk) => {
+                const str = (pk && typeof pk.toString === 'function' && pk.toString()) ||
+                            (p.publicKey && typeof p.publicKey.toString === 'function' && p.publicKey.toString()) || null;
+                PUBKEY = str; window.PUBKEY = str; window.walletPlumbingReady = !!str; setWalletLabels();
+              });
+              p.on('disconnect', () => {
+                PUBKEY = null; WALLET = null; window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
+                setWalletLabels();
+              });
+            } catch {}
+          }
         }
       }
-    }
-  } catch (e) { /* ignore hydration errors */ }
-})();
-
+    } catch {}
+  })();
 
   // -------------------------
   // Ticker (faux feed)
@@ -1228,32 +1155,24 @@ async function sendTxUniversal({ connection, tx }) {
     } catch (e) { console.error("loadPlayerStats", e); }
   }
   setInterval(loadPlayerStats, 15000);
-   
+
   // -------------------------
-  // SPL token helpers (use imports when available)
+  // SPL token helpers
   // -------------------------
   async function getOrCreateATA(owner, mintPk, payer) {
     const ownerPk   = new PublicKey(owner);
     const mintPkObj = new PublicKey(mintPk);
-
-    // pick correct token program (classic vs Token-2022)
     const tokenProgramId = await getTokenProgramForMint(mintPkObj);
-
-    // derive ATA with the SAME token program id (and allow owner off-curve)
     const ata = getAssociatedTokenAddressSync(
       mintPkObj,
       ownerPk,
-      true,            // allowOwnerOffCurve
+      true,
       tokenProgramId
     );
-
-    // does it exist already?
     const info = await connection.getAccountInfo(ata, "confirmed");
     if (info) {
       return { ata, ix: null, tokenProgramId };
     }
-
-    // create idempotently (won't fail if created by a race)
     const ix = createAssociatedTokenAccountIdempotentInstruction(
       new PublicKey(payer),
       ata,
@@ -1261,7 +1180,6 @@ async function sendTxUniversal({ connection, tx }) {
       mintPkObj,
       tokenProgramId
     );
-
     return { ata, ix, tokenProgramId };
   }
 
@@ -1276,172 +1194,144 @@ async function sendTxUniversal({ connection, tx }) {
   }
 
   async function sendSignedTransaction(tx) {
-  // Prefer the active WALLET, otherwise detect an injected provider
-  const provider = WALLET || getInjectedProvider();
-  if (!provider) throw new Error("WALLET_NOT_FOUND");
+    const provider = WALLET || getInjectedProvider();
+    if (!provider) throw new Error("WALLET_NOT_FOUND");
+    const payerPk =
+      provider.publicKey ||
+      (PUBKEY && new PublicKey(PUBKEY)) ||
+      tx.feePayer;
+    await ensureBlockhashAndPayer(connection, tx, payerPk);
 
-  // Ensure feePayer + recentBlockhash are set before any signing
-  const payerPk =
-    provider.publicKey ||
-    (PUBKEY && new PublicKey(PUBKEY)) ||
-    tx.feePayer;
-  await ensureBlockhashAndPayer(connection, tx, payerPk);
-
-  // 1) Phantom mobile preferred path
-  if (typeof provider.transact === "function") {
-    const res = await provider.transact(async (w) => w.signAndSendTransaction(tx));
-    return res?.signature || res;
+    if (typeof provider.transact === "function") {
+      const res = await provider.transact(async (w) => w.signAndSendTransaction(tx));
+      return res?.signature || res;
+    }
+    if (typeof provider.signAndSendTransaction === "function") {
+      const res = await provider.signAndSendTransaction(tx);
+      return res?.signature || res;
+    }
+    if (typeof provider.signTransaction === "function") {
+      const signed = await provider.signTransaction(tx);
+      const raw = signed.serialize();
+      const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
+      try { await connection.confirmTransaction(sig, "confirmed"); } catch {}
+      return sig;
+    }
+    if (typeof provider.sendTransaction === "function") {
+      const sig = await provider.sendTransaction(tx, connection);
+      try { await connection.confirmTransaction(sig, "confirmed"); } catch {}
+      return sig;
+    }
+    throw new Error("WALLET_NO_SEND_METHOD");
   }
-
-  // 2) Modern path
-  if (typeof provider.signAndSendTransaction === "function") {
-    const res = await provider.signAndSendTransaction(tx);
-    return res?.signature || res;
-  }
-
-  // 3) Legacy path
-  if (typeof provider.signTransaction === "function") {
-    const signed = await provider.signTransaction(tx);
-    const raw = signed.serialize();
-    const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
-    try { await connection.confirmTransaction(sig, "confirmed"); } catch {}
-    return sig;
-  }
-
-  // 4) Very old fallback
-  if (typeof provider.sendTransaction === "function") {
-    const sig = await provider.sendTransaction(tx, connection);
-    try { await connection.confirmTransaction(sig, "confirmed"); } catch {}
-    return sig;
-  }
-
-  throw new Error("WALLET_NO_SEND_METHOD");
-}
 
   // -------------------------
-  // Coin flip UI — simulate when no wallet, on-chain when connected
+  // Coin flip UI
   // -------------------------
- (function wireCoinFlipUI() {
-  // How long the coin spin lasts (read from CSS if present)
-  function getSpinMs() {
-    const coin = document.getElementById("coin") || document.querySelector(".coin");
-    if (!coin) return 1600;
-    const s = getComputedStyle(coin).animationDuration || "1.6s";
-    const n = parseFloat(s) || 1.6;
-    return /ms$/i.test(s) ? n : n * 1000;
-  }
+  (function wireCoinFlipUI() {
+    function getSpinMs() {
+      const coin = document.getElementById("coin") || document.querySelector(".coin");
+      if (!coin) return 1600;
+      const s = getComputedStyle(coin).animationDuration || "1.6s";
+      const n = parseFloat(s) || 1.6;
+      return /ms$/i.test(s) ? n : n * 1000;
+    }
 
-  // Simulated flip used when no wallet is connected
-  function simulateFlip() {
-    const coin = document.getElementById("coin") || document.querySelector(".coin");
-    if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+    function simulateFlip() {
+      const coin = document.getElementById("coin") || document.querySelector(".coin");
+      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
 
-    // read chosen side from form (defensive)
-    const form = document.getElementById("bet-form");
-    const side = (form ? (new FormData(form)).get("side") : null) || "TRICK";
+      const form = document.getElementById("bet-form");
+      const side = (form ? (new FormData(form)).get("side") : null) || "TRICK";
 
-    // simulate spin/settle delay to match CSS .spin duration
-    setTimeout(() => {
+      setTimeout(() => {
+        try {
+          const landedTreat = Math.random() < 0.5;
+          const landed = landedTreat ? "TREAT" : "TRICK";
+          const chosen = String(side || "TRICK").toUpperCase();
+          const win = (landed === chosen);
+
+          if (coin) {
+            coin.classList.remove("spin", "coin--show-trick", "coin--show-treat");
+            coin.classList.add(landedTreat ? "coin--show-treat" : "coin--show-trick");
+            void coin.offsetWidth;
+          }
+          try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
+          try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
+          try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
+
+          const statusEl = document.getElementById("cf-status");
+          if (statusEl) {
+            statusEl.textContent = (win ? `WIN — ${landed}` : `LOSS — ${landed}`);
+            statusEl.setAttribute("role", "status");
+            statusEl.setAttribute("aria-live", "polite");
+          }
+          if (window.__TREATZ_DEBUG) {
+            console.log("[TREATZ] (SIM) coin flip result:", { chosen, landed, win });
+          }
+        } catch (err) {
+          console.error("coin flip settle handler error", err);
+        }
+      }, getSpinMs());
+    }
+
+    async function handleFlip(e) {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
       try {
-        const landedTreat = Math.random() < 0.5;
-        const landed = landedTreat ? "TREAT" : "TRICK";
-        const chosen = String(side || "TRICK").toUpperCase();
-        const win = (landed === chosen);
-
-        // stop the spin animation and set final visual state (use the same classes used by setCoinVisual)
-        if (coin) {
-          coin.classList.remove("spin", "coin--show-trick", "coin--show-treat");
-          coin.classList.add(landedTreat ? "coin--show-treat" : "coin--show-trick");
-          void coin.offsetWidth; // force reflow so CSS transitions settle predictably
-        }
-
-        // update visuals first (face images & classes)
-        try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
-
-        // 🔊 FX + banner
-        try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
-        try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
-
-        // update status text under coin
-        const statusEl = document.getElementById("cf-status");
-        if (statusEl) {
-          statusEl.textContent = (win ? `WIN — ${landed}` : `LOSS — ${landed}`);
-          statusEl.setAttribute("role", "status");
-          statusEl.setAttribute("aria-live", "polite");
-        }
-
-        if (window.__TREATZ_DEBUG) {
-          console.log("[TREATZ] (SIM) coin flip result:", { chosen, landed, win });
+        const connected = !!(window.PUBKEY || window.WALLET || (typeof PUBKEY !== "undefined" && PUBKEY));
+        const canTransact = connected && !!(window.WALLET || (typeof WALLET !== "undefined" && WALLET));
+        if (canTransact) {
+          await placeCoinFlip();
+        } else {
+          toast("Simulating — connect wallet to play for real");
+          simulateFlip();
         }
       } catch (err) {
-        console.error("coin flip settle handler error", err);
+        console.error("flip handler error", err);
+        alert(err?.message || "Failed to place bet.");
       }
-    }, getSpinMs());
-  }
-
-  // Central handler used by all bindings
-  async function handleFlip(e) {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
-    try {
-      const connected = !!(window.PUBKEY || window.WALLET || (typeof PUBKEY !== "undefined" && PUBKEY));
-      const canTransact = connected && !!(window.WALLET || (typeof WALLET !== "undefined" && WALLET));
-      if (canTransact) {
-        await placeCoinFlip();  // builds transferChecked + Memo and requests signature
-      } else {
-        toast("Simulating — connect wallet to play for real");
-        simulateFlip();
-      }
-    } catch (err) {
-      console.error("flip handler error", err);
-      alert(err?.message || "Failed to place bet.");
     }
-  }
 
-  // Expose for console/inline HTML
-  window.flipNow = handleFlip;
+    window.flipNow = handleFlip;
 
-  // Try a bunch of common selectors so markup changes don’t break the game
-  const selectors = [
-    "#cf-play",
-    "#cf-place",
-    "#flip-now",
-    ".cf__play",
-    'button[name="flip"]',
-    '[data-action="flip"]'
-  ];
+    const selectors = [
+      "#cf-play",
+      "#cf-place",
+      "#flip-now",
+      ".cf__play",
+      'button[name="flip"]',
+      '[data-action="flip"]'
+    ];
 
-  let bound = false;
-  for (const sel of selectors) {
-    document.querySelectorAll(sel).forEach(btn => {
-      if (!btn || btn.__treatzFlipBound) return;
-      btn.addEventListener("click", handleFlip, { passive: false });
-      btn.__treatzFlipBound = true;
+    let bound = false;
+    for (const sel of selectors) {
+      document.querySelectorAll(sel).forEach(btn => {
+        if (!btn || btn.__treatzFlipBound) return;
+        btn.addEventListener("click", handleFlip, { passive: false });
+        btn.__treatzFlipBound = true;
+        bound = true;
+      });
+    }
+
+    const betForm = document.getElementById("bet-form");
+    if (betForm && !betForm.__treatzFlipBound) {
+      betForm.addEventListener("submit", handleFlip, { passive: false });
+      betForm.__treatzFlipBound = true;
       bound = true;
-    });
-  }
+    }
 
-  // Also catch <form id="bet-form"> submit (pressing Enter, etc.)
-  const betForm = document.getElementById("bet-form");
-  if (betForm && !betForm.__treatzFlipBound) {
-    betForm.addEventListener("submit", handleFlip, { passive: false });
-    betForm.__treatzFlipBound = true;
-    bound = true;
-  }
-
-  // If nothing was found now, set up a delegated listener so late-loaded DOM still works.
-  if (!bound) {
-    document.addEventListener("click", (e) => {
-      const btn = e.target.closest?.('[data-action="flip"], #cf-play, #cf-place, #flip-now, .cf__play, button[name="flip"]');
-      if (btn) handleFlip(e);
-    }, { passive: false });
-  }
-})();
+    if (!bound) {
+      document.addEventListener("click", (e) => {
+        const btn = e.target.closest?.('[data-action="flip"], #cf-play, #cf-place, #flip-now, .cf__play, button[name="flip"]');
+        if (btn) handleFlip(e);
+      }, { passive: false });
+    }
+  })();
 
   // placeCoinFlip: full backend flow when wallet available
   async function placeCoinFlip() {
     try {
-      // DIAGNOSTIC: print wallet runtime capabilities
       console.log("[TREATZ][diag] placeCoinFlip start", {
         PUBKEY,
         WALLET,
@@ -1457,17 +1347,16 @@ async function sendTxUniversal({ connection, tx }) {
       const amountHuman = Number(document.getElementById("bet-amount").value || "0");
       const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
       if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
-      // app.js — placeCoinFlip()
+
       const bet = await jfetch(`${API}/bets`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ amount: toBaseUnits(amountHuman), side })
+        body: JSON.stringify({ amount: Math.floor(amountHuman * TEN_POW), side })
       });
       const betId = bet.bet_id;
       $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
       $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
 
-      // ⬇️ NEW: show commit (server_seed_hash) for fairness right away
       {
         const edge = document.getElementById("edge-line");
         if (edge && bet.server_seed_hash) {
@@ -1477,7 +1366,6 @@ async function sendTxUniversal({ connection, tx }) {
 
       const mintPk = new PublicKey(CONFIG.token.mint);
 
-      // Resolve destination ATA (create if backend didn't give one)
       let destAtaPk, createDestIx = null;
       if (CONFIG.vaults?.game_vault_ata) {
         destAtaPk = new PublicKey(CONFIG.vaults.game_vault_ata);
@@ -1495,19 +1383,17 @@ async function sendTxUniversal({ connection, tx }) {
       const payerRaw = PUBKEY;
       const payerPub = (typeof payerRaw === "string") ? new PublicKey(payerRaw) : payerRaw;
 
-      // Prefer the real token account if user holds a non-ATA; otherwise use ATA (create if needed)
       const { ata: computedAta, ix: createSrc, tokenProgramId } =
         await getOrCreateATA(payerPub, mintPk, payerPub);
-      
+
       let realSrc = computedAta;
-      
-      // Pick the token account with the largest balance, not the first one
+
       const found = await connection.getTokenAccountsByOwner(
         payerPub,
         { mint: mintPk },
         "confirmed"
       ).catch(() => null);
-      
+
       if (found?.value?.length) {
         let best = { pubkey: computedAta, amt: -1 };
         for (const it of found.value) {
@@ -1517,38 +1403,36 @@ async function sendTxUniversal({ connection, tx }) {
         }
         realSrc = best.pubkey;
       }
-      
-      // Preflight balance check (human units for coin-flip)
+
       const bal = await connection.getTokenAccountBalance(realSrc, "confirmed").catch(() => null);
       const uiBal = Number(bal?.value?.uiAmount || 0);
       const needHuman = Number(amountHuman);
       if (uiBal < needHuman) {
         toast(`Insufficient ${TOKEN.symbol}: have ${uiBal.toLocaleString()}, need ${needHuman.toLocaleString()}`);
-        return; // stop before building the tx
+        return;
       }
 
-      // (Optional safety): verify the token account’s owner matches payerPub
       try {
         const info = await connection.getParsedAccountInfo(realSrc, "confirmed");
         const ownerStr = info?.value?.data?.parsed?.info?.owner;
         if (ownerStr && ownerStr !== payerPub.toBase58()) {
           throw new Error("Token account is not owned by connected wallet");
         }
-      } catch (_) { /* best effort */ }
+      } catch {}
 
       const ixs = [];
-      if (createSrc) ixs.push(createSrc);       // create ATA if user had none
-      if (createDestIx) ixs.push(createDestIx); // keep from your previous patch
+      if (createSrc) ixs.push(createSrc);
+      if (createDestIx) ixs.push(createDestIx);
       ixs.push(
         createTransferCheckedInstruction(
-          realSrc,            // <— use the actual token account
+          realSrc,
           mintPk,
           destAtaPk,
           payerPub,
-          toBaseUnits(amountHuman),
+          Math.floor(amountHuman * TEN_POW),
           DECIMALS,
-          [],                 // no multisig signers
-          tokenProgramId      // <-- critical
+          [],
+          tokenProgramId
         ),
         memoIx(bet.memo)
       );
@@ -1561,7 +1445,6 @@ async function sendTxUniversal({ connection, tx }) {
       $("#cf-status")?.replaceChildren(document.createTextNode(signature ? `Sent: ${signature.slice(0, 10)}…` : "Sent"));
       const coin = $("#coin");
       if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
-      // FX will trigger on actual result inside pollBetUntilSettle()
       pollBetUntilSettle(betId).catch(() => { });
     } catch (e) {
       console.error(e);
@@ -1575,30 +1458,24 @@ async function sendTxUniversal({ connection, tx }) {
       await new Promise(r => setTimeout(r, 1500));
       try {
         const b = await jfetch(`${API}/bets/${betId}`);
-                if ((b.status || "").toUpperCase() === "SETTLED") {
+        if ((b.status || "").toUpperCase() === "SETTLED") {
           const win = !!b.win;
           const result = win ? "TREAT" : "TRICK";
 
-          // coin face + side
           setCoinVisual(result);
-
-          // 🔊 FX + banner
           playResultFX(result);
           showWinBanner(win ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
 
           $("#cf-status")?.replaceChildren(document.createTextNode(win ? "WIN!" : "LOSS"));
           return;
         }
-
-      } catch { /* ignore */ }
+      } catch {}
     }
     $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
   }
 
-  // Coin flip place button wiring for real flow (if you want to hook it)
   $("#cf-place")?.addEventListener("click", (e) => { e.preventDefault(); placeCoinFlip().catch(() => {}); });
 
-  // show banner on win/loss
   function showWinBanner(text) {
     try {
       const el = document.createElement("div");
@@ -1614,335 +1491,328 @@ async function sendTxUniversal({ connection, tx }) {
     } catch (e) { console.warn("showWinBanner failed", e); }
   }
 
-// ==========================
-// Wheel of Fate — Frontend
-// ==========================
-(function initWheel() {
-  const API = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
-  const DECIMALS = Number(window.TREATZ_CONFIG?.token?.decimals || 6);
-  const TEN = 10 ** DECIMALS;
+  // ==========================
+  // Wheel of Fate — Frontend
+  // ==========================
+  (function initWheel() {
+    const API = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
+    const DECIMALS = Number(window.TREATZ_CONFIG?.token?.decimals || 6);
+    const TEN = 10 ** DECIMALS;
 
-  // DOM refs
-  const elSvg = document.getElementById("wheel-svg");
-  const elSpin = document.getElementById("wheel-spin");
-  const elFreeBtn = document.getElementById("wheel-freespin");
-  const elPrice = document.getElementById("wheel-price");
-  const elPriceBtn = document.getElementById("wheel-price-btn");
-  const elCommit = document.getElementById("wheel-commit");
-  const elToast = document.getElementById("wheel-toast");
-  const elFree = document.getElementById("wheel-free");
-  const elStatus = document.getElementById("wheel-status");
-  const elConnect = document.getElementById("wheel-connect");
-  const elOpenPh = document.getElementById("wheel-open-in-phantom");
-  const elAddr    = document.getElementById("wheel-addr");
-  const elMode    = document.getElementById("wheel-mode");
-  const elHist = document.getElementById("wheel-history");
-  const elHistList = document.getElementById("wheel-history-list");
+    // DOM refs
+    const elSvg = document.getElementById("wheel-svg");
+    const elSpin = document.getElementById("wheel-spin");
+    const elFreeBtn = document.getElementById("wheel-freespin");
+    const elPrice = document.getElementById("wheel-price");
+    const elPriceBtn = document.getElementById("wheel-price-btn");
+    const elCommit = document.getElementById("wheel-commit");
+    const elToast = document.getElementById("wheel-toast");
+    const elFree = document.getElementById("wheel-free");
+    const elStatus = document.getElementById("wheel-status");
+    const elConnect = document.getElementById("wheel-connect");
+    const elOpenPh = document.getElementById("wheel-open-in-phantom");
+    const elAddr    = document.getElementById("wheel-addr");
+    const elMode    = document.getElementById("wheel-mode");
+    const elHist = document.getElementById("wheel-history");
+    const elHistList = document.getElementById("wheel-history-list");
 
-  if (!elSvg || !elSpin) return;
+    if (!elSvg || !elSpin) return;
 
-  // Prize model (MORE losses than wins; must mirror backend labels)
-  const PRIZES = [
-    { label:"💀 Ghosted",           type:"loss", amount:0,        w:0.16 },
-    { label:"🕸️ Cobwebs",           type:"loss", amount:0,        w:0.12 },
-    { label:"🧟 Haunted Detour",    type:"loss", amount:0,        w:0.10 },
-    { label:"🕯️ Candle Went Out",  type:"loss", amount:0,        w:0.08 },
-    { label:"🎃 Pumpkin Smash",     type:"loss", amount:0,        w:0.06 },
-    { label:"🧙‍♀️ Witch Tax",       type:"loss", amount:0,        w:0.04 },
-    { label:"👻 Phantom Fees",      type:"loss", amount:0,        w:0.02 },
+    // Prize model
+    const PRIZES = [
+      { label:"💀 Ghosted",           type:"loss", amount:0,        w:0.16 },
+      { label:"🕸️ Cobwebs",           type:"loss", amount:0,        w:0.12 },
+      { label:"🧟 Haunted Detour",    type:"loss", amount:0,        w:0.10 },
+      { label:"🕯️ Candle Went Out",  type:"loss", amount:0,        w:0.08 },
+      { label:"🎃 Pumpkin Smash",     type:"loss", amount:0,        w:0.06 },
+      { label:"🧙‍♀️ Witch Tax",       type:"loss", amount:0,        w:0.04 },
+      { label:"👻 Phantom Fees",      type:"loss", amount:0,        w:0.02 },
 
-    { label:"🍬 50,000",            type:"win",  amount:50_000,    w:0.09 },
-    { label:"🍬 100,000",           type:"win",  amount:100_000,   w:0.07 },
-    { label:"🍬 250,000",           type:"win",  amount:250_000,   w:0.05 },
-    { label:"🍬 500,000",           type:"win",  amount:500_000,   w:0.04 },
-    { label:"🍬 1,000,000",         type:"win",  amount:1_000_000, w:0.03 },
-    { label:"🍬 2,000,000",         type:"win",  amount:2_000_000, w:0.02 },
+      { label:"🍬 50,000",            type:"win",  amount:50_000,    w:0.09 },
+      { label:"🍬 100,000",           type:"win",  amount:100_000,   w:0.07 },
+      { label:"🍬 250,000",           type:"win",  amount:250_000,   w:0.05 },
+      { label:"🍬 500,000",           type:"win",  amount:500_000,   w:0.04 },
+      { label:"🍬 1,000,000",         type:"win",  amount:1_000_000, w:0.03 },
+      { label:"🍬 2,000,000",         type:"win",  amount:2_000_000, w:0.02 },
 
-    { label:"🎁 Free Spin x1",      type:"free", amount:0,         w:0.08, free:1 },
-    { label:"🎁 Free Spin x2",      type:"free", amount:0,         w:0.03, free:2 },
-    { label:"🎁 Free Spin x3",      type:"free", amount:0,         w:0.01, free:3 },
-  ];
+      { label:"🎁 Free Spin x1",      type:"free", amount:0,         w:0.08, free:1 },
+      { label:"🎁 Free Spin x2",      type:"free", amount:0,         w:0.03, free:2 },
+      { label:"🎁 Free Spin x3",      type:"free", amount:0,         w:0.01, free:3 },
+    ];
 
-  // Draw wheel slices
-  function drawWheel() {
-    const cx=200, cy=200, r=190;
-    elSvg.innerHTML = "";
-    const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
-    let a0 = -Math.PI/2; // start at top (pointer)
-    PRIZES.forEach((p)=>{
-      const a1 = a0 + 2*Math.PI*(p.w/sumW);
-      const x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0);
-      const x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
-      const large = (a1-a0) > Math.PI ? 1:0;
-      const path = document.createElementNS("http://www.w3.org/2000/svg","path");
-      path.setAttribute("d", `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`);
-      path.setAttribute("class", p.type === "win" ? "slice-win" : (p.type==="free"?"slice-free":"slice-loss"));
-      elSvg.appendChild(path);
+    // Draw wheel slices
+    function drawWheel() {
+      const cx=200, cy=200, r=190;
+      elSvg.innerHTML = "";
+      const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
+      let a0 = -Math.PI/2;
+      PRIZES.forEach((p)=>{
+        const a1 = a0 + 2*Math.PI*(p.w/sumW);
+        const x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0);
+        const x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
+        const large = (a1-a0) > Math.PI ? 1:0;
+        const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+        path.setAttribute("d", `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`);
+        path.setAttribute("class", p.type === "win" ? "slice-win" : (p.type==="free"?"slice-free":"slice-loss"));
+        elSvg.appendChild(path);
 
-      // label
-      const am = (a0+a1)/2, lr = r*0.68;
-      const lx = cx + lr*Math.cos(am), ly = cy + lr*Math.sin(am);
-      const t = document.createElementNS("http://www.w3.org/2000/svg","text");
-      t.setAttribute("x", lx.toFixed(1));
-      t.setAttribute("y", ly.toFixed(1));
-      t.setAttribute("class","slice-label");
-      t.textContent = p.label;
-      elSvg.appendChild(t);
+        const am = (a0+a1)/2, lr = r*0.68;
+        const lx = cx + lr*Math.cos(am), ly = cy + lr*Math.sin(am);
+        const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+        t.setAttribute("x", lx.toFixed(1));
+        t.setAttribute("y", ly.toFixed(1));
+        t.setAttribute("class","slice-label");
+        t.textContent = p.label;
+        elSvg.appendChild(t);
 
-      a0 = a1;
-    });
-    const ring = document.createElementNS("http://www.w3.org/2000/svg","circle");
-    ring.setAttribute("cx",cx); ring.setAttribute("cy",cy); ring.setAttribute("r",r-6);
-    ring.setAttribute("stroke","rgba(106,0,255,.45)"); ring.setAttribute("stroke-width","8"); ring.setAttribute("fill","none");
-    ring.setAttribute("class","wheel-glow");
-    elSvg.appendChild(ring);
-  }
-  drawWheel();
-
-  // Wallet UI state
-  function short(k) { return k ? (k.slice(0,4) + "…" + k.slice(-4)) : ""; }
-  function updateWheelWalletUI() {
-    const connected = !!(window.PUBKEY && window.WALLET);
-    if (connected) {
-      elConnect.hidden = true;
-      elAddr.hidden = false;
-      elAddr.textContent = short(PUBKEY);
-      elOpenPh.hidden = false;
-      try { elOpenPh.href = `https://phantom.app/ul/browse/${location.origin}`; } catch {}
-      elMode.textContent = "On-chain mode";
-    } else {
-      elConnect.hidden = false;
-      elAddr.hidden = true;
-      elOpenPh.hidden = true;
-      elMode.textContent = "Simulated (no wallet)";
+        a0 = a1;
+      });
+      const ring = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      ring.setAttribute("cx",cx); ring.setAttribute("cy",cy); ring.setAttribute("r",r-6);
+      ring.setAttribute("stroke","rgba(106,0,255,.45)"); ring.setAttribute("stroke-width","8"); ring.setAttribute("fill","none");
+      ring.setAttribute("class","wheel-glow");
+      elSvg.appendChild(ring);
     }
-  }
-  updateWheelWalletUI();
-  window.addEventListener("wallet:connected", updateWheelWalletUI);
-  window.addEventListener("wallet:disconnected", updateWheelWalletUI);
-  elConnect?.addEventListener("click", () => {
-    const globalBtn = document.getElementById("btn-connect");
-    if (globalBtn) globalBtn.click(); else window.open("https://phantom.app/", "_blank", "noopener");
-  });
+    drawWheel();
 
-  // price label (from config; fallback to 100k)
-  try {
-    const envPrice = Number(window.TREATZ_CONFIG?.wheelPrice || 100_000);
-    const txt = envPrice.toLocaleString();
-    if (elPrice) elPrice.textContent = txt;
-    if (elPriceBtn) elPriceBtn.textContent = txt;
-  } catch {
-
-  // toasts + history helpers
-  function toastWheel(msg) {
-    elToast.hidden = false;
-    elToast.textContent = msg;
-    setTimeout(()=>{ elToast.hidden = true; }, 4000);
-  }
-  function pushHistory(line) {
-    elHist.hidden = false;
-    const li = document.createElement("li");
-    li.textContent = line;
-    elHistList.prepend(li);
-    while (elHistList.children.length > 10) elHistList.lastChild.remove();
-  }
-
-  // credit poller
-  async function refreshWheelCredit() {
-    try {
-      if (!window.PUBKEY) { elFree.textContent = "0"; return; }
-      const r = await fetch(`${API}/credits/${window.PUBKEY}`).then(r=>r.json());
-      // backend stores as plain integer count; display raw
-      elFree.textContent = String(Number(r?.credit||0));
-    } catch {}
-  }
-  setInterval(refreshWheelCredit, 12000);
-  document.addEventListener("DOMContentLoaded", refreshWheelCredit);
-
-  // animation math
-  function spinToLabel(label) {
-    const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
-    let a0 = -Math.PI/2;
-    let targetAngle = 0;
-    for (const p of PRIZES) {
-      const a1 = a0 + 2*Math.PI*(p.w/sumW);
-      if (p.label === label) {
-        const am = (a0+a1)/2;
-        targetAngle = (Math.PI*1.5) - am; // pointer at top
-        break;
+    // Wallet UI state
+    function short(k) { return k ? (k.slice(0,4) + "…" + k.slice(-4)) : ""; }
+    function updateWheelWalletUI() {
+      const connected = !!(window.PUBKEY && window.WALLET);
+      if (connected) {
+        elConnect.hidden = true;
+        elAddr.hidden = false;
+        elAddr.textContent = short(PUBKEY);
+        elOpenPh.hidden = false;
+        try { elOpenPh.href = `https://phantom.app/ul/browse/${location.origin}`; } catch {}
+        elMode.textContent = "On-chain mode";
+      } else {
+        elConnect.hidden = false;
+        elAddr.hidden = true;
+        elOpenPh.hidden = true;
+        elMode.textContent = "Simulated (no wallet)";
       }
-      a0 = a1;
     }
-    const turns = 6 + Math.random()*2;
-    const deg = (turns*360) + (targetAngle*180/Math.PI);
-    elSvg.classList.add("spinning");
-    elSvg.style.transform = `rotate(${deg.toFixed(2)}deg)`;
-  }
+    updateWheelWalletUI();
+    window.addEventListener("wallet:connected", updateWheelWalletUI);
+    window.addEventListener("wallet:disconnected", updateWheelWalletUI);
+    elConnect?.addEventListener("click", () => {
+      const globalBtn = document.getElementById("btn-connect");
+      if (globalBtn) globalBtn.click(); else window.open("https://phantom.app/", "_blank", "noopener");
+    });
 
-  function resultLine(outcome) {
-    const msgsWin = [
-      "TREATZ rain from the crypt! 🍬",
-      "Summoned a sweet pump. 🎉",
-      "Full-size bar unlocked! 🟩",
-    ];
-    const msgsLoss = [
-      "Ghosts snatched your candy. 💀",
-      "Cobwebs only… try again? 🕸️",
-      "The cauldron cackles. 🧪",
-    ];
-    const msgsFree = [
-      "A witch slips you a free spin. 🧙‍♀️",
-      "The moon smiles—free spin granted. 🌕",
-    ];
-    if (outcome.type === "win") return `${outcome.label} — ${msgsWin[Math.floor(Math.random()*msgsWin.length)]}`;
-    if (outcome.type === "free") return `${outcome.label} — ${msgsFree[Math.floor(Math.random()*msgsFree.length)]}`;
-    return `${outcome.label} — ${msgsLoss[Math.floor(Math.random()*msgsLoss.length)]}`;
-  }
+    // price label (from config; fallback to 100k)
+    try {
+      const envPrice = Number(window.TREATZ_CONFIG?.wheelPrice || 100_000);
+      const txt = envPrice.toLocaleString();
+      if (elPrice) elPrice.textContent = txt;
+      if (elPriceBtn) elPriceBtn.textContent = txt;
+    } catch (e) {
+      // ignore
+    }
 
-  // polling for paid spin settlement
-  async function pollSpin(spinId, timeoutMs=45000) {
-    const t0 = Date.now();
-    while (Date.now()-t0 < timeoutMs) {
-      await new Promise(r=>setTimeout(r,1200));
+    // toasts + history helpers
+    function toastWheel(msg) {
+      elToast.hidden = false;
+      elToast.textContent = msg;
+      setTimeout(()=>{ elToast.hidden = true; }, 4000);
+    }
+    function pushHistory(line) {
+      elHist.hidden = false;
+      const li = document.createElement("li");
+      li.textContent = line;
+      elHistList.prepend(li);
+      while (elHistList.children.length > 10) elHistList.lastChild.remove();
+    }
+
+    // credit poller
+    async function refreshWheelCredit() {
       try {
-        const s = await fetch(`${API}/wheel/spins/${spinId}`).then(r=>r.json());
-        if ((s.status||"").toUpperCase()==="SETTLED") {
-          const outcome = { label:s.outcome_label, type: (s.prize_amount>0?"win": (s.free_spins>0?"free":"loss")), amount:s.prize_amount||0, free:s.free_spins||0 };
-          spinToLabel(outcome.label);
-          setTimeout(()=>{
-            try { playResultFX(outcome.type==="loss"?"LOSS":"WIN"); } catch{}
-            toastWheel(resultLine(outcome));
-            elStatus.textContent = outcome.type==="win" ? `WIN — ${outcome.label}` : (outcome.type==="free" ? `FREE — ${outcome.label}` : `LOSS — ${outcome.label}`);
-            refreshWheelCredit();
-            const amt = outcome.amount ? ` +${(outcome.amount / TEN).toLocaleString()} $TREATZ` : "";
-            const fs  = outcome.free   ? ` +${outcome.free} free` : "";
-            pushHistory(`[PAID] ${outcome.label}${amt}${fs}`);
-          }, 4600);
-          return;
-        }
+        if (!window.PUBKEY) { elFree.textContent = "0"; return; }
+        const r = await fetch(`${API}/credits/${window.PUBKEY}`).then(r=>r.json());
+        elFree.textContent = String(Number(r?.credit||0));
       } catch {}
     }
-    toastWheel("Settlement taking longer than usual. Check history later.");
-  }
+    setInterval(refreshWheelCredit, 12000);
+    document.addEventListener("DOMContentLoaded", refreshWheelCredit);
 
-  // simulate (no wallet)
-  function simulateSpin() {
-    const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
-    let r = Math.random()*sumW, pick = PRIZES[0];
-    for (const p of PRIZES) { r -= p.w; if (r <= 0) { pick = p; break; } }
-    elSvg.classList.add("spinning");
-    spinToLabel(pick.label);
-    setTimeout(()=>{
-      try { playResultFX(pick.type==="loss"?"LOSS":"WIN"); } catch{}
-      toastWheel(resultLine(pick));
-      elStatus.textContent = (pick.type==="win" ? `WIN — ${pick.label}` : (pick.type==="free" ? `FREE — ${pick.label}` : `LOSS — ${pick.label}`));
-      const amt = pick.amount ? ` +${pick.amount.toLocaleString()} $TREATZ` : "";
-      const fs  = pick.free   ? ` +${pick.free} free` : "";
-      pushHistory(`[SIM] ${pick.label}${amt}${fs}`);
-    }, 4600);
-  }
-
-  // paid spin (on-chain)
-  async function spinOnChain() {
-    elStatus.textContent = "Preparing spin…";
-    const body = { client_seed: Math.random().toString(16).slice(2) };
-    const spin = await fetch(`${API}/wheel/spins`, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body) }).then(r=>r.json());
-    elCommit.textContent = `Commit: ${spin.server_seed_hash.slice(0,12)}…`;
-
-    // Build SPL transfer (reuse libs imported at top of app.js)
-    const { PublicKey, Transaction } = window.solanaWeb3 || {};
-    const { createTransferCheckedInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } = window.splToken || {};
-    if (!PublicKey || !Transaction || !createTransferCheckedInstruction) { throw new Error("Wallet libs missing"); }
-
-    // global helpers from app.js
-    async function ensureConfig() { return; } // not needed if vaults are fixed server-side
-    function memoIx(memo) {
-      // simple Memo program ix (program id: MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr)
-      const pid = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-      return new window.solanaWeb3.TransactionInstruction({ keys: [], programId: pid, data: Buffer.from(memo, "utf8") });
-    }
-    async function getOrCreateATA(owner, mint, payer) {
-      const ata = await getAssociatedTokenAddress(mint, owner);
-      // Client-side "ensure" is best-effort; vault can receive without us creating src ATA if user already has it.
-      return { ata, ix: null };
-    }
-    async function sendSignedTransaction(tx) {
-      if (!window.WALLET || typeof window.WALLET.signAndSendTransaction !== "function") throw new Error("No wallet connected");
-      const { signature } = await window.WALLET.signAndSendTransaction(tx);
-      return signature;
-    }
-    async function jfetch(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(`${r.status}`); return r.json(); }
-
-    await ensureConfig();
-    const mintPk = new PublicKey(window.TREATZ_CONFIG?.token?.mint || "11111111111111111111111111111111"); // replace at runtime if provided
-    const payerPub = new PublicKey(window.PUBKEY);
-    const dest = new PublicKey(spin.deposit); // server tells us the deposit account (vault or ATA)
-    const { ata: srcAta } = await getOrCreateATA(payerPub, mintPk, payerPub);
-    const ixs = [];
-    ixs.push(
-      createTransferCheckedInstruction(srcAta, mintPk, dest, payerPub, BigInt(spin.amount), DECIMALS),
-      memoIx(spin.memo)
-    );
-    const bh = (await jfetch(`${API}/cluster/latest_blockhash`)).blockhash; // backend helper exists already  [oai_citation:2‡main.py](file-service://file-QyDC13gCLtv1yqtqx6X1mc)
-    const tx = new Transaction({ feePayer: payerPub, recentBlockhash: bh });
-    tx.add(...ixs);
-    await sendSignedTransaction(tx);
-
-    // Pre-spin flourish while webhook settles
-    elSvg.classList.add("spinning");
-    elSvg.style.transform = `rotate(${(720).toFixed(2)}deg)`;
-    pollSpin(spin.spin_id).catch(()=>{});
-  }
-
-  // Free spin via API (requires connected wallet)
-  async function doFreeSpin() {
-    if (!window.PUBKEY) { toastWheel("Connect wallet to use free spins."); return; }
-    try {
-      elFreeBtn.disabled = true;
-      elSpin.disabled = true;
-      elStatus.textContent = "Free spin casting…";
+    // animation math
+    function spinToLabel(label) {
+      const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
+      let a0 = -Math.PI/2;
+      let targetAngle = 0;
+      for (const p of PRIZES) {
+        const a1 = a0 + 2*Math.PI*(p.w/sumW);
+        if (p.label === label) {
+          const am = (a0+a1)/2;
+          targetAngle = (Math.PI*1.5) - am;
+          break;
+        }
+        a0 = a1;
+      }
+      const turns = 6 + Math.random()*2;
+      const deg = (turns*360) + (targetAngle*180/Math.PI);
       elSvg.classList.add("spinning");
-      elSvg.style.transform = `rotate(${(540).toFixed(2)}deg)`;
+      elSvg.style.transform = `rotate(${deg.toFixed(2)}deg)`;
+    }
 
-      const body = { wallet: window.PUBKEY, client_seed: Math.random().toString(16).slice(2) };
-      const r = await fetch(`${API}/wheel/spins/free`, {
-        method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body)
-      }).then(r=>r.json());
+    function resultLine(outcome) {
+      const msgsWin = [
+        "TREATZ rain from the crypt! 🍬",
+        "Summoned a sweet pump. 🎉",
+        "Full-size bar unlocked! 🟩",
+      ];
+      const msgsLoss = [
+        "Ghosts snatched your candy. 💀",
+        "Cobwebs only… try again? 🕸️",
+        "The cauldron cackles. 🧪",
+      ];
+      const msgsFree = [
+        "A witch slips you a free spin. 🧙‍♀️",
+        "The moon smiles—free spin granted. 🌕",
+      ];
+      if (outcome.type === "win") return `${outcome.label} — ${msgsWin[Math.floor(Math.random()*msgsWin.length)]}`;
+      if (outcome.type === "free") return `${outcome.label} — ${msgsFree[Math.floor(Math.random()*msgsFree.length)]}`;
+      return `${outcome.label} — ${msgsLoss[Math.floor(Math.random()*msgsLoss.length)]}`;
+    }
 
-      spinToLabel(r.outcome_label);
+    // polling for paid spin settlement
+    async function pollSpin(spinId, timeoutMs=45000) {
+      const t0 = Date.now();
+      while (Date.now()-t0 < timeoutMs) {
+        await new Promise(r=>setTimeout(r,1200));
+        try {
+          const s = await fetch(`${API}/wheel/spins/${spinId}`).then(r=>r.json());
+          if ((s.status||"").toUpperCase()==="SETTLED") {
+            const outcome = { label:s.outcome_label, type: (s.prize_amount>0?"win": (s.free_spins>0?"free":"loss")), amount:s.prize_amount||0, free:s.free_spins||0 };
+            spinToLabel(outcome.label);
+            setTimeout(()=>{
+              try { playResultFX(outcome.type==="loss"?"LOSS":"WIN"); } catch{}
+              toastWheel(resultLine(outcome));
+              elStatus.textContent = outcome.type==="win" ? `WIN — ${outcome.label}` : (outcome.type==="free" ? `FREE — ${outcome.label}` : `LOSS — ${outcome.label}`);
+              refreshWheelCredit();
+              const amt = outcome.amount ? ` +${(outcome.amount / TEN).toLocaleString()} $TREATZ` : "";
+              const fs  = outcome.free   ? ` +${outcome.free} free` : "";
+              pushHistory(`[PAID] ${outcome.label}${amt}${fs}`);
+            }, 4600);
+            return;
+          }
+        } catch {}
+      }
+      toastWheel("Settlement taking longer than usual. Check history later.");
+    }
+
+    // simulate (no wallet)
+    function simulateSpin() {
+      const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
+      let r = Math.random()*sumW, pick = PRIZES[0];
+      for (const p of PRIZES) { r -= p.w; if (r <= 0) { pick = p; break; } }
+      elSvg.classList.add("spinning");
+      spinToLabel(pick.label);
       setTimeout(()=>{
-        const type = r.prize_amount>0 ? "win" : (r.free_spins>0 ? "free" : "loss");
-        try { playResultFX(type==="loss"?"LOSS":"WIN"); } catch{}
-        toastWheel(type==="win" ? `${r.outcome_label} — 🎉` : (type==="free" ? `${r.outcome_label} — 🌕` : `${r.outcome_label} — 💀`));
-        elStatus.textContent = type.toUpperCase() + " — " + r.outcome_label;
-        refreshWheelCredit();
-        const amt = r.prize_amount ? ` +${(r.prize_amount / TEN).toLocaleString()} $TREATZ` : "";
-        const fs  = r.free_spins ? ` +${r.free_spins} free` : "";
-        pushHistory(`[FREE] ${r.outcome_label}${amt}${fs}`);
+        try { playResultFX(pick.type==="loss"?"LOSS":"WIN"); } catch{}
+        toastWheel(resultLine(pick));
+        elStatus.textContent = (pick.type==="win" ? `WIN — ${pick.label}` : (pick.type==="free" ? `FREE — ${pick.label}` : `LOSS — ${pick.label}`));
+        const amt = pick.amount ? ` +${pick.amount.toLocaleString()} $TREATZ` : "";
+        const fs  = pick.free   ? ` +${pick.free} free` : "";
+        pushHistory(`[SIM] ${pick.label}${amt}${fs}`);
+      }, 4600);
+    }
+
+    // paid spin (on-chain)
+    async function spinOnChain() {
+      elStatus.textContent = "Preparing spin…";
+      const body = { client_seed: Math.random().toString(16).slice(2) };
+      const spin = await fetch(`${API}/wheel/spins`, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body) }).then(r=>r.json());
+      elCommit.textContent = `Commit: ${spin.server_seed_hash.slice(0,12)}…`;
+
+      const { PublicKey, Transaction } = window.solanaWeb3 || {};
+      const { createTransferCheckedInstruction, getAssociatedTokenAddress } = window.splToken || {};
+      if (!PublicKey || !Transaction || !createTransferCheckedInstruction) { throw new Error("Wallet libs missing"); }
+
+      function memoIxLocal(memo) {
+        const pid = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+        const data = new TextEncoder().encode(memo || "");
+        return new window.solanaWeb3.TransactionInstruction({ keys: [], programId: pid, data });
+      }
+      async function getOrCreateATALocal(owner, mint) {
+        const ata = await getAssociatedTokenAddress(mint, owner);
+        return { ata, ix: null };
+      }
+      async function sendSignedTransactionLocal(tx) {
+        if (!window.WALLET || typeof window.WALLET.signAndSendTransaction !== "function") throw new Error("No wallet connected");
+        const res = await window.WALLET.signAndSendTransaction(tx);
+        return res?.signature || res;
+      }
+      async function jfetchLocal(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(`${r.status}`); return r.json(); }
+
+      const mintPk = new PublicKey(window.TREATZ_CONFIG?.token?.mint || "11111111111111111111111111111111");
+      const payerPub = new PublicKey(window.PUBKEY);
+      const dest = new PublicKey(spin.deposit);
+      const { ata: srcAta } = await getOrCreateATALocal(payerPub, mintPk);
+      const ixs = [
+        createTransferCheckedInstruction(srcAta, mintPk, dest, payerPub, BigInt(spin.amount), DECIMALS),
+        memoIxLocal(spin.memo)
+      ];
+      const bh = (await jfetchLocal(`${API}/cluster/latest_blockhash`)).blockhash;
+      const tx = new Transaction({ feePayer: payerPub, recentBlockhash: bh });
+      tx.add(...ixs);
+      await sendSignedTransactionLocal(tx);
+
+      elSvg.classList.add("spinning");
+      elSvg.style.transform = `rotate(${(720).toFixed(2)}deg)`;
+      pollSpin(spin.spin_id).catch(()=>{});
+    }
+
+    // Free spin via API (requires connected wallet)
+    async function doFreeSpin() {
+      if (!window.PUBKEY) { toastWheel("Connect wallet to use free spins."); return; }
+      try {
+        elFreeBtn.disabled = true;
+        elSpin.disabled = true;
+        elStatus.textContent = "Free spin casting…";
+        elSvg.classList.add("spinning");
+        elSvg.style.transform = `rotate(${(540).toFixed(2)}deg)`;
+
+        const body = { wallet: window.PUBKEY, client_seed: Math.random().toString(16).slice(2) };
+        const r = await fetch(`${API}/wheel/spins/free`, {
+          method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body)
+        }).then(r=>r.json());
+
+        spinToLabel(r.outcome_label);
+        setTimeout(()=>{
+          const type = r.prize_amount>0 ? "win" : (r.free_spins>0 ? "free" : "loss");
+          try { playResultFX(type==="loss"?"LOSS":"WIN"); } catch{}
+          toastWheel(type==="win" ? `${r.outcome_label} — 🎉` : (type==="free" ? `${r.outcome_label} — 🌕` : `${r.outcome_label} — 💀`));
+          elStatus.textContent = type.toUpperCase() + " — " + r.outcome_label;
+          refreshWheelCredit();
+          const amt = r.prize_amount ? ` +${(r.prize_amount / TEN).toLocaleString()} $TREATZ` : "";
+          const fs  = r.free_spins ? ` +${r.free_spins} free` : "";
+          pushHistory(`[FREE] ${r.outcome_label}${amt}${fs}`);
+          elFreeBtn.disabled = false;
+          elSpin.disabled = false;
+        }, 4600);
+      } catch (e) {
         elFreeBtn.disabled = false;
         elSpin.disabled = false;
-      }, 4600);
-    } catch (e) {
-      elFreeBtn.disabled = false;
-      elSpin.disabled = false;
-      toastWheel("Free spin failed.");
+        toastWheel("Free spin failed.");
+      }
     }
-  }
 
-  // Button handlers (simulate fallback if no wallet)
-  elSpin.addEventListener("click", async (e)=>{
-    e.preventDefault();
-    try {
-      const hasWallet = !!(window.PUBKEY && window.WALLET);
-      if (hasWallet) return spinOnChain();
-      toastWheel("Simulating — connect wallet to play for real.");
-      simulateSpin();
-    } catch (err) {
-      alert(err?.message || "Spin failed.");
-    }
-  });
-  elFreeBtn?.addEventListener("click", (e)=>{ e.preventDefault(); doFreeSpin(); });
-})();
+    // Button handlers (simulate fallback if no wallet)
+    elSpin.addEventListener("click", async (e)=>{
+      e.preventDefault();
+      try {
+        const hasWallet = !!(window.PUBKEY && window.WALLET);
+        if (hasWallet) return spinOnChain();
+        toastWheel("Simulating — connect wallet to play for real.");
+        simulateSpin();
+      } catch (err) {
+        alert(err?.message || "Spin failed.");
+      }
+    });
+    elFreeBtn?.addEventListener("click", (e)=>{ e.preventDefault(); doFreeSpin(); });
+  })();
 
   // -------------------------
   // Jackpot / Raffle UI
@@ -1966,30 +1836,23 @@ async function sendTxUniversal({ connection, tx }) {
     } catch (e) { console.error(e); alert(e?.message || "Ticket purchase failed."); }
   });
 
-  // Safe raffle purchase helper — modeled on placeCoinFlip()
-  // NOTE: adapt the POST endpoint/body if your backend expects something else.
+  // Safe raffle purchase helper
   window.startRafflePurchase = async function startRafflePurchase({ tickets = 1 } = {}) {
     try {
       await ensureConfig();
-      // ensure we have a pubkey + WALLET
       const runtimePub = PUBKEY || window.PUBKEY || null;
       if (!runtimePub) throw new Error("Connect wallet to buy tickets");
 
       if (!WALLET && window.WALLET) WALLET = window.WALLET;
       if (!WALLET) throw new Error("Wallet provider not available to sign transaction");
-  
-      // get current round (server):
+
       const round = await jfetch(`${API}/rounds/current`);
       const roundId = round?.round_id;
       if (!roundId) throw new Error("No active raffle round");
-  
-      // ticket price from config (server uses base units)
-      // ticket price (fallback) — server will return definitive amount in purchase.amount
+
       const ticketBase = Number(CONFIG?.raffle?.ticket_price ?? CONFIG?.token?.ticket_price ?? 0);
       if (!ticketBase) console.warn("Ticket price not in config; will rely on purchase.amount");
 
-      // create purchase order on backend - adapt endpoint if needed
-      // expected response should include deposit/memo like bets flow
       const purchase = await jfetch(`${API}/rounds/${encodeURIComponent(roundId)}/buy`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1997,22 +1860,15 @@ async function sendTxUniversal({ connection, tx }) {
       }).catch(() => null);
 
       if (!purchase || !purchase.memo) {
-        // If backend didn't return this endpoint shape, fall back to contacting a generic /buy endpoint
         console.warn("[TREATZ] buy endpoint returned no memo — purchase object:", purchase);
-        // try fallback to /bets-style endpoint (if your backend uses it)
-        // const purchase2 = await jfetch(`${API}/bets`, { method: "POST", headers:{...}, body: JSON.stringify({ amount: amountBase, side: "TICKET" }) });
-        // use purchase2 instead if available
         throw new Error("Purchase API did not return required payment payload. Confirm endpoint /rounds/:id/buy exists.");
       }
 
-      // Use server-declared amount (exact), fallback to client calc
       const amountBase = Number(purchase.amount ?? (ticketBase * Number(tickets || 1)));
-  
-      // Show deposit/memo for debugging
+
       $("#jp-deposit")?.replaceChildren(document.createTextNode(purchase.deposit || "—"));
       $("#jp-memo")?.replaceChildren(document.createTextNode(purchase.memo || "—"));
 
-      // Build transfer tx to JACKPOT vault (create ATA if backend didn't provide one)
       const mintPk = new PublicKey(CONFIG.token.mint);
 
       let destAtaPk, createDestIx = null;
@@ -2028,19 +1884,17 @@ async function sendTxUniversal({ connection, tx }) {
 
       const payerPub = (typeof runtimePub === "string") ? new PublicKey(runtimePub) : runtimePub;
 
-      // Resolve actual source token account (legacy TA or ATA)
       const { ata: computedAta, ix: createSrc, tokenProgramId } =
         await getOrCreateATA(payerPub, mintPk, payerPub);
-      
+
       let realSrc = computedAta;
-      
-      // Pick the token account with the largest balance
+
       const found = await connection.getTokenAccountsByOwner(
         payerPub,
         { mint: mintPk },
         "confirmed"
       ).catch(() => null);
-      
+
       if (found?.value?.length) {
         let best = { pubkey: computedAta, amt: -1 };
         for (const it of found.value) {
@@ -2050,8 +1904,7 @@ async function sendTxUniversal({ connection, tx }) {
         }
         realSrc = best.pubkey;
       }
-      
-      // Preflight balance check (BASE UNITS for raffle)
+
       const bal = await connection.getTokenAccountBalance(realSrc, "confirmed").catch(() => null);
       const haveBase = Number(bal?.value?.amount || 0);
       const needBase = Number(amountBase);
@@ -2059,7 +1912,7 @@ async function sendTxUniversal({ connection, tx }) {
         const haveHuman = haveBase / (10 ** Number(DECIMALS || 6));
         const needHuman = needBase / (10 ** Number(DECIMALS || 6));
         toast(`Insufficient ${TOKEN.symbol}: have ${haveHuman.toLocaleString()}, need ${needHuman.toLocaleString()}`);
-        return; // stop before building the tx
+        return;
       }
 
       const ixs = [];
@@ -2067,30 +1920,27 @@ async function sendTxUniversal({ connection, tx }) {
       if (createDestIx) ixs.push(createDestIx);
       ixs.push(
         createTransferCheckedInstruction(
-          realSrc,            // <— use the actual token account
+          realSrc,
           mintPk,
           destAtaPk,
           payerPub,
           Number(amountBase),
           DECIMALS,
-          [],                 // no multisig
+          [],
           tokenProgramId
         ),
         memoIx(purchase.memo || "")
       );
 
-      // fetch blockhash & send
       const bh = (await jfetch(`${API}/cluster/latest_blockhash`)).blockhash;
       const tx = new Transaction({ feePayer: payerPub });
       tx.recentBlockhash = bh;
       tx.add(...ixs);
 
-      // send using sendSignedTransaction helper (handles multiple provider shapes)
       const signature = await sendSignedTransaction(tx);
       if (!signature) throw new Error("Failed to send transaction");
 
       toast("Ticket purchase sent: " + signature.slice(0, 8) + "…");
-      // Optionally: poll server for purchase/round updates
       return signature;
     } catch (err) {
       console.error("startRafflePurchase failed", err);
@@ -2100,7 +1950,7 @@ async function sendTxUniversal({ connection, tx }) {
   };
 
   let __recentCache = [];
-  
+
   (async function initRaffleUI() {
     const errOut = (where, message) => {
       console.error(`[raffle:${where}]`, message);
@@ -2201,8 +2051,8 @@ async function sendTxUniversal({ connection, tx }) {
         try {
           const up = await jfetchStrict(`${API}/rounds/current`);
           if (up && up.round_id && up.round_id !== round.round_id) {
-            __recentCache = []; // invalidate history cache on new round
-            loadHistory();      // re-render with fresh data
+            __recentCache = [];
+            loadHistory();
             round = up;
             const newOpensAt = new Date(iso(round.opens_at));
             const newClosesAt = new Date(iso(round.closes_at));
@@ -2229,7 +2079,6 @@ async function sendTxUniversal({ connection, tx }) {
   async function loadHistory(query = "") {
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
 
-    // fetch once and cache
     if (!__recentCache.length) {
       tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
       try {
@@ -2259,7 +2108,7 @@ async function sendTxUniversal({ connection, tx }) {
     for (const r of recent) {
       const roundId = r.id || r.round_id || r[0] || "unknown";
       let w = null;
-      try { w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(roundId)}/winner`); } catch (e) { /* ignore per-row */ }
+      try { w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(roundId)}/winner`); } catch (e) {}
       const potHuman = (Number(r.pot || 0) / TEN_POW).toLocaleString();
       const winner = w?.winner || "—";
       const payout = w?.payout_sig || "—";
@@ -2287,15 +2136,14 @@ async function sendTxUniversal({ connection, tx }) {
       await ensureConfig();
       if (CONFIG?.raffle?.splits) {
         const s = CONFIG.raffle.splits || {};
-        // you confirmed SPLT_* are in percent; this is robust if someone later sets BPS
         const pct = (x) => {
           const n = Number(x || 0);
-          return !isFinite(n) ? 0 : (n <= 1 ? n * 100 : n); // allow 0.10 -> 10%
+          return !isFinite(n) ? 0 : (n <= 1 ? n * 100 : n);
         };
         const winner = pct(s.winner);
         const dev    = pct(s.dev);
         const burn   = pct(s.burn);
-        const protocol = Math.max(0, dev + burn); // what users care about most
+        const protocol = Math.max(0, dev + burn);
         const el = document.getElementById("edge-line");
         if (el) {
           el.textContent = `Protocol fee: ${protocol.toFixed(2)}% — Splits: ${winner.toFixed(2)}% winner • ${burn.toFixed(2)}% burn • ${dev.toFixed(2)}% dev`;
@@ -2327,7 +2175,7 @@ async function sendTxUniversal({ connection, tx }) {
     }
     a.muted = true; a.volume = 0; a.loop = true;
     const start = async () => {
-      try { await a.play(); } catch { }
+      try { await a.play(); } catch {}
       a.muted = false;
       let v = 0, tgt = 0.12;
       const fade = () => { v = Math.min(tgt, v + 0.02); a.volume = v; if (v < tgt) requestAnimationFrame(fade); };
@@ -2350,20 +2198,16 @@ async function sendTxUniversal({ connection, tx }) {
     e.preventDefault();
   });
 
-  // expose both under window.TREATZ and as direct globals for console/dev convenience
   window.TREATZ = window.TREATZ || {};
   Object.assign(window.TREATZ, {
     playResultFX, rainTreatz, hauntTrick, announceLastWinner, setCoinVisual, spawnPiece
   });
 
-  // make setCoinVisual directly callable from console/tests
   if (typeof window !== 'undefined') {
     window.setCoinVisual = setCoinVisual;
-    // optionally also expose setCoinFaces
     window.setCoinFaces = setCoinFaces;
   }
 
-  // FX debug wrapper
   (function fxDebugWrap(){
     if (!window.playResultFX) return;
     const orig = window.playResultFX;
