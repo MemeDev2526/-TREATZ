@@ -47,8 +47,8 @@ if (typeof window !== "undefined") {
 
 // 2) RPC connection
 const RPC_URL =
-  (window.TREATZ_CONFIG && window.TREATZ_CONFIG.rpcUrl) ||
-  ((window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "") + "/cluster");
+  window.TREATZ_CONFIG?.rpcUrl
+  || "https://api.mainnet-beta.solana.com";
 
 const connection = new Connection(RPC_URL, { commitment: "confirmed" });
 
@@ -1423,13 +1423,14 @@ export async function getAta(owner, mint) {
       const ixs = [];
       if (createSrc) ixs.push(createSrc);
       if (createDestIx) ixs.push(createDestIx);
+      const amountBase = BigInt(Math.floor(amountHuman * TEN_POW)); // bigint ✅
       ixs.push(
         createTransferCheckedInstruction(
           realSrc,
           mintPk,
           destAtaPk,
           payerPub,
-          Math.floor(amountHuman * TEN_POW),
+          amountBase, // bigint ✅
           DECIMALS,
           [],
           tokenProgramId
@@ -1864,7 +1865,7 @@ export async function getAta(owner, mint) {
         throw new Error("Purchase API did not return required payment payload. Confirm endpoint /rounds/:id/buy exists.");
       }
 
-      const amountBase = Number(purchase.amount ?? (ticketBase * Number(tickets || 1)));
+      const amountBase = BigInt(purchase.amount ?? (ticketBase * Number(tickets || 1))); // bigint ✅
 
       $("#jp-deposit")?.replaceChildren(document.createTextNode(purchase.deposit || "—"));
       $("#jp-memo")?.replaceChildren(document.createTextNode(purchase.memo || "—"));
@@ -1924,7 +1925,7 @@ export async function getAta(owner, mint) {
           mintPk,
           destAtaPk,
           payerPub,
-          Number(amountBase),
+          amountBase, // bigint ✅
           DECIMALS,
           [],
           tokenProgramId
