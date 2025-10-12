@@ -14,7 +14,7 @@ import base58 as _b58
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional  # <-- move this ABOVE _rfc3339
 def _rfc3339(dt: Optional[datetime]) -> Optional[str]:
-        """
+    """
     Return an RFC3339-style UTC timestamp ending with 'Z'.
     Accepts naive or aware datetimes and normalizes to UTC (no offset).
 
@@ -23,21 +23,18 @@ def _rfc3339(dt: Optional[datetime]) -> Optional[str]:
     """
     if dt is None:
         return None
-    # if naive, treat as UTC
+
     if dt.tzinfo is None:
+        # Treat naive as UTC; strip microseconds for a clean seconds-only stamp
         dt_utc = dt.replace(microsecond=0)
     else:
-        # convert to UTC and drop tzinfo for canonical Z suffix
-        dt_utc = dt.astimezone(timezone.utc).replace(microsecond=0)
+        # Convert to UTC and drop tzinfo so we can append 'Z'
+        dt_utc = dt.astimezone(timezone.utc).replace(microsecond=0, tzinfo=None)
 
-    # Use ISO format without offset, append 'Z'
-    # If dt_utc.isoformat() contains an offset (it won't after astimezone+replace above),
-    # we still strip anything after the seconds portion for safety.
-    iso = dt_utc.isoformat()
-    if iso.endswith("+00:00"):
-        iso = iso.rsplit("+", 1)[0]
-    # remove possible fractional seconds already handled by replace
+    # Ensure no offset remains and append 'Z'
+    iso = dt_utc.isoformat()  # e.g., '2025-10-12T17:22:33'
     return iso + "Z"
+    
 import os
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi import FastAPI, HTTPException, Request, Query
