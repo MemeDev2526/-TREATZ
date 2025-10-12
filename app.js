@@ -50,8 +50,8 @@ if (typeof window !== "undefined") {
 // 2) RPC connection
 const RPC_URL =
   (window.TREATZ_CONFIG && window.TREATZ_CONFIG.rpcUrl) ||
-  "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY";
-
+  ((window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "") + "/cluster");
+  
 const connection = new Connection(RPC_URL, { commitment: "confirmed" });
 
 // Warm-up probe so we fail fast & show a friendly message if RPC blocks the browser
@@ -721,9 +721,10 @@ async function sendTxUniversal({ connection, tx }) {
   const deepLinks = [
     document.getElementById("btn-open-in-phantom"),
     document.getElementById("btn-open-in-phantom-2"),
+    document.getElementById("btn-open-in-phantom-3"),
     document.getElementById("btn-open-in-phantom-modal"),
   ].filter(Boolean);
-
+  
   function updateDeepLinkVisibility(PUBKEY = null) {
     if (!deepLinks.length) return;
     const href = phantomDeepLinkForThisSite();
@@ -1626,6 +1627,7 @@ async function sendTxUniversal({ connection, tx }) {
   const elSpin = document.getElementById("wheel-spin");
   const elFreeBtn = document.getElementById("wheel-freespin");
   const elPrice = document.getElementById("wheel-price");
+  const elPriceBtn = document.getElementById("wheel-price-btn");
   const elCommit = document.getElementById("wheel-commit");
   const elToast = document.getElementById("wheel-toast");
   const elFree = document.getElementById("wheel-free");
@@ -1726,8 +1728,10 @@ async function sendTxUniversal({ connection, tx }) {
   // price label (from config; fallback to 100k)
   try {
     const envPrice = Number(window.TREATZ_CONFIG?.wheelPrice || 100_000);
-    elPrice.textContent = envPrice.toLocaleString();
-  } catch {}
+    const txt = envPrice.toLocaleString();
+    if (elPrice) elPrice.textContent = txt;
+    if (elPriceBtn) elPriceBtn.textContent = txt;
+  } catch {
 
   // toasts + history helpers
   function toastWheel(msg) {
