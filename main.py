@@ -12,8 +12,9 @@ import asyncio
 import traceback
 import base58 as _b58
 from datetime import datetime, timedelta, timezone
+from typing import Literal, Optional  # <-- move this ABOVE _rfc3339
 def _rfc3339(dt: Optional[datetime]) -> Optional[str]:
-    """
+        """
     Return an RFC3339-style UTC timestamp ending with 'Z'.
     Accepts naive or aware datetimes and normalizes to UTC (no offset).
 
@@ -1036,6 +1037,10 @@ async def get_config(include_balances: bool = False):
             "dev_wallet": DEV_WALLET or None,
             "burn_address": BURN_ADDRESS or None,
         },
+        "wheel": {
+            "spin_price_whole": int(getattr(settings, "WHEEL_SPIN_PRICE", 100_000)),
+            "spin_price_base": int(getattr(settings, "WHEEL_SPIN_PRICE", 100_000)) * (10 ** int(getattr(settings, "TOKEN_DECIMALS", 6))),
+        },
         "vaults": {
             "game_vault": settings.GAME_VAULT,
             "game_vault_ata": game_vault_ata or None,
@@ -1288,8 +1293,8 @@ async def get_spin(spin_id: str):
         "settled_at": row[11],
     }
 
-@app.get(f"{API}/credits/{{wallet}}")
-async def get_credits(wallet: str):
+@app.get(f"{API}/wheel/credits/{{wallet}}")
+async def get_wheel_credits(wallet: str):
     val = int((await dbmod.kv_get(app.state.db, f"wheel_credit:{wallet.lower()}")) or 0)
     return {"credit": val}
 
@@ -1413,10 +1418,67 @@ async def helius_webhook(request: Request):
         game_vault_ata      = (settings.GAME_VAULT_ATA or "").lower()
         jackpot_vault_ata   = (settings.JACKPOT_VAULT_ATA or "").lower()
 
+        # Wheel vaults (fall back to game if not set)
+        wheel_vault_owner   = (getattr(settings, "WHEEL_VAULT", "") or settings.GAME_VAULT or "").lower()
+        wheel_vault_ata     = (getattr(settings, "WHEEL_VAULT_ATA", "") or settings.GAME_VAULT_ATA or "").lower()
+
         def _to_matches(dest: str, ata: str, owner: str) -> bool:
             d = (dest or "").lower()
             return d == (ata or "") or d == (owner or "")
-            
+
+        # ---------------- Wheel of Fate deposits ----------------
+        if memo.startswith("WL:") and _to_matches(to_addr, wheel_vault_ata, wheel_vault_owner):
+            try:
+                _, spin_id, client_seed_sent = memo.split(":")
+            except Exception:
+                # Ignore malformed memo
+                continue
+
+            # Load spin row
+            async with app.state.db.execute(
+                "SELECT wager,status,client_seed,server_seed_hash,server_seed_reveal FROM spins WHERE id=?",
+                (spin_id,)
+            ) as cur:
+                row = await cur.fetchone()
+            if not row:
+                continue
+
+            wager = int(row[0] or 0)
+            prev_status = (row[1] or "").upper()
+            client_seed_db = row[2] or ""
+
+            # Idempotency: already settled?
+            if prev_status == "SETTLED":
+                continue
+
+            # Short deposit guard
+            if amt < wager:
+                await dbmod.kv_set(app.state.db, f"spin:{spin_id}:short_deposit", str(amt))
+                await app.state.db.commit()
+                continue
+
+            # Pull committed server seed
+            server_seed = await dbmod.kv_get(app.state.db, f"spin:{spin_id}:server_seed")
+            if not server_seed:
+                # cannot settle without the committed seed
+                await dbmod.kv_set(app.state.db, f"spin:{spin_id}:payout_error", "missing_server_seed")
+                await app.state.db.commit()
+                continue
+
+            # Record payer + tx on the spin
+            await app.state.db.execute(
+                "UPDATE spins SET user=?, tx_sig=? WHERE id=?",
+                (sender_raw, tx_sig, spin_id)
+            )
+            await app.state.db.commit()
+
+            # Settle (pays out if win; credits free spins)
+            try:
+                await _wheel_settle(app, spin_id, sender_raw, client_seed_db or client_seed_sent, server_seed)
+            except Exception:
+                traceback.print_exc()
+                # do not raise; keep processing other events
+
         # ---------------- Coin flip deposits ----------------
         if memo.startswith("BET:") and _to_matches(to_addr, game_vault_ata, game_vault_owner):
             try:
