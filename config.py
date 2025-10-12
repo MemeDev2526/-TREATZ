@@ -30,11 +30,14 @@ class Settings(BaseSettings):
     # =========================================================
     GAME_VAULT: str = os.getenv("GAME_VAULT", "5nRWo11VPGj8Ge67ntN5cAYPHxU6xfaFwrmH9ogdzuqf")
     JACKPOT_VAULT: str = os.getenv("JACKPOT_VAULT", "AQtwNnM727GZFB9VwqXdd3uXi1K7N7wrd14giRgEWN71")
+    WHEEL_VAULT: str = os.getenv("WHEEL_VAULT", "")
     GAME_VAULT_ATA: str = os.getenv("GAME_VAULT_ATA", "9vNPiCTRRJzb8pgERfxoYL2JybviL89q9966vrUN1hEp")
     JACKPOT_VAULT_ATA: str = os.getenv("JACKPOT_VAULT_ATA", "6MFMMdqTDZ4rCxmsRAq8mtTYLfV3huoG1SvSKXiqAdGH")
+    WHEEL_VAULT_ATA: str = os.getenv("WHEEL_VAULT_ATA", "")
     GAME_VAULT_PK: Optional[str] = os.getenv("GAME_VAULT_PK")
     JACKPOT_VAULT_PK: Optional[str] = os.getenv("JACKPOT_VAULT_PK")
-
+    WHEEL_VAULT_PK: Optional[str] = os.getenv("WHEEL_VAULT_PK")
+    
     # =========================================================
     # Token / Mint
     # =========================================================
@@ -50,7 +53,8 @@ class Settings(BaseSettings):
     SPLT_BURN: int = int(os.getenv("SPLT_BURN", "10"))
     SPLT_DEV: int = int(os.getenv("SPLT_DEV", "10"))
     SPLT_WINNER: int = int(os.getenv("SPLT_WINNER", "80"))
-
+     # Wheel of Fate: price per spin (expressed in whole $TREATZ; converted to base units in backend)
+    WHEEL_SPIN_PRICE: int = int(os.getenv("WHEEL_SPIN_PRICE", "100000"))
     # =========================================================
     # Game Logic
     # =========================================================
