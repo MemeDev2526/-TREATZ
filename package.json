@@ -10,7 +10,7 @@
     "build": "vite build --base=/static/ --outDir static",
     "build:ci": "npm run build:app && npm run build",
     "preview": "vite preview --outDir static"
-  }
+  },
   "dependencies": {
     "@solana/web3.js": "^1.95.3",
     "@solana/spl-token": "^0.4.7",
