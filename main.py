@@ -38,7 +38,6 @@ def _rfc3339(dt: Optional[datetime]) -> Optional[str]:
         iso = iso.rsplit("+", 1)[0]
     # remove possible fractional seconds already handled by replace
     return iso + "Z"
-from typing import Literal, Optional
 import os
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi import FastAPI, HTTPException, Request, Query
