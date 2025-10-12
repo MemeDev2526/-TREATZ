@@ -662,6 +662,27 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   filter: blur(10px);
   z-index:-1;
 }
+
+/* ===== Wheel of Fate ===== */
+.wheel-card .wheel-wrap { position: relative; display:grid; place-items:center; min-height: 320px; }
+.wheel { width: 320px; height: 320px; filter: drop-shadow(0 12px 24px rgba(0,0,0,.45)); transform: rotate(0deg); transition: transform 1.2s cubic-bezier(.2,.85,.2,1); }
+.wheel.spinning { transition: transform 4.6s cubic-bezier(.08,.8,.08,1); }
+.wheel-pointer {
+  position:absolute; top:-6px; left:50%; transform: translateX(-50%);
+  font-weight:900; color: var(--slime); text-shadow:0 0 14px rgba(57,255,20,.55);
+}
+.slice-label { font-family: "Rubik", system-ui, sans-serif; font-weight:900; fill:#fff; font-size:12px; text-anchor:middle; }
+.slice-win  { fill: rgba(57,255,20,.28); }
+.slice-loss { fill: rgba(255,69,69,.26); }
+.slice-free { fill: rgba(148,218,255,.26); }
+.wheel-glow { filter: blur(6px); opacity:.85 }
+
+.btnrow { display:flex; gap:.5rem; flex-wrap:wrap; }
+#wheel-history-list { margin:.25rem 0 0; padding-left:1rem; }
+#wheel-freespin[disabled], #wheel-spin[disabled] { opacity:.6; pointer-events:none; }
+.tag { display:inline-block; padding:.1rem .4rem; border-radius:.35rem; background:rgba(255,255,255,.06); font-size:.75rem; }
+.wallet--inline .btn { margin-right:.4rem; }
+
 /* =========================================================
    Mascot floater
    ========================================================= */
