@@ -3,6 +3,11 @@ set -euo pipefail
 
 echo "[TREATZ] 🚀 Starting Render build…"
 
+# Build/stamp id for cache-busting (__BUILD__ in HTML/JS)
+BUILD_ID="${RENDER_GIT_COMMIT:-$(date +%s)}"
+BUILD_ID="${BUILD_ID:0:7}"
+echo "[TREATZ] 🧾 BUILD_ID=${BUILD_ID}"
+
 # ---- Python venv (optional) ----
 if [ -f requirements.txt ]; then
   if [ -f .venv/bin/activate ]; then
@@ -74,10 +79,19 @@ if [ -f "style.css" ]; then
   echo "[TREATZ] Copied repo-root style.css -> /static/style.css"
 fi
 
-# ---- Sanity logs ----
 echo "[TREATZ] 📦 Contents of static/:"
 ls -la static || true
 echo "[TREATZ] 🔎 Has .vite manifest for other assets?"
 [ -f static/.vite/manifest.json ] && echo "Yes (.vite/manifest.json)" || echo "No"
+
+# --- Stamp __BUILD__ placeholders (index.html + app.js if present)
+if [ -f static/index.html ]; then
+  sed -i.bak "s/__BUILD__/${BUILD_ID}/g" static/index.html || true
+  rm -f static/index.html.bak
+fi
+if [ -f static/app.js ]; then
+  sed -i.bak "s/__BUILD__/${BUILD_ID}/g" static/app.js || true
+  rm -f static/app.js.bak
+fi
 
 echo "[TREATZ] ✅ Build complete!"
