@@ -192,17 +192,16 @@ async def _ensure_ata_ixs(
 
     resp = await client.get_account_info(ata, commitment=Confirmed)
     ixs: List = []
-        if getattr(resp, "value", None) is None:
+    if getattr(resp, "value", None) is None:
         ixs.append(
             create_ata_idem(
                 payer=payer,
                 owner=owner,
                 mint=mint_pk,
-                token_program_id=token_prog,   # ensure correct token program (SPL or Token-2022)
+                token_program_id=token_prog,  # ensure correct token program (SPL or Token-2022)
             )
         )
     return ata, ixs
-
 # ---------------- Core SPL transfer ----------------
 async def _send_spl_from_vault(
     client: AsyncClient,
