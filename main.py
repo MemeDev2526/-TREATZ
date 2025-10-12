@@ -194,6 +194,11 @@ app.add_middleware(
 
 API = (getattr(settings, "API_PREFIX", "/api") or "/api").rstrip("/")
 
+# --- Wheel of Fate settings ---
+WHEEL_SPIN_PRICE = int(getattr(settings, "WHEEL_SPIN_PRICE", 100_000))  # whole tokens; backend will charge in base units
+TOKEN_DECIMALS = int(getattr(settings, "TOKEN_DECIMALS", 6))
+def _to_base(n: int) -> int: return int(n) * (10 ** TOKEN_DECIMALS)
+    
 # =========================================================
 # Crypto Helpers
 # =========================================================
@@ -1120,6 +1125,216 @@ async def list_round_entries(round_id: str, offset: int = 0, limit: int = 100):
         for r in rows
     ]
 
+# ---------------- Wheel of Fate: models ----------------
+class NewSpin(BaseModel):
+    client_seed: Optional[str] = None
+
+class SpinResp(BaseModel):
+    spin_id: str
+    server_seed_hash: str
+    deposit: str
+    memo: str
+    amount: int  # base units
+
+class SpinFullResp(BaseModel):
+    id: str
+    user: Optional[str] = None
+    wager: int
+    outcome_label: Optional[str] = None
+    prize_amount: Optional[int] = None
+    free_spins: int = 0
+    status: str
+    server_seed_hash: str
+    server_seed_reveal: Optional[str] = None
+    tx_sig: Optional[str] = None
+    created_at: str
+    settled_at: Optional[str] = None
+
+class FreeSpinReq(BaseModel):
+    wallet: str
+    client_seed: Optional[str] = None
+
+class FreeSpinResp(BaseModel):
+    id: str
+    outcome_label: str
+    prize_amount: int
+    free_spins: int
+    server_seed_hash: str
+    server_seed_reveal: str
+    salt: str
+    created_at: str
+    settled_at: str
+    
+# ---------- Helper: settle a wheel spin ----------
+async def _wheel_settle(app, spin_id: str, payer_wallet: str, client_seed: str, server_seed: str) -> dict:
+    try:
+        slot_now = await _rpc_get_slot()
+        blockhash, _ = await _rpc_get_blockhash_fallback(slot_now, 128, 32)
+    except Exception:
+        blockhash = secrets.token_hex(16)
+    salt = blockhash
+
+    digest = hmac.new(server_seed.encode(), f"{client_seed}|{salt}".encode(), hashlib.sha256).digest()
+    rnd = int.from_bytes(digest[:8], "big") / 2**64  # [0,1)
+
+    dec = int(getattr(settings, "TOKEN_DECIMALS", 6))
+    prize_table = [
+        {"label":"💀 Ghosted",            "type":"loss", "amount":0,                    "free":0, "w":0.16},
+        {"label":"🕸️ Cobwebs",            "type":"loss", "amount":0,                    "free":0, "w":0.12},
+        {"label":"🧟 Haunted Detour",     "type":"loss", "amount":0,                    "free":0, "w":0.10},
+        {"label":"🕯️ Candle Went Out",   "type":"loss", "amount":0,                    "free":0, "w":0.08},
+        {"label":"🎃 Pumpkin Smash",      "type":"loss", "amount":0,                    "free":0, "w":0.06},
+        {"label":"🧙‍♀️ Witch Tax",        "type":"loss", "amount":0,                    "free":0, "w":0.04},
+        {"label":"👻 Phantom Fees",       "type":"loss", "amount":0,                    "free":0, "w":0.02},
+
+        {"label":"🍬 50,000",             "type":"win",  "amount":(10**dec)*50_000,     "free":0, "w":0.09},
+        {"label":"🍬 100,000",            "type":"win",  "amount":(10**dec)*100_000,    "free":0, "w":0.07},
+        {"label":"🍬 250,000",            "type":"win",  "amount":(10**dec)*250_000,    "free":0, "w":0.05},
+        {"label":"🍬 500,000",            "type":"win",  "amount":(10**dec)*500_000,    "free":0, "w":0.04},
+        {"label":"🍬 1,000,000",          "type":"win",  "amount":(10**dec)*1_000_000,  "free":0, "w":0.03},
+        {"label":"🍬 2,000,000",          "type":"win",  "amount":(10**dec)*2_000_000,  "free":0, "w":0.02},
+
+        {"label":"🎁 Free Spin x1",       "type":"free", "amount":0,                    "free":1, "w":0.08},
+        {"label":"🎁 Free Spin x2",       "type":"free", "amount":0,                    "free":2, "w":0.03},
+        {"label":"🎁 Free Spin x3",       "type":"free", "amount":0,                    "free":3, "w":0.01},
+    ]
+
+    # pick weighted
+    acc = 0.0
+    pick = prize_table[-1]
+    for opt in prize_table:
+        acc += opt["w"]
+        if rnd <= acc:
+            pick = opt; break
+
+    prize_amt = int(pick["amount"] or 0)
+    free_spins = int(pick["free"] or 0)
+
+    await app.state.db.execute(
+        "UPDATE spins SET outcome_label=?, prize_amount=?, free_spins=?, status='SETTLED', server_seed_reveal=?, settled_at=? WHERE id=?",
+        (pick["label"], prize_amt, free_spins, server_seed, _rfc3339(datetime.now(timezone.utc)), spin_id)
+    )
+    await app.state.db.commit()
+
+    if prize_amt > 0 and payer_wallet:
+        try:
+            from payouts import pay_coinflip_winner as _pay  # or pay_wheel_winner if you added it
+            sig = await _pay(payer_wallet, prize_amt)
+            await dbmod.kv_set(app.state.db, f"spin:{spin_id}:payout_sig", sig)
+        except Exception:
+            traceback.print_exc()
+
+    if free_spins > 0 and payer_wallet:
+        key = f"wheel_credit:{payer_wallet.lower()}"
+        cur = int((await dbmod.kv_get(app.state.db, key)) or 0)
+        await dbmod.kv_set(app.state.db, key, str(cur + free_spins))
+
+    return {"label": pick["label"], "type": pick["type"], "amount": prize_amt, "free": free_spins, "salt": salt}
+
+# ---------- Wheel endpoints ----------
+@app.post(f"{API}/wheel/spins", response_model=SpinResp)
+async def create_spin(body: NewSpin):
+    price_whole = int(getattr(settings, "WHEEL_SPIN_PRICE", 100_000))
+    if price_whole <= 0:
+        raise HTTPException(500, "WHEEL_SPIN_PRICE not configured")
+    price = price_whole * (10 ** int(getattr(settings, "TOKEN_DECIMALS", 6)))
+
+    spin_id = secrets.token_hex(6)
+    server_seed = secrets.token_hex(32)
+    server_seed_hash = _hash(server_seed)
+    client_seed = (body.client_seed or secrets.token_hex(8))
+
+    await dbmod.kv_set(app.state.db, f"spin:{spin_id}:server_seed", server_seed)
+    await app.state.db.execute(
+        "INSERT INTO spins(id, user, wager, server_seed_hash, client_seed, status, created_at) VALUES(?,?,?,?,?,?,?)",
+        (spin_id, "", price, server_seed_hash, client_seed, "PENDING", _rfc3339(datetime.now(timezone.utc)))
+    )
+    await app.state.db.commit()
+
+    # pick vault or ATA to receive
+    deposit = (
+        getattr(settings, "WHEEL_VAULT_ATA", None) or
+        getattr(settings, "WHEEL_VAULT", None) or
+        getattr(settings, "GAME_VAULT_ATA", None) or
+        getattr(settings, "GAME_VAULT", None)
+    )
+    if not deposit:
+        raise HTTPException(500, "Game vault not configured")
+
+    memo = f"WL:{spin_id}:{client_seed}"
+    return {"spin_id": spin_id, "server_seed_hash": server_seed_hash, "deposit": deposit, "memo": memo, "amount": price}
+
+@app.get(f"{API}/wheel/spins/{{spin_id}}", response_model=SpinFullResp)
+async def get_spin(spin_id: str):
+    async with app.state.db.execute(
+        "SELECT id,user,wager,outcome_label,prize_amount,free_spins,status,server_seed_hash,server_seed_reveal,tx_sig,created_at,settled_at FROM spins WHERE id=?",
+        (spin_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if not row:
+        raise HTTPException(404, "Spin not found")
+    return {
+        "id": row[0],
+        "user": row[1],
+        "wager": int(row[2] or 0),
+        "outcome_label": row[3],
+        "prize_amount": int(row[4] or 0) if row[4] is not None else None,
+        "free_spins": int(row[5] or 0),
+        "status": row[6],
+        "server_seed_hash": row[7],
+        "server_seed_reveal": row[8],
+        "tx_sig": row[9],
+        "created_at": row[10],
+        "settled_at": row[11],
+    }
+
+@app.get(f"{API}/credits/{{wallet}}")
+async def get_credits(wallet: str):
+    val = int((await dbmod.kv_get(app.state.db, f"wheel_credit:{wallet.lower()}")) or 0)
+    return {"credit": val}
+
+@app.post(f"{API}/wheel/spins/free", response_model=FreeSpinResp)
+async def redeem_free_spin(body: FreeSpinReq):
+    wallet = (body.wallet or "").lower()
+    if not wallet:
+        raise HTTPException(400, "wallet required")
+    key = f"wheel_credit:{wallet}"
+    cur = int((await dbmod.kv_get(app.state.db, key)) or 0)
+    if cur <= 0:
+        raise HTTPException(400, "no free spins")
+    await dbmod.kv_set(app.state.db, key, str(cur - 1))
+
+    spin_id = secrets.token_hex(6)
+    server_seed = secrets.token_hex(32)
+    server_seed_hash = _hash(server_seed)
+    client_seed = body.client_seed or secrets.token_hex(8)
+
+    await dbmod.kv_set(app.state.db, f"spin:{spin_id}:server_seed", server_seed)
+    await app.state.db.execute(
+        "INSERT INTO spins(id,user,wager,server_seed_hash,client_seed,status,created_at) VALUES(?,?,?,?,?,?,?)",
+        (spin_id, wallet, 0, server_seed_hash, client_seed, "PENDING", _rfc3339(datetime.now(timezone.utc)))
+    )
+    await app.state.db.commit()
+
+    outcome = await _wheel_settle(app, spin_id, wallet, client_seed, server_seed)
+
+    async with app.state.db.execute(
+        "SELECT created_at, settled_at, outcome_label, prize_amount, free_spins, server_seed_hash, server_seed_reveal FROM spins WHERE id=?", (spin_id,)
+    ) as cur2:
+        row = await cur2.fetchone()
+
+    return {
+        "id": spin_id,
+        "outcome_label": row[2],
+        "prize_amount": int(row[3] or 0),
+        "free_spins": int(row[4] or 0),
+        "server_seed_hash": row[5],
+        "server_seed_reveal": row[6],
+        "salt": outcome["salt"],
+        "created_at": row[0],
+        "settled_at": row[1],
+    }
+    
 # =========================================================
 # Webhooks — Helius (MVP)
 # =========================================================
