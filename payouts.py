@@ -237,7 +237,7 @@ async def _send_spl_from_vault(
     # Ensure recipient ATA (vault pays)
     winner_ata, pre_ixs = await _ensure_ata_ixs(client, winner_wallet, payer=vault_wallet)
     # For vault ATA, program id must match the mint’s program
-    vault_ata = get_associated_token_address(vault_wallet, mint_pk)
+    vault_ata = get_associated_token_address(vault_pub, mint_pk, token_program_id=token_prog)
 
     tx = Transaction()
     for ix in pre_ixs:
@@ -374,12 +374,12 @@ async def pay_jackpot_split(
         if b_pub:
             b_ata, ixs = await _ensure_ata_ixs(client, b_pub, payer=vault_pub); pre_ixs += ixs
 
-        vault_ata = get_associated_token_address(vault_pub, mint_pk)
+        vault_ata = get_associated_token_address(vault_pub, mint_pk, token_program_id=token_prog)
 
         for ix in pre_ixs:
             tx.add(ix)
 
-                token_prog = await _mint_owner_program_id(client)  # NEW
+        token_prog = await _mint_owner_program_id(client)  # NEW
 
         # Use same transfer_checked positional form
         if w_pub and winner_amount > 0:
@@ -406,7 +406,7 @@ async def pay_jackpot_split(
                 bh = lbh["result"]["value"]["blockhash"]
             except Exception:
                 raise RuntimeError("Could not fetch latest blockhash")
-        tx.recent_blockhash = bh
+        tx.recent_blockhash = str(bh)
         tx.fee_payer = vault_pub
 
         # sign with vault keypair
