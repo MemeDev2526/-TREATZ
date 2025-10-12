@@ -188,17 +188,18 @@ async def _ensure_ata_ixs(
     token_prog = await _mint_owner_program_id(client)
 
     # For Token-2022, ATA derivation MUST include token_program_id
-    ata = get_associated_token_address(owner, mint_pk, token_program_id=token_prog)  # <-- important
+    ata = get_associated_token_address(owner, mint_pk, token_program_id=token_prog)
 
     resp = await client.get_account_info(ata, commitment=Confirmed)
     ixs: List = []
     if getattr(resp, "value", None) is None:
+        # create ATA idempotently if it doesn't exist
         ixs.append(
             create_ata_idem(
                 payer=payer,
                 owner=owner,
                 mint=mint_pk,
-                token_program_id=token_prog,  # ensure correct token program (SPL or Token-2022)
+                token_program_id=token_prog,  # correct program id (SPL or Token-2022)
             )
         )
     return ata, ixs
