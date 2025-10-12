@@ -138,8 +138,8 @@ a, .btn--outline { color: var(--slime); }
 .wm__icon.backpack{ background: #0ea5e9; }
 .wm:not([hidden]) .wm__card { transform: scale(1); opacity: 1; }
 
-/* Ensure wallet buttons aren’t under overlays */
-.tokenbar__actions, .wallet { position: relative; z-index: 20; }
+/* Ensure wallet & modals sit above FX layer */
+.tokenbar__actions, .wallet, .wm { position: relative; z-index: 100001; }
 
 /* =========================================================
    Top Banner & Global Countdown
@@ -466,8 +466,8 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   transform: rotateY(180deg);
 }
 /* Orientation helpers (front = TRICK, back = TREAT) */
-.coin--show-trick { transform: rotateY(0deg); }
-.coin--show-treat { transform: rotateY(180deg); }
+.coin--show-trick { transform: rotateY(0deg) !important; }
+.coin--show-treat { transform: rotateY(180deg) !important; }
 
 .coin__face{
   position: absolute; inset: 0; display: grid; place-items:center;
@@ -591,6 +591,12 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   85%  { transform: translate3d(-50%,-50%,0) translateY(90vh) rotate(480deg) scale(calc(var(--scale) * 0.97)); opacity: 1; }
   100% { transform: translate3d(-50%,-50%,0) translateY(110vh) rotate(540deg) scale(calc(var(--scale) * 1.0)); opacity: 0; }
 }
+/* Alias so JS that uses 'fall' still works */
+@keyframes fall {
+  0%   { transform: translate3d(-50%,-50%,0) translateY(-8vh) rotate(0deg) scale(var(--scale)); opacity: 1; }
+  85%  { transform: translate3d(-50%,-50%,0) translateY(90vh) rotate(480deg) scale(calc(var(--scale) * 0.97)); opacity: 1; }
+  100% { transform: translate3d(-50%,-50%,0) translateY(110vh) rotate(540deg) scale(calc(var(--scale) * 1.0)); opacity: 0; }
+}
 @keyframes treatz-sway {
   0%   { transform: translate3d(-50%,-50%,0) translateX(0); }
   50%  { transform: translate3d(-50%,-50%,0) translateX(12px); }
@@ -706,6 +712,13 @@ body.flash { animation: screen-flash 0.9s ease both; }
   .ticker__rail{ animation: none !important; transform: translateX(0) !important; }
   .coin.spin{ animation: none !important; }
   body.flash { animation: none !important; }
+
+  /* Also disable visual FX */
+  .fx-piece,
+  .fx-piece--win,
+  .fx-piece--loss,
+  .fx-piece--ghost,
+  .candy-wrapper { animation: none !important; }
 }
 
 /* =========================================================
