@@ -46,9 +46,11 @@ if (typeof window !== "undefined") {
 }
 
 // 2) RPC connection
-const RPC_URL =
-  window.TREATZ_CONFIG?.rpcUrl
-  || "https://api.mainnet-beta.solana.com";
+// Build an absolute API base, then the cluster URL
+const API_BASE = (window.TREATZ_CONFIG?.apiBase ?? "/api").replace(/\/$/, "");
+const API_BASE_ABS = /^https?:\/\//i.test(API_BASE) ? API_BASE : (location.origin + API_BASE);
+
+const RPC_URL = window.TREATZ_CONFIG?.rpcUrl || (API_BASE_ABS + "/cluster");
 
 const connection = new Connection(RPC_URL, { commitment: "confirmed" });
 
