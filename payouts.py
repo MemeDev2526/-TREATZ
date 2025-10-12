@@ -26,7 +26,7 @@ except Exception:
             def __init__(self, kp: _SolderKeypair):
                 self._kp = kp
 
-            @property:
+            @property
             def public_key(self):
                 # solders: expose a PublicKey-compatible object
                 return _SoldersPubkey.from_bytes(bytes(self._kp.pubkey()))
