@@ -1613,6 +1613,333 @@ async function sendTxUniversal({ connection, tx }) {
     } catch (e) { console.warn("showWinBanner failed", e); }
   }
 
+// ==========================
+// Wheel of Fate — Frontend
+// ==========================
+(function initWheel() {
+  const API = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
+  const DECIMALS = Number(window.TREATZ_CONFIG?.token?.decimals || 6);
+  const TEN = 10 ** DECIMALS;
+
+  // DOM refs
+  const elSvg = document.getElementById("wheel-svg");
+  const elSpin = document.getElementById("wheel-spin");
+  const elFreeBtn = document.getElementById("wheel-freespin");
+  const elPrice = document.getElementById("wheel-price");
+  const elCommit = document.getElementById("wheel-commit");
+  const elToast = document.getElementById("wheel-toast");
+  const elFree = document.getElementById("wheel-free");
+  const elStatus = document.getElementById("wheel-status");
+  const elConnect = document.getElementById("wheel-connect");
+  const elOpenPh = document.getElementById("wheel-open-in-phantom");
+  const elAddr    = document.getElementById("wheel-addr");
+  const elMode    = document.getElementById("wheel-mode");
+  const elHist = document.getElementById("wheel-history");
+  const elHistList = document.getElementById("wheel-history-list");
+
+  if (!elSvg || !elSpin) return;
+
+  // Prize model (MORE losses than wins; must mirror backend labels)
+  const PRIZES = [
+    { label:"💀 Ghosted",           type:"loss", amount:0,        w:0.16 },
+    { label:"🕸️ Cobwebs",           type:"loss", amount:0,        w:0.12 },
+    { label:"🧟 Haunted Detour",    type:"loss", amount:0,        w:0.10 },
+    { label:"🕯️ Candle Went Out",  type:"loss", amount:0,        w:0.08 },
+    { label:"🎃 Pumpkin Smash",     type:"loss", amount:0,        w:0.06 },
+    { label:"🧙‍♀️ Witch Tax",       type:"loss", amount:0,        w:0.04 },
+    { label:"👻 Phantom Fees",      type:"loss", amount:0,        w:0.02 },
+
+    { label:"🍬 50,000",            type:"win",  amount:50_000,    w:0.09 },
+    { label:"🍬 100,000",           type:"win",  amount:100_000,   w:0.07 },
+    { label:"🍬 250,000",           type:"win",  amount:250_000,   w:0.05 },
+    { label:"🍬 500,000",           type:"win",  amount:500_000,   w:0.04 },
+    { label:"🍬 1,000,000",         type:"win",  amount:1_000_000, w:0.03 },
+    { label:"🍬 2,000,000",         type:"win",  amount:2_000_000, w:0.02 },
+
+    { label:"🎁 Free Spin x1",      type:"free", amount:0,         w:0.08, free:1 },
+    { label:"🎁 Free Spin x2",      type:"free", amount:0,         w:0.03, free:2 },
+    { label:"🎁 Free Spin x3",      type:"free", amount:0,         w:0.01, free:3 },
+  ];
+
+  // Draw wheel slices
+  function drawWheel() {
+    const cx=200, cy=200, r=190;
+    elSvg.innerHTML = "";
+    const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
+    let a0 = -Math.PI/2; // start at top (pointer)
+    PRIZES.forEach((p)=>{
+      const a1 = a0 + 2*Math.PI*(p.w/sumW);
+      const x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0);
+      const x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
+      const large = (a1-a0) > Math.PI ? 1:0;
+      const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute("d", `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`);
+      path.setAttribute("class", p.type === "win" ? "slice-win" : (p.type==="free"?"slice-free":"slice-loss"));
+      elSvg.appendChild(path);
+
+      // label
+      const am = (a0+a1)/2, lr = r*0.68;
+      const lx = cx + lr*Math.cos(am), ly = cy + lr*Math.sin(am);
+      const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+      t.setAttribute("x", lx.toFixed(1));
+      t.setAttribute("y", ly.toFixed(1));
+      t.setAttribute("class","slice-label");
+      t.textContent = p.label;
+      elSvg.appendChild(t);
+
+      a0 = a1;
+    });
+    const ring = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    ring.setAttribute("cx",cx); ring.setAttribute("cy",cy); ring.setAttribute("r",r-6);
+    ring.setAttribute("stroke","rgba(106,0,255,.45)"); ring.setAttribute("stroke-width","8"); ring.setAttribute("fill","none");
+    ring.setAttribute("class","wheel-glow");
+    elSvg.appendChild(ring);
+  }
+  drawWheel();
+
+  // Wallet UI state
+  function short(k) { return k ? (k.slice(0,4) + "…" + k.slice(-4)) : ""; }
+  function updateWheelWalletUI() {
+    const connected = !!(window.PUBKEY && window.WALLET);
+    if (connected) {
+      elConnect.hidden = true;
+      elAddr.hidden = false;
+      elAddr.textContent = short(PUBKEY);
+      elOpenPh.hidden = false;
+      try { elOpenPh.href = `https://phantom.app/ul/browse/${location.origin}`; } catch {}
+      elMode.textContent = "On-chain mode";
+    } else {
+      elConnect.hidden = false;
+      elAddr.hidden = true;
+      elOpenPh.hidden = true;
+      elMode.textContent = "Simulated (no wallet)";
+    }
+  }
+  updateWheelWalletUI();
+  window.addEventListener("wallet:connected", updateWheelWalletUI);
+  window.addEventListener("wallet:disconnected", updateWheelWalletUI);
+  elConnect?.addEventListener("click", () => {
+    const globalBtn = document.getElementById("btn-connect");
+    if (globalBtn) globalBtn.click(); else window.open("https://phantom.app/", "_blank", "noopener");
+  });
+
+  // price label (from config; fallback to 100k)
+  try {
+    const envPrice = Number(window.TREATZ_CONFIG?.wheelPrice || 100_000);
+    elPrice.textContent = envPrice.toLocaleString();
+  } catch {}
+
+  // toasts + history helpers
+  function toastWheel(msg) {
+    elToast.hidden = false;
+    elToast.textContent = msg;
+    setTimeout(()=>{ elToast.hidden = true; }, 4000);
+  }
+  function pushHistory(line) {
+    elHist.hidden = false;
+    const li = document.createElement("li");
+    li.textContent = line;
+    elHistList.prepend(li);
+    while (elHistList.children.length > 10) elHistList.lastChild.remove();
+  }
+
+  // credit poller
+  async function refreshWheelCredit() {
+    try {
+      if (!window.PUBKEY) { elFree.textContent = "0"; return; }
+      const r = await fetch(`${API}/credits/${window.PUBKEY}`).then(r=>r.json());
+      // backend stores as plain integer count; display raw
+      elFree.textContent = String(Number(r?.credit||0));
+    } catch {}
+  }
+  setInterval(refreshWheelCredit, 12000);
+  document.addEventListener("DOMContentLoaded", refreshWheelCredit);
+
+  // animation math
+  function spinToLabel(label) {
+    const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
+    let a0 = -Math.PI/2;
+    let targetAngle = 0;
+    for (const p of PRIZES) {
+      const a1 = a0 + 2*Math.PI*(p.w/sumW);
+      if (p.label === label) {
+        const am = (a0+a1)/2;
+        targetAngle = (Math.PI*1.5) - am; // pointer at top
+        break;
+      }
+      a0 = a1;
+    }
+    const turns = 6 + Math.random()*2;
+    const deg = (turns*360) + (targetAngle*180/Math.PI);
+    elSvg.classList.add("spinning");
+    elSvg.style.transform = `rotate(${deg.toFixed(2)}deg)`;
+  }
+
+  function resultLine(outcome) {
+    const msgsWin = [
+      "TREATZ rain from the crypt! 🍬",
+      "Summoned a sweet pump. 🎉",
+      "Full-size bar unlocked! 🟩",
+    ];
+    const msgsLoss = [
+      "Ghosts snatched your candy. 💀",
+      "Cobwebs only… try again? 🕸️",
+      "The cauldron cackles. 🧪",
+    ];
+    const msgsFree = [
+      "A witch slips you a free spin. 🧙‍♀️",
+      "The moon smiles—free spin granted. 🌕",
+    ];
+    if (outcome.type === "win") return `${outcome.label} — ${msgsWin[Math.floor(Math.random()*msgsWin.length)]}`;
+    if (outcome.type === "free") return `${outcome.label} — ${msgsFree[Math.floor(Math.random()*msgsFree.length)]}`;
+    return `${outcome.label} — ${msgsLoss[Math.floor(Math.random()*msgsLoss.length)]}`;
+  }
+
+  // polling for paid spin settlement
+  async function pollSpin(spinId, timeoutMs=45000) {
+    const t0 = Date.now();
+    while (Date.now()-t0 < timeoutMs) {
+      await new Promise(r=>setTimeout(r,1200));
+      try {
+        const s = await fetch(`${API}/wheel/spins/${spinId}`).then(r=>r.json());
+        if ((s.status||"").toUpperCase()==="SETTLED") {
+          const outcome = { label:s.outcome_label, type: (s.prize_amount>0?"win": (s.free_spins>0?"free":"loss")), amount:s.prize_amount||0, free:s.free_spins||0 };
+          spinToLabel(outcome.label);
+          setTimeout(()=>{
+            try { playResultFX(outcome.type==="loss"?"LOSS":"WIN"); } catch{}
+            toastWheel(resultLine(outcome));
+            elStatus.textContent = outcome.type==="win" ? `WIN — ${outcome.label}` : (outcome.type==="free" ? `FREE — ${outcome.label}` : `LOSS — ${outcome.label}`);
+            refreshWheelCredit();
+            const amt = outcome.amount ? ` +${(outcome.amount / TEN).toLocaleString()} $TREATZ` : "";
+            const fs  = outcome.free   ? ` +${outcome.free} free` : "";
+            pushHistory(`[PAID] ${outcome.label}${amt}${fs}`);
+          }, 4600);
+          return;
+        }
+      } catch {}
+    }
+    toastWheel("Settlement taking longer than usual. Check history later.");
+  }
+
+  // simulate (no wallet)
+  function simulateSpin() {
+    const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
+    let r = Math.random()*sumW, pick = PRIZES[0];
+    for (const p of PRIZES) { r -= p.w; if (r <= 0) { pick = p; break; } }
+    elSvg.classList.add("spinning");
+    spinToLabel(pick.label);
+    setTimeout(()=>{
+      try { playResultFX(pick.type==="loss"?"LOSS":"WIN"); } catch{}
+      toastWheel(resultLine(pick));
+      elStatus.textContent = (pick.type==="win" ? `WIN — ${pick.label}` : (pick.type==="free" ? `FREE — ${pick.label}` : `LOSS — ${pick.label}`));
+      const amt = pick.amount ? ` +${pick.amount.toLocaleString()} $TREATZ` : "";
+      const fs  = pick.free   ? ` +${pick.free} free` : "";
+      pushHistory(`[SIM] ${pick.label}${amt}${fs}`);
+    }, 4600);
+  }
+
+  // paid spin (on-chain)
+  async function spinOnChain() {
+    elStatus.textContent = "Preparing spin…";
+    const body = { client_seed: Math.random().toString(16).slice(2) };
+    const spin = await fetch(`${API}/wheel/spins`, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body) }).then(r=>r.json());
+    elCommit.textContent = `Commit: ${spin.server_seed_hash.slice(0,12)}…`;
+
+    // Build SPL transfer (reuse libs imported at top of app.js)
+    const { PublicKey, Transaction } = window.solanaWeb3 || {};
+    const { createTransferCheckedInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } = window.splToken || {};
+    if (!PublicKey || !Transaction || !createTransferCheckedInstruction) { throw new Error("Wallet libs missing"); }
+
+    // global helpers from app.js
+    async function ensureConfig() { return; } // not needed if vaults are fixed server-side
+    function memoIx(memo) {
+      // simple Memo program ix (program id: MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr)
+      const pid = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+      return new window.solanaWeb3.TransactionInstruction({ keys: [], programId: pid, data: Buffer.from(memo, "utf8") });
+    }
+    async function getOrCreateATA(owner, mint, payer) {
+      const ata = await getAssociatedTokenAddress(mint, owner);
+      // Client-side "ensure" is best-effort; vault can receive without us creating src ATA if user already has it.
+      return { ata, ix: null };
+    }
+    async function sendSignedTransaction(tx) {
+      if (!window.WALLET || typeof window.WALLET.signAndSendTransaction !== "function") throw new Error("No wallet connected");
+      const { signature } = await window.WALLET.signAndSendTransaction(tx);
+      return signature;
+    }
+    async function jfetch(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(`${r.status}`); return r.json(); }
+
+    await ensureConfig();
+    const mintPk = new PublicKey(window.TREATZ_CONFIG?.token?.mint || "11111111111111111111111111111111"); // replace at runtime if provided
+    const payerPub = new PublicKey(window.PUBKEY);
+    const dest = new PublicKey(spin.deposit); // server tells us the deposit account (vault or ATA)
+    const { ata: srcAta } = await getOrCreateATA(payerPub, mintPk, payerPub);
+    const ixs = [];
+    ixs.push(
+      createTransferCheckedInstruction(srcAta, mintPk, dest, payerPub, BigInt(spin.amount), DECIMALS),
+      memoIx(spin.memo)
+    );
+    const bh = (await jfetch(`${API}/cluster/latest_blockhash`)).blockhash; // backend helper exists already  [oai_citation:2‡main.py](file-service://file-QyDC13gCLtv1yqtqx6X1mc)
+    const tx = new Transaction({ feePayer: payerPub, recentBlockhash: bh });
+    tx.add(...ixs);
+    await sendSignedTransaction(tx);
+
+    // Pre-spin flourish while webhook settles
+    elSvg.classList.add("spinning");
+    elSvg.style.transform = `rotate(${(720).toFixed(2)}deg)`;
+    pollSpin(spin.spin_id).catch(()=>{});
+  }
+
+  // Free spin via API (requires connected wallet)
+  async function doFreeSpin() {
+    if (!window.PUBKEY) { toastWheel("Connect wallet to use free spins."); return; }
+    try {
+      elFreeBtn.disabled = true;
+      elSpin.disabled = true;
+      elStatus.textContent = "Free spin casting…";
+      elSvg.classList.add("spinning");
+      elSvg.style.transform = `rotate(${(540).toFixed(2)}deg)`;
+
+      const body = { wallet: window.PUBKEY, client_seed: Math.random().toString(16).slice(2) };
+      const r = await fetch(`${API}/wheel/spins/free`, {
+        method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body)
+      }).then(r=>r.json());
+
+      spinToLabel(r.outcome_label);
+      setTimeout(()=>{
+        const type = r.prize_amount>0 ? "win" : (r.free_spins>0 ? "free" : "loss");
+        try { playResultFX(type==="loss"?"LOSS":"WIN"); } catch{}
+        toastWheel(type==="win" ? `${r.outcome_label} — 🎉` : (type==="free" ? `${r.outcome_label} — 🌕` : `${r.outcome_label} — 💀`));
+        elStatus.textContent = type.toUpperCase() + " — " + r.outcome_label;
+        refreshWheelCredit();
+        const amt = r.prize_amount ? ` +${(r.prize_amount / TEN).toLocaleString()} $TREATZ` : "";
+        const fs  = r.free_spins ? ` +${r.free_spins} free` : "";
+        pushHistory(`[FREE] ${r.outcome_label}${amt}${fs}`);
+        elFreeBtn.disabled = false;
+        elSpin.disabled = false;
+      }, 4600);
+    } catch (e) {
+      elFreeBtn.disabled = false;
+      elSpin.disabled = false;
+      toastWheel("Free spin failed.");
+    }
+  }
+
+  // Button handlers (simulate fallback if no wallet)
+  elSpin.addEventListener("click", async (e)=>{
+    e.preventDefault();
+    try {
+      const hasWallet = !!(window.PUBKEY && window.WALLET);
+      if (hasWallet) return spinOnChain();
+      toastWheel("Simulating — connect wallet to play for real.");
+      simulateSpin();
+    } catch (err) {
+      alert(err?.message || "Spin failed.");
+    }
+  });
+  elFreeBtn?.addEventListener("click", (e)=>{ e.preventDefault(); doFreeSpin(); });
+})();
+
   // -------------------------
   // Jackpot / Raffle UI
   // -------------------------
