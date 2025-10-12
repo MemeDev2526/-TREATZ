@@ -395,3 +395,7 @@ async def pay_jackpot_split(
         except Exception:
             return str(sig)
         return str(sig)
+        
+async def pay_wheel_winner(winner_pubkey_str: str, amount_base_units: int) -> str:
+    """Pay a Wheel of Fate winner (uses GAME_VAULT under the hood)."""
+    return await pay_coinflip_winner(winner_pubkey_str, amount_base_units)
