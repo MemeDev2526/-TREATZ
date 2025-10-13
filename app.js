@@ -48,17 +48,20 @@ if (typeof window !== "undefined") {
 // 2) RPC connection
 const API_BASE = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
 
-// Prefer server-provided absolute RPC URL when available
-const RPC_FROM_SERVER = (window.__CFG__ && window.__CFG__.rpc_url) || null;
+// Prefer backend-configured absolute URL if available (set after /api/config loads)
+const cfgRpc = window.__CFG__?.rpc_url;
 
-const RPC_CANDIDATE =
-  RPC_FROM_SERVER ||
-  window.TREATZ_CONFIG?.rpcUrl ||
-  `${API_BASE}/cluster`;
+// Fall back to any page bootstrap value or to our local proxy
+const bootRpc = window.TREATZ_CONFIG?.rpcUrl || `${API_BASE}/cluster`;
 
+// Pick the first that looks absolute; otherwise resolve relative to origin
+const RPC_CANDIDATE = cfgRpc || bootRpc;
 const RPC_URL = /^https?:/i.test(RPC_CANDIDATE)
   ? RPC_CANDIDATE
   : new URL(RPC_CANDIDATE, location.origin).toString();
+
+window.__RPC_URL__ = RPC_URL;
+console.log({ API_BASE, cfgRpc, bootRpc, RPC_URL });
 
 const connection = new Connection(RPC_URL, { commitment: "confirmed" });
 
