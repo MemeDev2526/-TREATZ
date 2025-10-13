@@ -24,10 +24,11 @@
   <!-- ========== CONFIG (kept as-is so app.js can read) ========== -->
   <script>
     window.__TREATZ_DEBUG = false;
-    window.TREATZ_BUILD = "__BUILD__";
+    window.TREATZ_BUILD = "d7ac495";
     window.TREATZ_CONFIG = {
       apiBase: "/api",
-      rpcUrl: "/api/cluster", // backend proxies calls (no public key)
+      /* rpcUrl intentionally omitted so the app will use /api/config.rpc_url
+         or fall back to the local JSON-RPC proxy at /api/cluster */
       token: { symbol: "$TREATZ", decimals: 6 },
       links: {
         telegram: "https://t.me/trickortreatsol",
