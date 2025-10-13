@@ -48,23 +48,20 @@ if (typeof window !== "undefined") {
 // 2) RPC connection
 const API_BASE = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
 
-let RPC_URL = window.TREATZ_CONFIG?.rpcUrl || `${API_BASE}/cluster`;
+// Prefer server-provided absolute RPC URL when available
+const RPC_FROM_SERVER = (window.__CFG__ && window.__CFG__.rpc_url) || null;
 
-// Try to upgrade RPC_URL from /api/config if it provides one
-(async () => {
-  try {
-    const cfg = await fetch(`${API_BASE}/config`).then(r => r.ok ? r.json() : null);
-    const fromApi = cfg?.rpc_url;
-    if (fromApi && /^https?:/i.test(fromApi)) {
-      RPC_URL = fromApi;
-      window.__RPC_URL__ = RPC_URL;
-      console.log("[TREATZ] RPC updated from /api/config:", RPC_URL);
-    }
-  } catch {}
-})();
+const RPC_CANDIDATE =
+  RPC_FROM_SERVER ||
+  window.TREATZ_CONFIG?.rpcUrl ||
+  `${API_BASE}/cluster`;
 
+const RPC_URL = /^https?:/i.test(RPC_CANDIDATE)
+  ? RPC_CANDIDATE
+  : new URL(RPC_CANDIDATE, location.origin).toString();
 
 const connection = new Connection(RPC_URL, { commitment: "confirmed" });
+
 
 // Warm-up probe so we fail fast & show a friendly message if RPC blocks the browser
 (async () => {
