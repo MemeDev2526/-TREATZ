@@ -46,11 +46,23 @@ if (typeof window !== "undefined") {
 }
 
 // 2) RPC connection
-// Build an absolute API base, then the cluster URL
-const API_BASE = (window.TREATZ_CONFIG?.apiBase ?? "/api").replace(/\/$/, "");
-const API_BASE_ABS = /^https?:\/\//i.test(API_BASE) ? API_BASE : (location.origin + API_BASE);
+const API_BASE = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
 
-const RPC_URL = window.TREATZ_CONFIG?.rpcUrl || (API_BASE_ABS + "/cluster");
+let RPC_URL = window.TREATZ_CONFIG?.rpcUrl || `${API_BASE}/cluster`;
+
+// Try to upgrade RPC_URL from /api/config if it provides one
+(async () => {
+  try {
+    const cfg = await fetch(`${API_BASE}/config`).then(r => r.ok ? r.json() : null);
+    const fromApi = cfg?.rpc_url;
+    if (fromApi && /^https?:/i.test(fromApi)) {
+      RPC_URL = fromApi;
+      window.__RPC_URL__ = RPC_URL;
+      console.log("[TREATZ] RPC updated from /api/config:", RPC_URL);
+    }
+  } catch {}
+})();
+
 
 const connection = new Connection(RPC_URL, { commitment: "confirmed" });
 
