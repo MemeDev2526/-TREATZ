@@ -11,6 +11,7 @@ import time
 import asyncio
 import traceback
 import base58 as _b58
+import httpx
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional  # <-- move this ABOVE _rfc3339
 def _rfc3339(dt: Optional[datetime]) -> Optional[str]:
@@ -37,7 +38,7 @@ def _rfc3339(dt: Optional[datetime]) -> Optional[str]:
     
 import os
 from fastapi.responses import HTMLResponse, FileResponse
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import FastAPI, HTTPException, Request, Query, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -302,6 +303,32 @@ async def _rpc_get_token_balance(ata: str) -> int:
     except Exception:
         # RPC or parsing failed — treat as zero so frontend gets a clear error later
         return 0
+
+@app.api_route(f"{API}/cluster", methods=["POST", "OPTIONS", "GET"])
+async def proxy_cluster(request: Request):
+    if request.method == "OPTIONS":
+        # preflight ok (CORS is already wide-open via middleware)
+        return Response(status_code=204)
+    if request.method == "GET":
+        return {"ok": True, "note": "POST JSON-RPC to this endpoint."}
+
+    # POST: forward JSON-RPC to your configured RPC_URL
+    try:
+        payload = await request.body()
+    except Exception:
+        payload = b"{}"
+
+    headers = {"content-type": "application/json"}
+    # Include auth headers if your provider expects them; Helius auth is in the URL query,
+    # so we just forward the body.
+    async with httpx.AsyncClient(timeout=20) as client:
+        upstream = await client.post(RPC_URL, content=payload, headers=headers)
+        return Response(
+            content=upstream.content,
+            status_code=upstream.status_code,
+            media_type=upstream.headers.get("content-type", "application/json"),
+        )
+
 
 async def _rpc_get_slot() -> int:
     async with AsyncClient(RPC_URL) as c:
@@ -1018,18 +1045,18 @@ async def get_config(include_balances: bool = False):
         if isinstance(game_bal, int):
             max_wager = game_bal // 2
 
-    return {
+        return {
         "token": {
             "mint": settings.TREATZ_MINT,
             "decimals": getattr(settings, "TOKEN_DECIMALS", 6),
-            "ticket_price": settings.TICKET_PRICE,  # (back-compat)
+            "ticket_price": settings.TICKET_PRICE,
         },
         "raffle": {
             "round_minutes": ROUND_MIN,
             "duration_minutes": ROUND_MIN,
             "break_minutes": ROUND_BREAK,
             "splits": {"winner": SPLT_WIN, "dev": SPLT_DEV, "burn": SPLT_BURN},
-            "ticket_price": settings.TICKET_PRICE,  # <— added here for frontend
+            "ticket_price": settings.TICKET_PRICE,
             "dev_wallet": DEV_WALLET or None,
             "burn_address": BURN_ADDRESS or None,
         },
@@ -1044,18 +1071,22 @@ async def get_config(include_balances: bool = False):
             "jackpot_vault_ata": jackpot_vault_ata or None,
         },
         "timers": {
-        "current_round_id": rid,
-        "opens_at": _rfc3339(o_dt) if rid and opens_at else None,
-        "closes_at": _rfc3339(c_dt) if rid and closes_at else None,
-        "next_opens_at": _rfc3339(n_dt) if rid and closes_at else None,
-    },
+            "current_round_id": rid,
+            "opens_at": _rfc3339(o_dt) if rid and opens_at else None,
+            "closes_at": _rfc3339(c_dt) if rid and closes_at else None,
+            "next_opens_at": _rfc3339(n_dt) if rid and closes_at else None,
+        },
 
         "limits": {
-            "max_wager_base_units": max_wager,            # null unless include_balances=true
-            "game_vault_balance": game_bal,               # null unless include_balances=true
-            "jackpot_vault_balance": jack_bal,            # null unless include_balances=true
+            "max_wager_base_units": max_wager,
+            "game_vault_balance": game_bal,
+            "jackpot_vault_balance": jack_bal,
         },
+
+        # <-- let the frontend learn the absolute Helius RPC URL
+        "rpc_url": RPC_URL,
     }
+
 
 
 EXPLORER_BASE = "https://solscan.io/tx/"
