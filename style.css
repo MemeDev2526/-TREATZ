@@ -638,15 +638,15 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 }
 
 /* loss visuals (skull/ghost) — make them RAIN like wins */
+.fx-piece--loss,
 .fx-piece--lose {
   mix-blend-mode: normal;
   filter: drop-shadow(0 14px 36px rgba(0,0,0,.72)) saturate(0.95) contrast(1.05);
-  /* fall down the screen; slightly slower by default */
   --dur: 5.4s;
   animation: treatz-fall var(--dur) linear forwards, treatz-sway 3.4s ease-in-out infinite;
   --scale: 1.0;
 }
-}
+
 .fx-piece--loss svg [class^="c"], .fx-piece--loss svg path, .fx-piece--loss svg circle {
   fill: #ffffff !important;
   stroke: #000000 !important;
@@ -736,12 +736,14 @@ body.flash { animation: screen-flash 0.9s ease both; }
   .coin.spin{ animation: none !important; }
   body.flash { animation: none !important; }
 
-  /* Also disable visual FX */
+  /* Keep FX, just slow them down (don’t nuke them) */
   .fx-piece,
   .fx-piece--win,
   .fx-piece--loss,
   .fx-piece--ghost,
-  .candy-wrapper { animation: none !important; }
+  .candy-wrapper {
+    animation-duration: calc(var(--dur, 6s) * 1.6) !important;
+  }
 }
 
 /* =========================================================
