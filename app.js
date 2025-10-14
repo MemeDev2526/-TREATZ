@@ -2007,12 +2007,16 @@ export async function getAta(owner, mint) {
       let closesAt = new Date(iso(round.closes_at));
       const nextOpenIso = cfg?.timers?.next_opens_at ? iso(cfg.timers.next_opens_at) : null;
       const nextOpensAt = nextOpenIso ? new Date(nextOpenIso) : new Date(closesAt.getTime() + breakMin * 60 * 1000);
-      if (elId) elId.textContent = round.round_id;
-      if (elPot) elPot.textContent = (Number(round.pot || 0) / TEN_POW).toLocaleString();
-      const commitEl = document.getElementById("seed-commit");
-      const revealEl = document.getElementById("seed-reveal");
-      if (commitEl) commitEl.textContent = round.server_seed_hash || "—";
-      if (revealEl) revealEl.textContent = round.server_seed_reveal || "— (reveal after settlement)";
+     if (elId) elId.textContent = round.round_id;
+     if (elPot) elPot.textContent = (Number(round.pot || 0) / TEN_POW).toLocaleString();
+
+     try {
+       const w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(round.round_id)}/winner`);
+       const commitEl = document.getElementById("seed-commit");
+       const revealEl = document.getElementById("seed-reveal");
+       if (commitEl) commitEl.textContent = w?.server_seed_hash || "—";
+       if (revealEl) revealEl.textContent = w?.server_seed_reveal || "— (reveal after settlement)";
+     } catch {}
       if (schedEl) schedEl.textContent = `Each round: ${durationMin} min • Break: ${breakMin} min • Next opens: ${nextOpensAt.toLocaleTimeString()}`;
       const fmtClock = (ms) => {
         if (ms < 0) ms = 0;
