@@ -1015,7 +1015,7 @@ async def get_round_winner(round_id: str):
 async def get_config(include_balances: bool = False):
     # Current round timing (for countdowns)
     rid = await dbmod.kv_get(app.state.db, "current_round_id")
-    opens_at = closes_at = next_opens_at = None
+    opens_at = closes_at = None
     o_dt = c_dt = n_dt = None
     if rid:
         async with app.state.db.execute(
@@ -1023,14 +1023,16 @@ async def get_config(include_balances: bool = False):
         ) as cur:
             row = await cur.fetchone()
         if row:
-            opens_at = row[0]
-            closes_at = row[1]
+            opens_at, closes_at = row[0], row[1]
             o_dt = _parse_iso_z(opens_at)
             c_dt = _parse_iso_z(closes_at)
             n_dt = c_dt + timedelta(minutes=ROUND_BREAK)
-    # Vault balances / limits (optional — hits RPC)
-    game_vault_ata = getattr(settings, "GAME_VAULT_ATA", "")
+
+    # Vault ids
+    game_vault_ata    = getattr(settings, "GAME_VAULT_ATA", "")
     jackpot_vault_ata = getattr(settings, "JACKPOT_VAULT_ATA", "")
+
+    # Balances (optional)
     game_bal = jack_bal = None
     max_wager = None
     if include_balances:
@@ -1045,18 +1047,18 @@ async def get_config(include_balances: bool = False):
         if isinstance(game_bal, int):
             max_wager = game_bal // 2
 
-        return {
+    return {
         "token": {
             "mint": settings.TREATZ_MINT,
-            "decimals": getattr(settings, "TOKEN_DECIMALS", 6),
-            "ticket_price": settings.TICKET_PRICE,
+            "decimals": int(getattr(settings, "TOKEN_DECIMALS", 6)),
+            "ticket_price": int(getattr(settings, "TICKET_PRICE", 0)),
         },
         "raffle": {
             "round_minutes": ROUND_MIN,
             "duration_minutes": ROUND_MIN,
             "break_minutes": ROUND_BREAK,
             "splits": {"winner": SPLT_WIN, "dev": SPLT_DEV, "burn": SPLT_BURN},
-            "ticket_price": settings.TICKET_PRICE,
+            "ticket_price": int(getattr(settings, "TICKET_PRICE", 0)),
             "dev_wallet": DEV_WALLET or None,
             "burn_address": BURN_ADDRESS or None,
         },
@@ -1065,29 +1067,24 @@ async def get_config(include_balances: bool = False):
             "spin_price_base": int(getattr(settings, "WHEEL_SPIN_PRICE", 100_000)) * (10 ** int(getattr(settings, "TOKEN_DECIMALS", 6))),
         },
         "vaults": {
-            "game_vault": settings.GAME_VAULT,
+            "game_vault": getattr(settings, "GAME_VAULT", None),
             "game_vault_ata": game_vault_ata or None,
-            "jackpot_vault": settings.JACKPOT_VAULT,
+            "jackpot_vault": getattr(settings, "JACKPOT_VAULT", None),
             "jackpot_vault_ata": jackpot_vault_ata or None,
         },
         "timers": {
             "current_round_id": rid,
-            "opens_at": _rfc3339(o_dt) if rid and opens_at else None,
-            "closes_at": _rfc3339(c_dt) if rid and closes_at else None,
-            "next_opens_at": _rfc3339(n_dt) if rid and closes_at else None,
+            "opens_at": _rfc3339(o_dt) if o_dt else None,
+            "closes_at": _rfc3339(c_dt) if c_dt else None,
+            "next_opens_at": _rfc3339(n_dt) if n_dt else None,
         },
-
         "limits": {
             "max_wager_base_units": max_wager,
             "game_vault_balance": game_bal,
             "jackpot_vault_balance": jack_bal,
         },
-
-        # <-- let the frontend learn the absolute Helius RPC URL
         "rpc_url": RPC_URL,
     }
-
-
 
 EXPLORER_BASE = "https://solscan.io/tx/"
 
