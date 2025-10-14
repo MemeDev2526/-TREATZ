@@ -1644,10 +1644,11 @@ export async function getAta(owner, mint) {
     async function refreshWheelCredit() {
       try {
         if (!window.PUBKEY) { elFree.textContent = "0"; return; }
-        const r = await fetch(`${API}/credits/${window.PUBKEY}`).then(r=>r.json());
-        elFree.textContent = String(Number(r?.credit||0));
+        const r = await fetch(`${API}/wheel/credits/${window.PUBKEY}`).then(r => r.json());
+        elFree.textContent = String(Number(r?.credit || 0));
       } catch {}
     }
+
     setInterval(refreshWheelCredit, 12000);
     document.addEventListener("DOMContentLoaded", refreshWheelCredit);
 
@@ -2075,10 +2076,15 @@ export async function getAta(owner, mint) {
             if (newClosesAt && !isNaN(newClosesAt)) closesAt = newClosesAt;
             if (elId) elId.textContent = round.round_id;
             if (elPot) elPot.textContent = (Number(round.pot || 0) / TEN_POW).toLocaleString();
-            const commitEl = document.getElementById("seed-commit");
-            const revealEl = document.getElementById("seed-reveal");
-            if (commitEl) commitEl.textContent = round.server_seed_hash || "—";
-            if (revealEl) revealEl.textContent = round.server_seed_reveal || "— (reveal after settlement)";
+
+            // NEW: read commit/reveal from /winner for the *new* round
+            try {
+              const w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(round.round_id)}/winner`);
+              const commitEl = document.getElementById("seed-commit");
+              const revealEl = document.getElementById("seed-reveal");
+              if (commitEl) commitEl.textContent = w?.server_seed_hash || "—";
+              if (revealEl) revealEl.textContent = w?.server_seed_reveal || "— (reveal after settlement)";
+            } catch {}
           } else {
             if (up && elPot) elPot.textContent = (Number(up.pot || 0) / TEN_POW).toLocaleString();
           }
