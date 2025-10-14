@@ -637,13 +637,15 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   z-index:-1;
 }
 
-/* loss visuals (skull/ghost) */
-.fx-piece--loss,
+/* loss visuals (skull/ghost) — make them RAIN like wins */
 .fx-piece--lose {
   mix-blend-mode: normal;
   filter: drop-shadow(0 14px 36px rgba(0,0,0,.72)) saturate(0.95) contrast(1.05);
-  animation: treatz-pop 1.6s ease forwards;
+  /* fall down the screen; slightly slower by default */
+  --dur: 5.4s;
+  animation: treatz-fall var(--dur) linear forwards, treatz-sway 3.4s ease-in-out infinite;
   --scale: 1.0;
+}
 }
 .fx-piece--loss svg [class^="c"], .fx-piece--loss svg path, .fx-piece--loss svg circle {
   fill: #ffffff !important;
