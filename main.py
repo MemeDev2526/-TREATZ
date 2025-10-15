@@ -1083,7 +1083,7 @@ async def get_config(include_balances: bool = False):
             "game_vault_balance": game_bal,
             "jackpot_vault_balance": jack_bal,
         },
-        "rpc_url": RPC_URL,
+        "rpc_url": RPC_URL if getattr(settings, "DEBUG", False) else None,
     }
 
 EXPLORER_BASE = "https://solscan.io/tx/"
@@ -1247,7 +1247,7 @@ async def _wheel_settle(app, spin_id: str, payer_wallet: str, client_seed: str, 
 
     if prize_amt > 0 and payer_wallet:
         try:
-            from payouts import pay_coinflip_winner as _pay  # or pay_wheel_winner if you added it
+            from payouts import pay_wheel_winner as _pay
             sig = await _pay(payer_wallet, prize_amt)
             await dbmod.kv_set(app.state.db, f"spin:{spin_id}:payout_sig", sig)
         except Exception:
@@ -1580,10 +1580,13 @@ async def helius_webhook(request: Request):
             try:
                 await app.state.db.execute("BEGIN")
                 if tickets > 0:
+                    # ignore duplicate tx_sig (Helius retries)
                     await app.state.db.execute(
-                        "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
+                        "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?) "
+                        "ON CONFLICT(tx_sig) DO NOTHING",
                         (round_id, sender_raw, tickets, tx_sig),
                     )
+                    # pot only increases if insert actually happened
                     await app.state.db.execute(
                         "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
                         (tickets * settings.TICKET_PRICE, round_id),
