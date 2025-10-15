@@ -447,6 +447,17 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   filter: blur(8px); position:absolute; z-index:-1;
 }
 
+.cf-banner{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(.98);
+  display:inline-block; max-width:90%; padding:.7rem 1rem;
+  font:700 18px/1.1 "Luckiest Guy","Creepster",system-ui,sans-serif;
+  text-align:center; color:#0D0D0D; background:#39FF14; border-radius:14px;
+  box-shadow:0 12px 28px rgba(0,0,0,.45), inset 0 -2px 0 rgba(0,0,0,.15);
+  opacity:0; pointer-events:none; transition:opacity .22s ease, transform .22s ease;
+}
+.cf-banner.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+.cf-banner.loss{ background:#111; color:#fff; outline:2px solid rgba(255,255,255,.08); }
+
 /* Coin visuals */
 .coin{
   position: relative; width: var(--coin-size); height: var(--coin-size);
@@ -477,8 +488,6 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 }
 .coin__face--back{
   transform: rotateY(180deg);
-  background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.25), rgba(255,255,255,.05) 60%),
-              linear-gradient(180deg, rgba(0,255,163,.8), rgba(148,218,255,.8));
   color: var(--slime); text-shadow: 0 0 10px rgba(57,255,20,.6);
 }
 .coin.spin{ animation: spin 1.6s cubic-bezier(.2,.6,.2,1) 1; animation-fill-mode: both; }
@@ -544,6 +553,12 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 
 /* About readability */
 #about .card p{ font-size:1.05rem; line-height:1.8; }
+
+.jp-heartbeat{display:flex;align-items:center;gap:10px;margin-top:.5rem;font:600 14px/1.2 Rubik,system-ui,sans-serif;color:#fff8;}
+.jp-heartbeat .dot{width:8px;height:8px;border-radius:50%;background:#c33;box-shadow:0 0 0 0 rgba(204,68,68,.6);animation: jp-ping 1.4s infinite;}
+.jp-heartbeat.is-up{color:#b6ffbf;}
+.jp-heartbeat.is-up .dot{background:#2fe66b;box-shadow:0 0 0 0 rgba(47,230,107,.6);}
+@keyframes jp-ping{0%{box-shadow:0 0 0 0 rgba(47,230,107,.6)}70%{box-shadow:0 0 0 8px rgba(47,230,107,0)}100%{box-shadow:0 0 0 0 rgba(47,230,107,0)}}
 
 /* =========================================================
    $TREATZ FX Layer (falling wrappers / ghosts / candy)
@@ -673,11 +688,14 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   position:absolute; top:-6px; left:50%; transform: translateX(-50%);
   font-weight:900; color: var(--slime); text-shadow:0 0 14px rgba(57,255,20,.55);
 }
-.slice-label { font-family: "Rubik", system-ui, sans-serif; font-weight:900; fill:#fff; font-size:12px; text-anchor:middle; }
-.slice-win  { fill: rgba(57,255,20,.28); }
-.slice-loss { fill: rgba(255,69,69,.26); }
-.slice-free { fill: rgba(148,218,255,.26); }
-.wheel-glow { filter: blur(6px); opacity:.85 }
+.slice-label {
+  font-family:"Rubik",system-ui,sans-serif; font-weight:900; fill:#fff; font-size:14px; text-anchor:middle;
+  paint-order:stroke; stroke:#000; stroke-width:3px;
+}
+.slice-win  { fill: rgba(20,241,149,.35);  stroke: rgba(255,255,255,.12); stroke-width:1; }
+.slice-loss { fill: rgba(255,107,0,.30);   stroke: rgba(255,255,255,.12); stroke-width:1; }
+.slice-free { fill: rgba(153,69,255,.32);  stroke: rgba(255,255,255,.12); stroke-width:1; }
+.wheel-glow { filter: drop-shadow(0 12px 24px rgba(0,0,0,.5)); opacity:.95 }
 
 .btnrow { display:flex; gap:.5rem; flex-wrap:wrap; }
 #wheel-history-list { margin:.25rem 0 0; padding-left:1rem; }
