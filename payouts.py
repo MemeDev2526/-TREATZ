@@ -1,7 +1,8 @@
 # payouts.py
 from __future__ import annotations
-import base58 as _b58
 from typing import Tuple, List, Optional, Union
+
+import base58 as _b58
 
 from config import settings
 from solana.rpc.async_api import AsyncClient
@@ -19,14 +20,11 @@ except Exception:
     from solders.keypair import Keypair as _SolderKeypair
 
     class PublicKey(_SoldersPubkey):  # type: ignore
-        # Allow constructing from str/bytes like solana.PublicKey
         def __new__(cls, val):
             if isinstance(val, (bytes, bytearray)):
                 return _SoldersPubkey.from_bytes(bytes(val))
             if isinstance(val, str):
-                # base58 string
                 return _SoldersPubkey.from_string(val)
-            # last resort (already a solders Pubkey)
             return val
 
     class Keypair:  # minimal shim
@@ -56,11 +54,8 @@ from spl.token.instructions import (
 )
 # Use idempotent ATA creation when available
 try:
-    from spl.token.instructions import (
-        create_associated_token_account_idempotent as create_ata_idem,
-    )
+    from spl.token.instructions import create_associated_token_account_idempotent as create_ata_idem
 except Exception:
-    # Fallback wrapper with Token-2022-compatible signature
     def create_ata_idem(*, payer, owner, mint, token_program_id=None, **_):
         return create_associated_token_account(
             payer=payer, owner=owner, mint=mint, program_id=token_program_id
@@ -70,7 +65,7 @@ from spl.token.constants import TOKEN_PROGRAM_ID
 try:
     from spl.token.constants import TOKEN_2022_PROGRAM_ID  # type: ignore
 except Exception:
-    TOKEN_2022_PROGRAM_ID = None  # we'll construct it lazily when needed
+    TOKEN_2022_PROGRAM_ID = None  # will build from string when needed
 TOKEN_2022_PROGRAM_ID_STR = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
 
 RPC_URL = settings.RPC_URL
@@ -84,7 +79,7 @@ JACKPOT_VAULT_STR = settings.JACKPOT_VAULT or ""
 GAME_VAULT_PK_B58 = settings.GAME_VAULT_PK or ""
 JACKPOT_VAULT_PK_B58 = settings.JACKPOT_VAULT_PK or ""
 
-TOKEN_DECIMALS = settings.TOKEN_DECIMALS
+TOKEN_DECIMALS = int(getattr(settings, "TOKEN_DECIMALS", 6))
 
 
 def _require_token_mint() -> None:
@@ -100,18 +95,14 @@ def _token_mint() -> PublicKey:
 def to_public_key(addr: Optional[Union[str, PublicKey, bytes, bytearray]]) -> PublicKey:
     if addr is None:
         raise ValueError("Empty public key provided")
-
-    # Already a PublicKey?
     try:
         if isinstance(addr, PublicKey):
             return addr  # type: ignore[arg-type]
     except Exception:
         pass
-
     if isinstance(addr, (bytes, bytearray)):
         return PublicKey(bytes(addr))
     if isinstance(addr, str):
-        # Try constructor from str first; if it fails, try b58 decode
         try:
             return PublicKey(addr)
         except Exception:
@@ -119,8 +110,6 @@ def to_public_key(addr: Optional[Union[str, PublicKey, bytes, bytearray]]) -> Pu
             if len(raw) != 32:
                 raise ValueError(f"Decoded key length != 32 ({len(raw)})")
             return PublicKey(raw)
-
-    # last resort
     return PublicKey(addr)
 
 
@@ -140,7 +129,6 @@ async def _mint_owner_program_id(client: AsyncClient) -> PublicKey:
 
     owner_str = str(owner) if owner is not None else ""
     if owner_str == (str(TOKEN_2022_PROGRAM_ID) if TOKEN_2022_PROGRAM_ID else TOKEN_2022_PROGRAM_ID_STR):
-        # Return a proper PublicKey for Token-2022
         return TOKEN_2022_PROGRAM_ID or to_public_key(TOKEN_2022_PROGRAM_ID_STR)
     return TOKEN_PROGRAM_ID
 
@@ -175,6 +163,7 @@ def _assert_owner_matches(vault_pub: PublicKey, kp: Keypair, label: str) -> None
             f"({str(vault_pub)} != {str(kp.public_key)})"
         )
 
+
 # ---------------- ATA ensure ----------------
 async def _ensure_ata_ixs(
     client: AsyncClient,
@@ -186,23 +175,53 @@ async def _ensure_ata_ixs(
     """
     mint_pk = _token_mint()
     token_prog = await _mint_owner_program_id(client)
-
-    # For Token-2022, ATA derivation MUST include token_program_id
     ata = get_associated_token_address(owner, mint_pk, token_program_id=token_prog)
 
     resp = await client.get_account_info(ata, commitment=Confirmed)
+    exists = False
+    if hasattr(resp, "value"):
+        exists = bool(resp.value)
+    elif isinstance(resp, dict):
+        exists = ((resp.get("result") or {}).get("value") is not None)
+
     ixs: List = []
-    if getattr(resp, "value", None) is None:
-        # create ATA idempotently if it doesn't exist
+    if not exists:
         ixs.append(
             create_ata_idem(
                 payer=payer,
                 owner=owner,
                 mint=mint_pk,
-                token_program_id=token_prog,  # correct program id (SPL or Token-2022)
+                token_program_id=token_prog,
             )
         )
     return ata, ixs
+
+
+# ---------------- Blockhash + signature helpers ----------------
+async def _get_latest_blockhash_str(client: AsyncClient) -> str:
+    lbh = await client.get_latest_blockhash()
+    # object
+    if hasattr(lbh, "value") and getattr(lbh, "value", None) is not None:
+        bh = getattr(lbh.value, "blockhash", None)
+        if bh:
+            return str(bh)
+    # dict
+    if isinstance(lbh, dict):
+        bh = (lbh.get("result") or {}).get("value", {}).get("blockhash")
+        if bh:
+            return str(bh)
+    raise RuntimeError("Could not fetch latest blockhash")
+
+
+def _normalize_sig(resp) -> str:
+    if isinstance(resp, dict):
+        sig = resp.get("result") or resp.get("signature")
+        if isinstance(sig, dict):
+            sig = sig.get("signature") or sig.get("txHash")
+        return str(sig or resp)
+    return str(getattr(resp, "value", None) or getattr(resp, "result", None) or resp)
+
+
 # ---------------- Core SPL transfer ----------------
 async def _send_spl_from_vault(
     client: AsyncClient,
@@ -211,6 +230,9 @@ async def _send_spl_from_vault(
     winner_wallet: PublicKey,
     amount_base_units: int,
 ) -> str:
+    if amount_base_units <= 0:
+        raise ValueError("amount_base_units must be > 0")
+
     mint_pk = _token_mint()
     token_prog = await _mint_owner_program_id(client)
 
@@ -237,46 +259,34 @@ async def _send_spl_from_vault(
         )
     )
 
-    # latest blockhash
-    lbh = await client.get_latest_blockhash()
-    bh = None
-    if hasattr(lbh, "value") and getattr(lbh, "value", None) is not None:
-        bh = getattr(lbh.value, "blockhash", None)
-    if not bh and isinstance(lbh, dict):
-        bh = (lbh.get("result") or {}).get("value", {}).get("blockhash")
-    if not bh:
-        raise RuntimeError("Could not fetch latest blockhash")
-
-    tx.recent_blockhash = str(bh)
+    tx.recent_blockhash = await _get_latest_blockhash_str(client)
     tx.fee_payer = vault_wallet
 
-    # sign & send
+    # sign & send (with a tiny retry if simulation complains)
     tx.sign(vault_owner_kp)
     raw = tx.serialize()
-    resp = await client.send_raw_transaction(
-        raw,
-        opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed)
-    )
 
-    # Normalize signature
-    sig = None
-    if isinstance(resp, dict):
-        sig = resp.get("result") or resp.get("signature")
-        if isinstance(sig, dict):
-            sig = sig.get("signature") or sig.get("txHash")
-    else:
-        sig = getattr(resp, "value", None) or getattr(resp, "result", None) or str(resp)
+    try:
+        resp = await client.send_raw_transaction(
+            raw,
+            opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed)
+        )
+    except Exception:
+        # one retry with skip_preflight=True (network hiccup / compute jitter)
+        resp = await client.send_raw_transaction(
+            raw,
+            opts=TxOpts(skip_preflight=True, preflight_commitment=Confirmed)
+        )
 
-    if not sig:
-        sig = str(resp)
+    sig = _normalize_sig(resp)
 
     # best-effort confirm
     try:
         await client.confirm_transaction(sig, commitment=Confirmed)
     except Exception:
-        return str(sig)
+        return sig
+    return sig
 
-    return str(sig)
 
 # ---------------- Public payout APIs ----------------
 async def pay_coinflip_winner(winner_pubkey_str: str, amount_base_units: int) -> str:
@@ -295,6 +305,7 @@ async def pay_coinflip_winner(winner_pubkey_str: str, amount_base_units: int) ->
             amount_base_units=amount_base_units,
         )
 
+
 async def pay_jackpot_winner(winner_pubkey_str: str, amount_base_units: int) -> str:
     if not JACKPOT_VAULT_PK_B58:
         raise RuntimeError("JACKPOT_VAULT_PK not set.")
@@ -310,6 +321,7 @@ async def pay_jackpot_winner(winner_pubkey_str: str, amount_base_units: int) -> 
             winner_wallet=to_public_key(winner_pubkey_str),
             amount_base_units=amount_base_units,
         )
+
 
 async def pay_jackpot_split(
     winner_pubkey_str: str, winner_amount: int,
@@ -362,41 +374,31 @@ async def pay_jackpot_split(
                 burn_amount, TOKEN_DECIMALS, None
             ))
 
-        lbh = await client.get_latest_blockhash()
-        bh = None
-        if hasattr(lbh, "value") and getattr(lbh, "value", None) is not None:
-            bh = getattr(lbh.value, "blockhash", None)
-        if not bh and isinstance(lbh, dict):
-            bh = (lbh.get("result") or {}).get("value", {}).get("blockhash")
-        if not bh:
-            raise RuntimeError("Could not fetch latest blockhash")
-
-        tx.recent_blockhash = str(bh)
+        tx.recent_blockhash = await _get_latest_blockhash_str(client)
         tx.fee_payer = vault_pub
 
         tx.sign(kp)
         raw = tx.serialize()
-        sig_resp = await client.send_raw_transaction(
-            raw,
-            opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed)
-        )
+        try:
+            sig_resp = await client.send_raw_transaction(
+                raw,
+                opts=TxOpts(skip_preflight=False, preflight_commitment=Confirmed)
+            )
+        except Exception:
+            sig_resp = await client.send_raw_transaction(
+                raw,
+                opts=TxOpts(skip_preflight=True, preflight_commitment=Confirmed)
+            )
 
-        sig = None
-        if isinstance(sig_resp, dict):
-            sig = sig_resp.get("result") or sig_resp.get("signature")
-            if isinstance(sig, dict):
-                sig = sig.get("signature") or sig.get("txHash")
-        else:
-            sig = getattr(sig_resp, "value", None) or getattr(sig_resp, "result", None) or str(sig_resp)
-        if not sig:
-            sig = str(sig_resp)
+        sig = _normalize_sig(sig_resp)
 
         try:
             await client.confirm_transaction(sig, commitment=Confirmed)
         except Exception:
-            return str(sig)
-        return str(sig)
-        
+            return sig
+        return sig
+
+
 async def pay_wheel_winner(winner_pubkey_str: str, amount_base_units: int) -> str:
     """Pay a Wheel of Fate winner (uses GAME_VAULT under the hood)."""
     return await pay_coinflip_winner(winner_pubkey_str, amount_base_units)
