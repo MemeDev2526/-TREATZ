@@ -775,6 +775,29 @@ body.flash { animation: screen-flash 0.9s ease both; }
 #about .card p{ font-size: 1.05rem; line-height: 1.8; }
 .toast { transition: opacity .25s ease; }
 
+/* --- $TREATZ small polish patch --- */
+
+/* Prevent TRICK/TREAT text flash before app.js swaps in images */
+.coin__face { text-indent: -9999px; }
+
+/* Buttons the app disables via class or aria attribute */
+.btn.is-disabled,
+.btn[aria-disabled="true"] {
+  opacity: .6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Make deep-link/aux buttons look disabled when hidden via [hidden] */
+[hidden] { display: none !important; }
+
+/* Slightly stronger modal stacking in case other elements get higher z-index later */
+.wm { z-index: 100002; }
+
+/* Wheel of Fate: crisper motion & block accidental text selection while spinning */
+.wheel { will-change: transform; user-select: none; }
+.wheel.spinning { pointer-events: none; }
+
 /* =========================================================
    MEDIA QUERIES (TABLETS & PHONES) — grouped at bottom
      • tablet breakpoint: max-width: 900px
