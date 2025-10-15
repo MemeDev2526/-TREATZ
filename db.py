@@ -97,7 +97,8 @@ CREATE INDEX IF NOT EXISTS idx_spins_created  ON spins(created_at);
 CREATE INDEX IF NOT EXISTS idx_spins_status   ON spins(status);
 
 -- keep schema forward-compatible across versions
-CREATE TEMP TABLE IF NOT EXISTS _chk_guard();
+-- (FIXED: give the temp table one dummy column)
+CREATE TEMP TABLE IF NOT EXISTS _chk_guard (ok INTEGER);
 """.strip()
 
 # =========================================================
@@ -120,8 +121,8 @@ async def connect(db_path: str = DB_PATH) -> aiosqlite.Connection:
     await conn.execute("PRAGMA wal_autocheckpoint=1000")
     await conn.execute("PRAGMA busy_timeout=5000")
 
-    # Optional: row access by name (your code mostly uses tuples; harmless either way)
-    conn.row_factory = sqlite3.Row
+    # Use aiosqlite.Row for dict-like access
+    conn.row_factory = aiosqlite.Row
 
     await conn.executescript(SCHEMA)
     await conn.commit()
@@ -219,8 +220,6 @@ def kv_get_sync(conn: sqlite3.Connection, k: str) -> Optional[str]:
 
 # -------------------------
 # Sequential round id allocator (synchronous)
-# Mirrors alloc_next_round_id() used in async code so BOTH sync + async paths
-# allocate sequential RNNNN ids consistently.
 # -------------------------
 def alloc_next_round_id_sync(conn: sqlite3.Connection) -> str:
     """
@@ -259,7 +258,6 @@ def mark_round_closed_sync(conn: sqlite3.Connection, round_id: str) -> None:
     conn.execute("UPDATE rounds SET status='SETTLED' WHERE id=?", (round_id,))
     conn.commit()
 
-# Optional: helper to reset the sequential counter synchronously (handy for tests).
 def reset_round_counter_sync(conn: sqlite3.Connection, value: int = 0) -> None:
     """
     Reset internal 'round:next_id' counter. Setting to 0 means next allocated id will be R0001.
