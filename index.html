@@ -167,12 +167,16 @@
 
         <!-- RIGHT: COIN + STATUS (FX will hook to #fx-layer) -->
         <div class="card__col">
-          <div class="cf-display" id="cf-display" aria-live="polite">
-            <div class="coin" id="coin" aria-label="Coin">
+          <div class="cf-display">
+            <div id="coin" class="coin">
               <div class="coin__face coin__face--front">TRICK</div>
               <div class="coin__face coin__face--back">TREAT</div>
             </div>
-            <div class="cf-status" id="cf-status">Ready to flip.</div>
+
+            <!-- centered banner overlay -->
+            <div id="cf-banner" class="cf-banner" aria-live="polite"></div>
+
+            <div id="cf-status" class="cf-status">—</div>
           </div>
         </div>
       </div>
@@ -204,8 +208,15 @@
             <div class="progress__bar" id="jp-progress" style="width:0%"></div>
           </div>
           <p id="raffle-schedule" class="help" style="margin-top:.5rem;">Draw cadence appears here.</p>
-        </div>
 
+          <!-- Raffle heartbeat / backend status -->
+          <div id="jp-heartbeat" class="jp-heartbeat" aria-live="polite">
+            <span class="dot" aria-hidden="true"></span>
+            <span id="jp-status">Checking raffle schedule…</span>
+          </div>
+
+        </div>
+       
         <!-- 10) DISABLED CONNECT + 11) BUY TICKETS -->
         <div class="card__col">
           <div class="wallet wallet--inline" style="margin-bottom:.75rem;">
@@ -369,6 +380,30 @@
   <script>
     if (window.TREATZ_CONFIG) window.TREATZ_CONFIG.apiBase = "/api";
   </script>
+
+  <script>
+  (function raffleHeartbeat(){
+    async function tick(){
+      try{
+        const h = await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());
+        const cur = await fetch('/api/rounds/current',{cache:'no-store'}).then(r=>r.json());
+        const s = document.getElementById('jp-status');
+        const hb = document.getElementById('jp-heartbeat');
+        if(!s||!hb) return;
+        const closes = new Date(String(cur.closes_at||'').replace(' ','T')+'Z');
+        const left = Math.max(0, Math.floor((closes - Date.now())/1000));
+        const m = Math.floor(left/60), sec = String(left%60).padStart(2,'0');
+        s.textContent = `Round #${cur.round_id} — closes in ${m}:${sec}`;
+        hb.classList.toggle('is-up', !!h.ok);
+      }catch(e){
+        const s = document.getElementById('jp-status'); if(s) s.textContent = 'Raffle offline (backend unreachable)';
+        document.getElementById('jp-heartbeat')?.classList.remove('is-up');
+      }
+    }
+    tick(); setInterval(tick, 3000);
+  })();
+  </script>
+
 
   <!-- Robust entry loader: try /static/app.js, else Vite manifest -->
   <script>
