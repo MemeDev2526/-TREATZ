@@ -10,7 +10,7 @@ const OUTDIR = path.dirname(OUTFILE);
 const SHIM = path.resolve(cwd, "shims", "buffer-globals.js");
 const inject = fs.existsSync(SHIM) ? [SHIM] : [];
 
-// Ignore accidental CSS imports inside ESM (we ship style.css separately)
+// Ignore accidental CSS imports in the runtime bundle
 const IgnoreCssPlugin = {
   name: "ignore-css",
   setup(b) {
@@ -19,7 +19,11 @@ const IgnoreCssPlugin = {
 };
 
 async function ensureDir(dirPath) {
-  await fs.promises.mkdir(dirPath, { recursive: true });
+  try {
+    await fs.promises.mkdir(dirPath, { recursive: true });
+  } catch (err) {
+    if (err.code !== "EEXIST") throw err;
+  }
 }
 
 async function run() {
@@ -29,8 +33,6 @@ async function run() {
   }
   await ensureDir(OUTDIR);
 
-  const isDev = (process.env.NODE_ENV || "").toLowerCase() === "development";
-
   console.log("[TREATZ] 🧩 esbuild bundling app.js → static/app.js");
   try {
     await build({
@@ -39,13 +41,16 @@ async function run() {
       format: "esm",
       platform: "browser",
       target: ["es2020"],
-      minify: !isDev,
-      sourcemap: isDev ? "inline" : false,
+      minify: true,
+      sourcemap: process.env.NODE_ENV === "development" ? "inline" : false,
       outfile: OUTFILE,
+
       define: {
         "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
         global: "globalThis"
       },
+
+      // Make imported assets predictable and served from /static
       assetNames: "assets/[name]-[hash]",
       publicPath: "/static",
       loader: {
@@ -59,7 +64,10 @@ async function run() {
         ".woff2": "file",
         ".mp3": "file"
       },
+
+      // Optional Buffer/process shim (if present)
       inject,
+
       plugins: [IgnoreCssPlugin],
       logLevel: "info",
       legalComments: "none",
