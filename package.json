@@ -1,25 +1,29 @@
 {
   "name": "treatz-frontend",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Frontend for the TREATZ dApp — Solana-powered fun & games",
   "type": "module",
   "main": "app.js",
+
   "scripts": {
     "dev": "vite",
     "build:app": "node ./build-app.js",
-    "build": "vite build --base=/static/ --outDir static && npm run build:app && mkdir -p dist && cp -r static/* dist/",
+    "build": "vite build --base=/static/ --outDir static && npm run build:app",
     "build:ci": "npm run build",
     "preview": "vite preview"
   },
+
   "dependencies": {
     "@solana/spl-token": "^0.4.7",
     "@solana/web3.js": "^1.95.3",
     "buffer": "^6.0.3"
   },
+
   "devDependencies": {
     "esbuild": "^0.21.5",
     "vite": "^5.4.0"
   },
+
   "keywords": [
     "solana",
     "spl-token",
