@@ -1344,29 +1344,74 @@ export async function getAta(owner, mint) {
   })();
 
   // placeCoinFlip: full backend flow when wallet available
-  async function placeCoinFlip() {
-    try {
-      console.log("[TREATZ][diag] placeCoinFlip start", {
-        PUBKEY,
-        WALLET,
-        windowPUBKEY: window.PUBKEY,
-        provider: !!window.provider,
-        can_signTx: !!(WALLET && (WALLET.signTransaction || WALLET.signAndSendTransaction || WALLET.sendTransaction)),
-        providerEvents: typeof (WALLET?.on) === 'function'
-      });
+  async function placeCoinFlip(){
+    await ensureConfig();
+    if(!PUBKEY) throw new Error("Wallet not connected");
+    const form = document.getElementById("bet-form");
+    const side = (new FormData(form)).get("side") || "TRICK";
+    const amountHuman = Number(document.getElementById("bet-amount").value || "0");
+    if(!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
 
-      await ensureConfig();
-      if (!PUBKEY) throw new Error("Wallet not connected");
-      if (!window.solanaWeb3 || !window.splToken || !WALLET) throw new Error("Wallet libraries not loaded");
-      const amountHuman = Number(document.getElementById("bet-amount").value || "0");
-      const side = (new FormData(document.getElementById("bet-form"))).get("side") || "TRICK";
-      if (!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
+    const amountBase = Math.floor(amountHuman * (10 ** (CONFIG?.token?.decimals || 6)));
 
-      const bet = await jfetch(`${API}/bets`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ amount: Math.floor(amountHuman * TEN_POW), side })
-      });
+    // 1) Create bet server-side
+    const bet = await jfetch(`${API}/bets`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ amount: amountBase, side: String(side).toUpperCase() })
+    });
+
+    // 2) On-chain payment to game vault with memo "BET:<id>:<side>"
+    const mintPk = new PublicKey(CONFIG.token.mint);
+    const payer  = new PublicKey(PUBKEY);
+    const deposit = new PublicKey(bet.deposit);   // vault or ATA
+    const tokenProgramId = await getTokenProgramForMint(mintPk);
+
+    const tx = new Transaction();
+    // ensure payer ATA exists
+    const { ata: fromAta } = await getOrCreateATA(payer, mintPk, payer);
+    // ensure vault ATA exists (noop if already exists on chain)
+    const { ata: toAta }   = await getOrCreateATA(deposit, mintPk, payer);
+
+    tx.add(
+      createTransferCheckedInstruction(
+        fromAta, mintPk, toAta, payer, amountBase, CONFIG.token.decimals, [], tokenProgramId
+      ),
+      memoIx(bet.memo) // "BET:<bet_id>:<TRICK|TREAT>"
+    );
+
+    const sig = await sendSignedTransaction(tx);
+    if (window.__TREATZ_DEBUG) console.log("[coinflip] deposit sig:", sig);
+
+    // 3) Poll until settled
+    const coin = document.getElementById("coin"); 
+    if (coin){ coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+
+    const poll = async() => {
+      const r = await jfetch(`${API}/bets/${encodeURIComponent(bet.id)}`).catch(()=>null);
+      return r && r.status ? r : null;
+    };
+    let settled=null, tries=0;
+    while(!settled && tries++ < 40){ // ~20s
+      const r = await poll();
+      if(r && r.status === "SETTLED") settled = r;
+      else await new Promise(res=>setTimeout(res, 500));
+    }
+    if(!settled) throw new Error("Settlement timeout — check webhook/ingestor.");
+
+    // 4) Visuals + banner + FX + refresh balance
+    const landed = String(settled.outcome || "").toUpperCase(); // "TRICK" | "TREAT"
+    const youWon = !!settled.win;
+    try { setCoinVisual(landed); } catch(e){}
+    try { playResultFX(youWon ? "TREAT" : "TRICK"); } catch(e){}
+    showWinBanner(youWon ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`, !youWon);
+
+    document.getElementById("cf-status")?.replaceChildren(
+      document.createTextNode(youWon ? `WIN — ${landed}` : `LOSS — ${landed}`)
+    );
+    refreshWalletBalance().catch(()=>{});
+  }
+
       const betId = bet.bet_id;
       $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
       $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
