@@ -9,6 +9,7 @@ Target DB path: /data/treatz.db (Render disk)
 from __future__ import annotations
 from typing import Optional
 from datetime import datetime
+from contextlib import contextmanager
 import os
 import sqlite3
 import secrets
@@ -63,7 +64,8 @@ CREATE TABLE IF NOT EXISTS entries (
   user TEXT NOT NULL,
   tickets INTEGER NOT NULL,
   tx_sig TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
+  -- Use ISO 8601 with 'T' separator; API can append 'Z' as needed
+  created_at TEXT DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%S','now')),
   FOREIGN KEY(round_id) REFERENCES rounds(id)
 );
 
@@ -88,6 +90,14 @@ CREATE INDEX IF NOT EXISTS idx_rounds_opens_at ON rounds(opens_at);
 CREATE INDEX IF NOT EXISTS idx_entries_round   ON entries(round_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_txsig ON entries(tx_sig);
 CREATE INDEX IF NOT EXISTS spins_user_created ON spins(user, created_at);
+
+-- Extra helpful indexes for perf
+CREATE INDEX IF NOT EXISTS idx_bets_created   ON bets(created_at);
+CREATE INDEX IF NOT EXISTS idx_spins_created  ON spins(created_at);
+CREATE INDEX IF NOT EXISTS idx_spins_status   ON spins(status);
+
+-- keep schema forward-compatible across versions
+CREATE TEMP TABLE IF NOT EXISTS _chk_guard();
 """.strip()
 
 # =========================================================
@@ -97,10 +107,22 @@ DB_PATH = os.getenv("DB_PATH", "/data/treatz.db")
 
 async def connect(db_path: str = DB_PATH) -> aiosqlite.Connection:
     """
-    Async connection for FastAPI handlers; ensures schema.
+    Async connection for FastAPI handlers; ensures schema and sets PRAGMAs.
     """
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = await aiosqlite.connect(db_path)
+
+    # Per-connection PRAGMAs to reduce locking and keep WAL fast
+    await conn.execute("PRAGMA foreign_keys=ON")
+    await conn.execute("PRAGMA journal_mode=WAL")
+    await conn.execute("PRAGMA synchronous=NORMAL")
+    await conn.execute("PRAGMA temp_store=MEMORY")
+    await conn.execute("PRAGMA wal_autocheckpoint=1000")
+    await conn.execute("PRAGMA busy_timeout=5000")
+
+    # Optional: row access by name (your code mostly uses tuples; harmless either way)
+    conn.row_factory = sqlite3.Row
+
     await conn.executescript(SCHEMA)
     await conn.commit()
     return conn
@@ -143,13 +165,38 @@ def connect_sync(db_path: str = DB_PATH) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+
+    # Per-connection PRAGMAs (mirror async)
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA temp_store=MEMORY")
+    conn.execute("PRAGMA wal_autocheckpoint=1000")
+    conn.execute("PRAGMA busy_timeout=5000")
+
     conn.executescript(SCHEMA)
     conn.commit()
     return conn
 
+@contextmanager
+def tx(conn: sqlite3.Connection):
+    """
+    Tiny transactional context manager for sync code.
+    Usage:
+        with tx(conn) as c:
+            c.execute(...)
+            c.execute(...)
+    """
+    try:
+        conn.execute("BEGIN")
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
 # -------------------------
 # Sync KV helpers (mirror async kv_get / kv_set)
-# These let synchronous shutdown/startup/payout code work with the same kv store.
 # -------------------------
 def kv_set_sync(conn: sqlite3.Connection, k: str, v: str) -> None:
     """
@@ -191,7 +238,7 @@ def alloc_next_round_id_sync(conn: sqlite3.Connection) -> str:
     return f"R{n:04d}"
 
 # -------------------------
-# Create round (synchronous) — updated to use sequential allocator
+# Create round (synchronous) — uses sequential allocator
 # -------------------------
 def create_round_sync(conn: sqlite3.Connection, opens_at: datetime, closes_at: datetime) -> str:
     """Create a new round row synchronously, returns new round ID (sequential)."""
