@@ -3,41 +3,43 @@ import { defineConfig } from "vite";
 import { resolve } from "path";
 
 export default defineConfig({
-  // keep base so built HTML references /static/...
+  // All asset URLs and imports resolve under /static/
   base: "/static/",
   root: ".",
 
-  // Speed up dev & avoid ESM resolution hiccups for large libs used elsewhere
+  // Speed up dev startup and avoid large ESM re-bundling
   optimizeDeps: {
-    include: ["@solana/web3.js", "@solana/spl-token"]
+    include: ["@solana/web3.js", "@solana/spl-token"],
   },
 
-    build: {
-    outDir: "dist",
+  build: {
+    // ⚠️ Note: we no longer hardcode outDir = "dist"
+    // because your npm script already passes --outDir static
     emptyOutDir: true,
 
-    // put hashed assets into /assets/ (default is 'assets' but explicit is clearer)
+    // Emit hashed assets into /assets/ (explicit is clearer)
     assetsDir: "assets",
 
-    // emit a manifest.json mapping original names → hashed filenames (helpful for deterministic copy)
+    // Produce manifest.json for deterministic hashed filenames
     manifest: true,
 
-    // recommend explicit rollup input for multi-page builds (ensures both index.html and whitepaper.html are built)
+    // Explicit Rollup entry points for multipage builds
     rollupOptions: {
       input: {
         main: resolve(__dirname, "index.html"),
         whitepaper: resolve(__dirname, "whitepaper.html"),
       },
-      external: id => id.startsWith("/static/"),
       output: {
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/chunk-[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
       },
     },
+
+    // bundle all CSS into one (helps stable file naming)
     cssCodeSplit: false,
 
-    // optional: increase chunk warning limit if you get warnings for big deps like @solana/web3.js
+    // Raise warning limit for Solana deps
     chunkSizeWarningLimit: 2000,
   },
 
@@ -46,10 +48,9 @@ export default defineConfig({
     open: true,
   },
 
-  // convenient alias if you want to import from "@/..." in your code
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      "@": resolve(__dirname, "src"),
     },
   },
 });
