@@ -600,6 +600,19 @@ export async function getAta(owner, mint) {
     }
   }
 
+  function showWinBanner(text, isLoss=false){
+    const el = document.getElementById("cf-banner");
+    if(!el) return;
+    el.classList.remove('loss','show');
+    el.textContent = text || '';
+    if(isLoss) el.classList.add('loss');
+    // force reflow to replay
+    void el.offsetWidth;
+    el.classList.add('show');
+    clearTimeout(el.__t);
+    el.__t = setTimeout(()=> el.classList.remove('show'), 2200);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     const treatImg = (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
     const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
@@ -953,7 +966,7 @@ export async function getAta(owner, mint) {
   // Minimal connect toggles
   $$("#btn-connect, #btn-connect-2").forEach(btn => btn?.addEventListener("click", async () => {
     try {
-      if (PUBKEY) {
+     if (PUBKEY) {
         try { await WALLET?.disconnect?.(); } catch {}
         PUBKEY = null; WALLET = null;
         window.PUBKEY = null;
@@ -961,6 +974,7 @@ export async function getAta(owner, mint) {
         window.WALLET = null;
         setWalletLabels();
         toast("Disconnected");
+        window.dispatchEvent(new Event("wallet:disconnected"));
         return;
       }
 
@@ -992,16 +1006,19 @@ export async function getAta(owner, mint) {
                     PUBKEY = s; window.PUBKEY = s;
                     window.walletPlumbingReady = !!s;
                     setWalletLabels();
+                    window.dispatchEvent(new Event("wallet:connected"));
                   });
                   p.on('disconnect', () => {
                     PUBKEY = null; WALLET = null;
                     window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
                     setWalletLabels();
+                    window.dispatchEvent(new Event("wallet:disconnected"));
                   });
                 } catch {}
               }
               setWalletLabels();
               toast("Wallet connected");
+              window.dispatchEvent(new Event("wallet:connected"));
               return;
             }
           }
@@ -1047,17 +1064,20 @@ export async function getAta(owner, mint) {
                 const s = (pk && pk.toString && pk.toString()) || (p.publicKey && p.publicKey.toString && p.publicKey.toString()) || null;
                 PUBKEY = s; window.PUBKEY = s; window.walletPlumbingReady = !!s;
                 setWalletLabels();
+                window.dispatchEvent(new Event("wallet:connected"));
               });
               p.on('disconnect', () => {
                 PUBKEY = null; WALLET = null;
                 window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
                 setWalletLabels();
+                window.dispatchEvent(new Event("wallet:disconnected"));
               });
             } catch {}
           }
 
           setWalletLabels();
           toast("Wallet connected");
+          window.dispatchEvent(new Event("wallet:connected"));
         } else {
           if (w === "phantom") window.open("https://phantom.app/", "_blank");
         }
@@ -1079,6 +1099,7 @@ export async function getAta(owner, mint) {
           window.PUBKEY = s; window.WALLET = p; window.provider = p;
           window.walletPlumbingReady = true;
           setWalletLabels();
+          window.dispatchEvent(new Event("wallet:connected"));
           console.log("[TREATZ] hydrated provider on load ->", s);
 
           if (typeof p.on === 'function') {
@@ -1087,10 +1108,12 @@ export async function getAta(owner, mint) {
                 const str = (pk && typeof pk.toString === 'function' && pk.toString()) ||
                             (p.publicKey && typeof p.publicKey.toString === 'function' && p.publicKey.toString()) || null;
                 PUBKEY = str; window.PUBKEY = str; window.walletPlumbingReady = !!str; setWalletLabels();
+                window.dispatchEvent(new Event("wallet:connected"));
               });
               p.on('disconnect', () => {
                 PUBKEY = null; WALLET = null; window.PUBKEY = null; window.WALLET = null; window.provider = null; window.walletPlumbingReady = false;
                 setWalletLabels();
+                window.dispatchEvent(new Event("wallet:disconnected"));
               });
             } catch {}
           }
@@ -1375,7 +1398,7 @@ export async function getAta(owner, mint) {
 
     tx.add(
       createTransferCheckedInstruction(
-        fromAta, mintPk, toAta, payer, amountBase, CONFIG.token.decimals, [], tokenProgramId
+        fromAta, mintPk, toAta, payer, BigInt(amountBase), CONFIG.token.decimals, [], tokenProgramId
       ),
       memoIx(bet.memo) // "BET:<bet_id>:<TRICK|TREAT>"
     );
@@ -1412,106 +1435,6 @@ export async function getAta(owner, mint) {
     refreshWalletBalance().catch(()=>{});
   }
 
-      const betId = bet.bet_id;
-      $("#bet-deposit")?.replaceChildren(document.createTextNode(bet.deposit));
-      $("#bet-memo")?.replaceChildren(document.createTextNode(bet.memo));
-
-      {
-        const edge = document.getElementById("edge-line");
-        if (edge && bet.server_seed_hash) {
-          edge.textContent = `Commit: ${bet.server_seed_hash.slice(0, 12)}… (revealed on settle)`;
-        }
-      }
-
-      const mintPk = new PublicKey(CONFIG.token.mint);
-
-      let destAtaPk, createDestIx = null;
-      if (CONFIG.vaults?.game_vault_ata) {
-        destAtaPk = new PublicKey(CONFIG.vaults.game_vault_ata);
-      } else {
-        const vaultOwner =
-          CONFIG.vaults?.game_vault ||
-          CONFIG.vaults?.game_owner ||
-          CONFIG.vaults?.receiver;
-        if (!vaultOwner) throw new Error("Vault owner not configured");
-        const got = await getOrCreateATA(vaultOwner, mintPk, new PublicKey(PUBKEY));
-        destAtaPk = got.ata;
-        createDestIx = got.ix;
-      }
-
-      const payerRaw = PUBKEY;
-      const payerPub = (typeof payerRaw === "string") ? new PublicKey(payerRaw) : payerRaw;
-
-      const { ata: computedAta, ix: createSrc, tokenProgramId } =
-        await getOrCreateATA(payerPub, mintPk, payerPub);
-
-      let realSrc = computedAta;
-
-      const found = await connection.getTokenAccountsByOwner(
-        payerPub,
-        { mint: mintPk },
-        "confirmed"
-      ).catch(() => null);
-
-      if (found?.value?.length) {
-        let best = { pubkey: computedAta, amt: -1 };
-        for (const it of found.value) {
-          const b = await connection.getTokenAccountBalance(it.pubkey, "confirmed").catch(() => null);
-          const amt = Number(b?.value?.uiAmount ?? 0);
-          if (amt > best.amt) best = { pubkey: it.pubkey, amt };
-        }
-        realSrc = best.pubkey;
-      }
-
-      const bal = await connection.getTokenAccountBalance(realSrc, "confirmed").catch(() => null);
-      const uiBal = Number(bal?.value?.uiAmount || 0);
-      const needHuman = Number(amountHuman);
-      if (uiBal < needHuman) {
-        toast(`Insufficient ${TOKEN.symbol}: have ${uiBal.toLocaleString()}, need ${needHuman.toLocaleString()}`);
-        return;
-      }
-
-      try {
-        const info = await connection.getParsedAccountInfo(realSrc, "confirmed");
-        const ownerStr = info?.value?.data?.parsed?.info?.owner;
-        if (ownerStr && ownerStr !== payerPub.toBase58()) {
-          throw new Error("Token account is not owned by connected wallet");
-        }
-      } catch {}
-
-      const ixs = [];
-      if (createSrc) ixs.push(createSrc);
-      if (createDestIx) ixs.push(createDestIx);
-      const amountBase = BigInt(Math.floor(amountHuman * TEN_POW)); // bigint ✅
-      ixs.push(
-        createTransferCheckedInstruction(
-          realSrc,
-          mintPk,
-          destAtaPk,
-          payerPub,
-          amountBase, // bigint ✅
-          DECIMALS,
-          [],
-          tokenProgramId
-        ),
-        memoIx(bet.memo)
-      );
-
-      const bh = (await jfetch(`${API}/cluster/latest_blockhash`)).blockhash;
-      const tx = new Transaction({ feePayer: payerPub });
-      tx.recentBlockhash = bh;
-      tx.add(...ixs);
-      const signature = await sendSignedTransaction(tx);
-      $("#cf-status")?.replaceChildren(document.createTextNode(signature ? `Sent: ${signature.slice(0, 10)}…` : "Sent"));
-      const coin = $("#coin");
-      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
-      pollBetUntilSettle(betId).catch(() => { });
-    } catch (e) {
-      console.error(e);
-      alert(e.message || "Bet failed.");
-    }
-  }
-
   async function pollBetUntilSettle(betId, timeoutMs = 45_000) {
     const t0 = Date.now();
     while (Date.now() - t0 < timeoutMs) {
@@ -1534,22 +1457,7 @@ export async function getAta(owner, mint) {
     $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
   }
 
-  $("#cf-place")?.addEventListener("click", (e) => { e.preventDefault(); placeCoinFlip().catch(() => {}); });
-
-  function showWinBanner(text) {
-    try {
-      const el = document.createElement("div");
-      el.textContent = text;
-      Object.assign(el.style, {
-        position: "fixed", left: "50%", top: "18px", transform: "translateX(-50%)",
-        background: "linear-gradient(90deg,#2aff6b,#9bff2a)",
-        color: "#032316", padding: "10px 14px", fontWeight: "900",
-        borderRadius: "999px", zIndex: 10000, boxShadow: "0 8px 24px rgba(0,0,0,.35)"
-      });
-      document.body.appendChild(el);
-      setTimeout(() => { el.style.opacity = "0"; el.style.transition = "opacity .35s"; setTimeout(() => el.remove(), 400); }, 1800);
-    } catch (e) { console.warn("showWinBanner failed", e); }
-  }
+  // (Removed duplicate floating-div version of showWinBanner)
 
   // ==========================
   // Wheel of Fate — Frontend
