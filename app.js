@@ -1387,15 +1387,33 @@ export async function getAta(owner, mint) {
     // 2) On-chain payment to game vault with memo "BET:<id>:<side>"
     const mintPk = new PublicKey(CONFIG.token.mint);
     const payer  = new PublicKey(PUBKEY);
-    const deposit = new PublicKey(bet.deposit);   // vault or ATA
+    const depositStr = String(bet.deposit);
+
+    // Resolve token program
     const tokenProgramId = await getTokenProgramForMint(mintPk);
 
-    const tx = new Transaction();
-    // ensure payer ATA exists
-    const { ata: fromAta } = await getOrCreateATA(payer, mintPk, payer);
-    // ensure vault ATA exists (noop if already exists on chain)
-    const { ata: toAta }   = await getOrCreateATA(deposit, mintPk, payer);
+    // Payer source ATA (ensure exists)
+    const { ata: fromAta, ix: createSrcIx } = await getOrCreateATA(payer, mintPk, payer);
 
+    // Destination token account: accept ATA or owner
+    let toAta = null, createDestIx = null;
+    try {
+      const pk = new PublicKey(depositStr);
+      const info = await connection.getAccountInfo(pk, "confirmed");
+      if (info && info.owner && info.owner.equals(tokenProgramId)) {
+        toAta = pk; // already a token account
+      }
+    } catch (_) {}
+    if (!toAta) {
+      const depositOwner = new PublicKey(depositStr);
+      const got = await getOrCreateATA(depositOwner, mintPk, payer);
+      toAta = got.ata;
+      createDestIx = got.ix;
+    }
+
+    const tx = new Transaction();
+    if (createSrcIx)  tx.add(createSrcIx);
+    if (createDestIx) tx.add(createDestIx);
     tx.add(
       createTransferCheckedInstruction(
         fromAta, mintPk, toAta, payer, BigInt(amountBase), CONFIG.token.decimals, [], tokenProgramId
@@ -1411,7 +1429,7 @@ export async function getAta(owner, mint) {
     if (coin){ coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
 
     const poll = async() => {
-      const r = await jfetch(`${API}/bets/${encodeURIComponent(bet.id)}`).catch(()=>null);
+      const r = await jfetch(`${API}/bets/${encodeURIComponent(bet.bet_id)}`).catch(()=>null);
       return r && r.status ? r : null;
     };
     let settled=null, tries=0;
@@ -1423,7 +1441,7 @@ export async function getAta(owner, mint) {
     if(!settled) throw new Error("Settlement timeout — check webhook/ingestor.");
 
     // 4) Visuals + banner + FX + refresh balance
-    const landed = String(settled.outcome || "").toUpperCase(); // "TRICK" | "TREAT"
+    const landed = String(settled.result || "").toUpperCase(); // <-- fixed field
     const youWon = !!settled.win;
     try { setCoinVisual(landed); } catch(e){}
     try { playResultFX(youWon ? "TREAT" : "TRICK"); } catch(e){}
@@ -1456,8 +1474,6 @@ export async function getAta(owner, mint) {
     }
     $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
   }
-
-  // (Removed duplicate floating-div version of showWinBanner)
 
   // ==========================
   // Wheel of Fate — Frontend
@@ -1688,45 +1704,56 @@ export async function getAta(owner, mint) {
       }, 4600);
     }
 
-    // paid spin (on-chain)
+    // paid spin (on-chain) — FIXED to accept ATA or owner & Token-2022 aware
     async function spinOnChain() {
       elStatus.textContent = "Preparing spin…";
       const body = { client_seed: Math.random().toString(16).slice(2) };
-      const spin = await fetch(`${API}/wheel/spins`, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body) }).then(r=>r.json());
+      const spin = await fetch(`${API}/wheel/spins`, {
+        method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(body)
+      }).then(r=>r.json());
       elCommit.textContent = `Commit: ${spin.server_seed_hash.slice(0,12)}…`;
 
-      const { PublicKey, Transaction } = window.solanaWeb3 || {};
-      const { createTransferCheckedInstruction, getAssociatedTokenAddress } = window.splToken || {};
-      if (!PublicKey || !Transaction || !createTransferCheckedInstruction) { throw new Error("Wallet libs missing"); }
+      const mintPk  = new PublicKey(window.TREATZ_CONFIG?.token?.mint);
+      const payerPk = new PublicKey(window.PUBKEY);
+      const tokenProgramId = await getTokenProgramForMint(mintPk);
 
-      function memoIxLocal(memo) {
-        const pid = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-        const data = new TextEncoder().encode(memo || "");
-        return new window.solanaWeb3.TransactionInstruction({ keys: [], programId: pid, data });
-      }
-      async function getOrCreateATALocal(owner, mint) {
-        const ata = await getAssociatedTokenAddress(mint, owner);
-        return { ata, ix: null };
-      }
-      async function sendSignedTransactionLocal(tx) {
-        if (!window.WALLET || typeof window.WALLET.signAndSendTransaction !== "function") throw new Error("No wallet connected");
-        const res = await window.WALLET.signAndSendTransaction(tx);
-        return res?.signature || res;
-      }
-      async function jfetchLocal(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw new Error(`${r.status}`); return r.json(); }
+      // Source ATA (ensure)
+      const { ata: srcAta, ix: createSrcIx } = await getOrCreateATA(payerPk, mintPk, payerPk);
 
-      const mintPk = new PublicKey(window.TREATZ_CONFIG?.token?.mint || "11111111111111111111111111111111");
-      const payerPub = new PublicKey(window.PUBKEY);
-      const dest = new PublicKey(spin.deposit);
-      const { ata: srcAta } = await getOrCreateATALocal(payerPub, mintPk);
-      const ixs = [
-        createTransferCheckedInstruction(srcAta, mintPk, dest, payerPub, BigInt(spin.amount), DECIMALS),
-        memoIxLocal(spin.memo)
-      ];
-      const bh = (await jfetchLocal(`${API}/cluster/latest_blockhash`)).blockhash;
-      const tx = new Transaction({ feePayer: payerPub, recentBlockhash: bh });
+      // Destination: if API gave ATA, use it; else derive from owner and create if needed
+      const depositStr = String(spin.deposit);
+      let dstAta = null, createDstIx = null;
+      try {
+        const pk = new PublicKey(depositStr);
+        const info = await connection.getAccountInfo(pk, "confirmed");
+        if (info && info.owner && info.owner.equals(tokenProgramId)) {
+          dstAta = pk;
+        }
+      } catch(_) {}
+      if (!dstAta) {
+        const vaultOwner = new PublicKey(depositStr);
+        const got = await getOrCreateATA(vaultOwner, mintPk, payerPk);
+        dstAta = got.ata;
+        createDstIx = got.ix;
+      }
+
+      const ixs = [];
+      if (createSrcIx) ixs.push(createSrcIx);
+      if (createDstIx) ixs.push(createDstIx);
+      ixs.push(
+        createTransferCheckedInstruction(
+          srcAta, mintPk, dstAta, payerPk, BigInt(spin.amount),
+          Number(window.TREATZ_CONFIG?.token?.decimals || 6), [], tokenProgramId
+        ),
+        memoIx(spin.memo)
+      );
+
+      const bh = (await jfetch(`${API}/cluster/latest_blockhash`)).blockhash;
+      const tx = new Transaction({ feePayer: payerPk, recentBlockhash: bh });
       tx.add(...ixs);
-      await sendSignedTransactionLocal(tx);
+
+      const sig = await sendSignedTransaction(tx);
+      if (window.__TREATZ_DEBUG) console.log("[wheel] deposit sig:", sig);
 
       elSvg.classList.add("spinning");
       elSvg.style.transform = `rotate(${(720).toFixed(2)}deg)`;
@@ -1877,9 +1904,10 @@ export async function getAta(owner, mint) {
       const bal = await connection.getTokenAccountBalance(realSrc, "confirmed").catch(() => null);
       const haveBase = Number(bal?.value?.amount || 0);
       const needBase = Number(amountBase);
+      const dec = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6); // <— consistent decimals
       if (haveBase < needBase) {
-        const haveHuman = haveBase / (10 ** Number(DECIMALS || 6));
-        const needHuman = needBase / (10 ** Number(DECIMALS || 6));
+        const haveHuman = haveBase / (10 ** dec);
+        const needHuman = needBase / (10 ** dec);
         toast(`Insufficient ${TOKEN.symbol}: have ${haveHuman.toLocaleString()}, need ${needHuman.toLocaleString()}`);
         return;
       }
@@ -1894,7 +1922,7 @@ export async function getAta(owner, mint) {
           destAtaPk,
           payerPub,
           amountBase, // bigint ✅
-          DECIMALS,
+          dec,
           [],
           tokenProgramId
         ),
