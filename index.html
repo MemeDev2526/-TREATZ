@@ -34,14 +34,14 @@
         telegram: "https://t.me/trickortreatsol",
         twitter:  "https://x.com/trickortreatsol?s=21",
         tiktok:   "https://www.tiktok.com/@sol_treatz",
-        whitepaper: "/whitepaper"
+        whitepaper: "/static/whitepaper.html"
       },
       buyUrl: "https://pump.fun/coin/DqABdJvc7pELo4Qf9UbxcvNuf9CVQkKzSMtWdiWcpump",
       tokenAddress: "DqABdJvc7pELo4Qf9UbxcvNuf9CVQkKzSMtWdiWcpump",
       assets: {
-        ambient: "/assets/ambient_loop.mp3",
-        logo: "/assets/TREATZ_Logo.png",
-        mascot: "/assets/Mascot.png"
+        ambient: "/static/assets/ambient_loop.mp3",
+        logo: "/static/assets/TREATZ_Logo.png",
+        mascot: "/static/assets/Mascot.png"
       }
     };
   </script>
@@ -167,16 +167,16 @@
 
         <!-- RIGHT: COIN + STATUS (FX will hook to #fx-layer) -->
         <div class="card__col">
-          <div class="cf-display">
-            <div id="coin" class="coin">
+          <div class="cf-display" id="cf-display" aria-live="polite">
+            <div class="coin" id="coin" aria-label="Coin">
               <div class="coin__face coin__face--front">TRICK</div>
               <div class="coin__face coin__face--back">TREAT</div>
             </div>
 
-            <!-- centered banner overlay -->
+            <!-- centered win/loss banner -->
             <div id="cf-banner" class="cf-banner" aria-live="polite"></div>
 
-            <div id="cf-status" class="cf-status">—</div>
+            <div class="cf-status" id="cf-status">Ready to flip.</div>
           </div>
         </div>
       </div>
@@ -212,8 +212,31 @@
           <!-- Raffle heartbeat / backend status -->
           <div id="jp-heartbeat" class="jp-heartbeat" aria-live="polite">
             <span class="dot" aria-hidden="true"></span>
-            <span id="jp-status">Checking raffle schedule…</span>
+            <span id="jp-status" aria-live="off">Checking raffle schedule…</span>
           </div>
+
+          <script>
+          (function raffleHeartbeat(){
+            async function tick(){
+              try{
+                const h = await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());
+                const cur = await fetch('/api/rounds/current',{cache:'no-store'}).then(r=>r.json());
+                const s = document.getElementById('jp-status');
+                const hb = document.getElementById('jp-heartbeat');
+                  if(!s||!hb) return;
+                  const closes = new Date(String(cur.closes_at||'').replace(' ','T')+'Z');
+                  const left = Math.max(0, Math.floor((closes - Date.now())/1000));
+                  const m = Math.floor(left/60), sec = String(left%60).padStart(2,'0');
+                  s.textContent = `Round #${cur.round_id} — closes in ${m}:${sec}`;
+                  hb.classList.toggle('is-up', !!h.ok);
+                }catch(e){
+                  const s = document.getElementById('jp-status'); if(s) s.textContent = 'Raffle offline (backend unreachable)';
+                  document.getElementById('jp-heartbeat')?.classList.remove('is-up');
+                }
+              }
+              tick(); setInterval(tick, 3000);
+            })();
+            </script>
 
         </div>
        
@@ -297,7 +320,6 @@
 
           <div class="form">
             <div class="btnrow">
-              <button id="wheel-spin" class="btn btn--primary">Spin the Wheel (100,000)</button>
               <button id="wheel-freespin" class="btn btn--ghost">Use Free Spin</button>
             </div>
             <p class="help" id="wheel-commit">Commit: —</p>
@@ -380,31 +402,7 @@
   <script>
     if (window.TREATZ_CONFIG) window.TREATZ_CONFIG.apiBase = "/api";
   </script>
-
-  <script>
-  (function raffleHeartbeat(){
-    async function tick(){
-      try{
-        const h = await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());
-        const cur = await fetch('/api/rounds/current',{cache:'no-store'}).then(r=>r.json());
-        const s = document.getElementById('jp-status');
-        const hb = document.getElementById('jp-heartbeat');
-        if(!s||!hb) return;
-        const closes = new Date(String(cur.closes_at||'').replace(' ','T')+'Z');
-        const left = Math.max(0, Math.floor((closes - Date.now())/1000));
-        const m = Math.floor(left/60), sec = String(left%60).padStart(2,'0');
-        s.textContent = `Round #${cur.round_id} — closes in ${m}:${sec}`;
-        hb.classList.toggle('is-up', !!h.ok);
-      }catch(e){
-        const s = document.getElementById('jp-status'); if(s) s.textContent = 'Raffle offline (backend unreachable)';
-        document.getElementById('jp-heartbeat')?.classList.remove('is-up');
-      }
-    }
-    tick(); setInterval(tick, 3000);
-  })();
-  </script>
-
-
+  
   <!-- Robust entry loader: try /static/app.js, else Vite manifest -->
   <script>
     (async () => {
