@@ -3,12 +3,12 @@ set -euo pipefail
 
 echo "[TREATZ] 🚀 Starting Render build…"
 
-# Build/stamp id for cache-busting (__BUILD__ in HTML/JS)
+# Build ID for cache-busting (__BUILD__ in HTML/JS)
 BUILD_ID="${RENDER_GIT_COMMIT:-$(date +%s)}"
 BUILD_ID="${BUILD_ID:0:7}"
 echo "[TREATZ] 🧾 BUILD_ID=${BUILD_ID}"
 
-# ---- Python venv (optional) ----
+# ---- Optional: Python venv (only if you have requirements.txt) ----
 if [ -f requirements.txt ]; then
   if [ -f .venv/bin/activate ]; then
     # shellcheck disable=SC1091
@@ -18,7 +18,6 @@ if [ -f requirements.txt ]; then
     # shellcheck disable=SC1091
     source .venv/bin/activate
   fi
-
   python3 -V
   pip install --upgrade pip
   pip install -r requirements.txt
@@ -26,65 +25,46 @@ else
   echo "[TREATZ] (no requirements.txt) — skipping Python deps"
 fi
 
-# ---- Frontend deps ----
+# ---- Node deps ----
 if [ -f package-lock.json ]; then
   npm ci --no-audit --no-fund
 else
   npm install --no-audit --no-fund
 fi
 
-# ---- Build site with Vite (puts files in dist/) ----
-echo "[TREATZ] 🛠️  Building site with Vite…"
-npm run build
+# ---- Build site to /static with Vite ----
+echo "[TREATZ] 🛠️  Building site with Vite → static/"
+npx vite build --base=/static/ --outDir static
 
-# ---- Copy dist → static (fresh) ----
-if [ -d "dist" ]; then
-  rm -rf static
-  mkdir -p static
-  cp -a dist/. static/
+# ---- Bundle standalone runtime AFTER vite (esbuild) ----
+echo "[TREATZ] 🧩 Bundling app.js with esbuild → static/app.js"
+npm run build:app
 
-  # keep raw repo assets (images/audio in /assets) under /static/assets too
-  mkdir -p static/assets
-  if [ -d "assets" ]; then
-    cp -a assets/. static/assets/
-  fi
-else
-  echo "[TREATZ] ⚠️ dist/ not found after build — aborting" >&2
+# Sanity: ensure app.js exists
+if [ ! -f static/app.js ]; then
+  echo "[TREATZ] ❌ static/app.js missing after build — aborting" >&2
   exit 1
 fi
 
-# ---- Overwrite the built index.html with our repo root index.html ----
-# This avoids Vite inserting a hashed HTML entry that imports /static/app.js and /static/style.css.
+# ---- Keep raw repo assets (images/audio) alongside vite output ----
+mkdir -p static/assets
+if [ -d "assets" ]; then
+  cp -a assets/. static/assets/
+fi
+
+# ---- Use your repo HTML (so your robust loader stays in control) ----
 if [ -f "index.html" ]; then
   cp -f index.html static/index.html
   echo "[TREATZ] Overrode Vite-built index.html with repo-root index.html"
 fi
 
-# ---- Build standalone runtime AFTER the dist→static copy ----
-echo "[TREATZ] 🧩 Building standalone runtime (app.js)…"
-npm run build:app
-
-# ensure we actually have JS before shipping
-if [ ! -f static/app.js ]; then
-  echo "[TREATZ] ❌ static/app.js missing after build — aborting deploy" >&2
-  exit 1
-fi
-
-
-# ---- NEVER copy from a manifest into app.js (that caused the regression) ----
-
-# ---- Always ship a stable /static/style.css (author CSS from repo root) ----
+# ---- Always ship your author CSS (stable path for the site) ----
 if [ -f "style.css" ]; then
   cp -f style.css static/style.css
   echo "[TREATZ] Copied repo-root style.css -> /static/style.css"
 fi
 
-echo "[TREATZ] 📦 Contents of static/:"
-ls -la static || true
-echo "[TREATZ] 🔎 Has .vite manifest for other assets?"
-[ -f static/.vite/manifest.json ] && echo "Yes (.vite/manifest.json)" || echo "No"
-
-# --- Stamp __BUILD__ placeholders (index.html + app.js if present)
+# ---- Stamp __BUILD__ placeholders (index.html + app.js) ----
 if [ -f static/index.html ]; then
   sed -i.bak "s/__BUILD__/${BUILD_ID}/g" static/index.html || true
   rm -f static/index.html.bak
@@ -93,5 +73,9 @@ if [ -f static/app.js ]; then
   sed -i.bak "s/__BUILD__/${BUILD_ID}/g" static/app.js || true
   rm -f static/app.js.bak
 fi
+
+echo "[TREATZ] 📦 Contents of static/:"
+ls -la static || true
+[ -f static/manifest.json ] && echo "[TREATZ] ✔ Vite manifest present" || echo "[TREATZ] (no top-level manifest.json — okay if your HTML handles fallback)"
 
 echo "[TREATZ] ✅ Build complete!"
