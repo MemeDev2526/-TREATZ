@@ -104,12 +104,13 @@ class Settings(BaseSettings):
     # =========================
     # Secrets / Webhooks
     # =========================
-    HMAC_SECRET: Optional[str] = None                # used to sign/verify webhooks
-    HELIUS_SIGNATURE_HEADER: Optional[str] = None    # e.g., "X-Helius-Signature"
+    HMAC_SECRET: Optional[str] = os.getenv("HMAC_SECRET")  # optional, only for HMAC mode                # used to sign/verify webhooks
+    HELIUS_SIGNATURE_HEADER: Optional[str] = os.getenv("HELIUS_SIGNATURE_HEADER")
     HELIUS_WEBHOOK_URL: Optional[str] = None         # where Helius POSTs (informational)
-    WEBHOOK_SHARED_SECRET: Optional[str] = None
+    WEBHOOK_SHARED_SECRET: Optional[str] = os.getenv("WEBHOOK_SHARED_SECRET")
     WEBHOOK_VERIFY_MODE: str = "header"              # "header"|"body" (future use)
     WEBHOOK_HEADER_NAME: str = "X-Helius-Auth"
+    ALLOW_UNSIGNED_HELIUS: bool = os.getenv("ALLOW_UNSIGNED_HELIUS", "false").lower() in ("1","true","yes")
 
     # =========================
     # Database
