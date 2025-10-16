@@ -474,17 +474,58 @@ def _parse_iso_z(s: Optional[str]) -> Optional[datetime]:
 # ---------- sequential round id helper ----------
 async def alloc_next_round_id() -> str:
     """
-    Allocate a sequential round id of the form RNNNN using a KV counter 'round:next_id'.
-    Returns the new id (e.g. 'R0001').
+    Allocate a sequential id 'RNNNN'. Before incrementing, sync the KV counter with DB max
+    so we never collide with already-present rows.
     """
+    # 1) bump KV to DB max if behind
+    await sync_round_counter_to_dbmax()
+
+    # 2) read, bump, write
     key = "round:next_id"
     cur = await dbmod.kv_get(app.state.db, key)
     try:
         n = int(cur or 0) + 1
     except Exception:
         n = 1
+
+    # 3) last-resort safety: if R{n} exists, resync and recompute once
+    cand = f"R{n:04d}"
+    async with app.state.db.execute("SELECT 1 FROM rounds WHERE id=?", (cand,)) as c:
+        row = await c.fetchone()
+    if row:
+        # resync → recompute
+        n = (await sync_round_counter_to_dbmax()) + 1
+        cand = f"R{n:04d}"
+
     await dbmod.kv_set(app.state.db, key, str(n))
-    return f"R{n:04d}"
+    return cand
+
+# ---------- round counter sync helpers ----------
+async def _db_max_round_num(conn) -> int:
+    """Return MAX numeric round id present in DB (e.g., R0011 -> 11)."""
+    async with conn.execute("SELECT MAX(CAST(SUBSTR(id, 2) AS INT)) FROM rounds") as cur:
+        row = await cur.fetchone()
+    try:
+        return int(row[0] or 0)
+    except Exception:
+        return 0
+
+async def sync_round_counter_to_dbmax() -> int:
+    """
+    Ensure KV 'round:next_id' is >= DB max numeric id.
+    Store DB max if KV is behind. Return the resulting 'round:next_id' (integer).
+    """
+    dbmax = await _db_max_round_num(app.state.db)
+    cur = await dbmod.kv_get(app.state.db, "round:next_id")
+    try:
+        kv = int(cur or 0)
+    except Exception:
+        kv = 0
+    if dbmax > kv:
+        await dbmod.kv_set(app.state.db, "round:next_id", str(dbmax))
+        return dbmax
+    return kv
+
 
 # --- Derived pot helper: always compute from entries ---
 async def _round_pot_base_units(conn, rid: str) -> int:
@@ -590,6 +631,11 @@ async def on_startup():
     # Connect DB + ensure schema
     app.state.db = await dbmod.connect(settings.DB_PATH)
     await ensure_schema(app.state.db)
+
+    try:
+        await sync_round_counter_to_dbmax()
+    except Exception:
+        traceback.print_exc()
 
     # Ensure a current (OPEN) round exists
     current = await dbmod.kv_get(app.state.db, "current_round_id")
@@ -1750,24 +1796,38 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
     await app.state.db.execute("UPDATE rounds SET status='SETTLED' WHERE id=?", (rid,))
 
     # Open next round (timed with ROUND_MIN & finalize_slot)
-    new_id = await alloc_next_round_id()
-    # make new round times timezone-aware UTC
-    now = datetime.now(timezone.utc) + timedelta(minutes=ROUND_BREAK)
-    closes = now + timedelta(minutes=ROUND_MIN)
+    # Try once; if primary-key collision occurs, sync counter and retry.
+    for attempt in (1, 2):
+        new_id = await alloc_next_round_id()
+        now = datetime.now(timezone.utc) + timedelta(minutes=ROUND_BREAK)
+        closes = now + timedelta(minutes=ROUND_MIN)
 
-    new_round_srv = secrets.token_hex(32)
-    await dbmod.kv_set(app.state.db, f"round:{new_id}:server_seed", new_round_srv)
-    srv_hash = _hash(new_round_srv)
+        new_round_srv = secrets.token_hex(32)
+        await dbmod.kv_set(app.state.db, f"round:{new_id}:server_seed", new_round_srv)
+        srv_hash = _hash(new_round_srv)
 
-    curr_slot = await _rpc_get_slot()
-    finalize_slot = curr_slot + (ROUND_MIN * SLOTS_PER_MIN)
+        curr_slot = await _rpc_get_slot()
+        new_finalize_slot = curr_slot + (ROUND_MIN * SLOTS_PER_MIN)
 
-    await app.state.db.execute(
-        "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) VALUES(?,?,?,?,?,?,?,?)",
-        (new_id, "OPEN", _rfc3339(now), _rfc3339(closes), srv_hash, secrets.token_hex(8), finalize_slot, 0),
-    )
-    await dbmod.kv_set(app.state.db, "current_round_id", new_id)
-    await app.state.db.commit()
+        try:
+            await app.state.db.execute(
+                "INSERT INTO rounds(id,status,opens_at,closes_at,server_seed_hash,client_seed,finalize_slot,pot) "
+                "VALUES(?,?,?,?,?,?,?,?)",
+                (new_id, "OPEN", _rfc3339(now), _rfc3339(closes), srv_hash, secrets.token_hex(8), new_finalize_slot, 0),
+            )
+            await dbmod.kv_set(app.state.db, "current_round_id", new_id)
+            await app.state.db.commit()
+            break  # success
+        except Exception as e:
+            # UNIQUE constraint → sync & retry once
+            msg = str(e).lower()
+            if attempt == 1 and ("unique" in msg or "constraint" in msg or "already exists" in msg):
+                await sync_round_counter_to_dbmax()
+                # loop and retry
+            else:
+                traceback.print_exc()
+                raise
+
 
     # Auto-apply credits to NEW round
     async with app.state.db.execute("SELECT k, v FROM kv WHERE k LIKE 'raffle_credit:%'") as cur:
@@ -1816,6 +1876,17 @@ async def admin_seed_rounds(n: int = 5, auth: bool = Depends(admin_guard)):
 
     await app.state.db.commit()
     return {"ok": True, "created": created}
+
+@app.post(f"{API}/admin/round/sync_counter")
+async def admin_sync_round_counter(auth: bool = Depends(admin_guard)):
+    """
+    Synchronize 'round:next_id' to the maximum existing round id in the database (if behind).
+    Returns the DB max and the resulting next_id value.
+    """
+    dbmax = await _db_max_round_num(app.state.db)
+    next_id = await sync_round_counter_to_dbmax()
+    return {"ok": True, "db_max": dbmax, "round:next_id": next_id}
+
 
 @app.post(f"{API}/admin/round/reset_counter")
 async def admin_reset_round_counter(value: int = 0, auth: bool = Depends(admin_guard)):
