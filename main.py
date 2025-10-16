@@ -486,6 +486,20 @@ async def alloc_next_round_id() -> str:
     await dbmod.kv_set(app.state.db, key, str(n))
     return f"R{n:04d}"
 
+# --- Derived pot helper: always compute from entries ---
+async def _round_pot_base_units(conn, rid: str, ticket_price_base: int) -> int:
+    """
+    Pot (base units) = SUM(entries.tickets) * TICKET_PRICE
+    This removes all unit drift from rounds.pot.
+    """
+    async with conn.execute(
+        "SELECT COALESCE(SUM(tickets),0) FROM entries WHERE round_id=?", (rid,)
+    ) as cur:
+        row = await cur.fetchone()
+    total_tickets = int(row[0] or 0)
+    return total_tickets * int(getattr(settings, "TICKET_PRICE", 0))
+
+
 # =========================================================
 # Lifecycle
 # =========================================================
@@ -799,7 +813,7 @@ class RoundCurrentResp(BaseModel):
 async def rounds_current():
     rid = await dbmod.kv_get(app.state.db, "current_round_id")
     async with app.state.db.execute(
-        "SELECT id, status, opens_at, closes_at, pot FROM rounds WHERE id=?",
+        "SELECT id, status, opens_at, closes_at FROM rounds WHERE id=?",
         (rid,),
     ) as cur:
         row = await cur.fetchone()
@@ -811,12 +825,15 @@ async def rounds_current():
     closes_dt = _parse_iso_z(row[3])
     next_open_dt = closes_dt + timedelta(minutes=ROUND_BREAK)
 
+    # derive pot from entries (base units)
+    pot_base = await _round_pot_base_units(app.state.db, rid, int(getattr(settings, "TICKET_PRICE", 0)))
+
     return RoundCurrentResp(
         round_id=row[0],
         status=row[1],
         opens_at=_rfc3339(opens_dt),
         closes_at=_rfc3339(closes_dt),
-        pot=row[4],
+        pot=pot_base,
         next_opens_at=_rfc3339(next_open_dt),
         round_minutes=ROUND_MIN,
         break_minutes=ROUND_BREAK,
@@ -824,26 +841,33 @@ async def rounds_current():
     
 @app.get(f"{API}/rounds/recent", response_model=list[RecentRoundResp])
 async def rounds_recent(limit: int = 10):
-    # sanitize & clamp the limit before inlining to avoid parameterized LIMIT quirks
     try:
         n = max(1, min(100, int(limit)))
     except Exception:
         n = 10
 
-    query = f"SELECT id, pot FROM rounds ORDER BY opens_at DESC LIMIT {n}"
+    # fetch ids then derive pot for each to avoid LIMIT param quirks
     try:
-        async with app.state.db.execute(query) as cur:
+        async with app.state.db.execute(
+            f"SELECT id FROM rounds ORDER BY opens_at DESC LIMIT {n}"
+        ) as cur:
             rows = await cur.fetchall()
     except Exception as e:
         print("[rounds_recent] DB error:", e, flush=True)
         traceback.print_exc()
         raise HTTPException(500, "Failed to fetch recent rounds")
 
-    if not rows:
+    result: list[RecentRoundResp] = []
+    for r in rows:
+        rid = str(r[0])
+        pot_base = await _round_pot_base_units(app.state.db, rid, int(getattr(settings, "TICKET_PRICE", 0)))
+        result.append(RecentRoundResp(id=rid, pot=pot_base))
+
+    if not result:
         rid = await dbmod.kv_get(app.state.db, "current_round_id")
         return [RecentRoundResp(id=rid, pot=0)] if rid else []
 
-    return [RecentRoundResp(id=str(r[0]), pot=int(r[1] or 0)) for r in rows]
+    return result
     
 @app.get(f"{API}/rounds")
 async def rounds_list(search: Optional[str] = Query(None), limit: int = Query(25)):
@@ -859,7 +883,7 @@ async def rounds_list(search: Optional[str] = Query(None), limit: int = Query(25
 
     # Basic SQL + optional filtering
     params = []
-    base_sql = "SELECT id, pot, opens_at, closes_at FROM rounds"
+    base_sql = "SELECT id, opens_at, closes_at FROM rounds"
     if search:
         # Allow searching by id (e.g., R1601) or by winner or seed fragments if desired.
         base_sql += " WHERE id LIKE ?"
@@ -877,11 +901,13 @@ async def rounds_list(search: Optional[str] = Query(None), limit: int = Query(25
 
     result = []
     for r in rows:
+        rid = r[0]
+        pot_base = await _round_pot_base_units(app.state.db, rid, int(getattr(settings, "TICKET_PRICE", 0)))
         result.append({
-            "id": r[0],
-            "pot": int(r[1] or 0),
-            "opens_at": r[2],
-            "closes_at": r[3],
+            "id": rid,
+            "pot": pot_base,
+            "opens_at": r[1],
+            "closes_at": r[2],
         })
 
     return {"rows": result}
@@ -967,10 +993,10 @@ async def get_round_winner(round_id: str):
     # Round basics
     try:
         async with app.state.db.execute(
-            "SELECT id,status,opens_at,closes_at,pot,server_seed_hash,server_seed_reveal,finalize_slot FROM rounds WHERE id=?",
+            "SELECT id,status,opens_at,closes_at,server_seed_hash,server_seed_reveal,finalize_slot FROM rounds WHERE id=?",
             (round_id,),
         ) as cur:
-            r = await cur.fetchone()
+            r = await cur.fetchone())
     except Exception as e:
         print("[get_round_winner] DB error for", round_id, ":", e, flush=True)
         traceback.print_exc()
@@ -995,19 +1021,21 @@ async def get_round_winner(round_id: str):
     # KV fairness bits
     entropy = await dbmod.kv_get(app.state.db, f"round:{round_id}:entropy")
 
+    # derive pot
+    pot_base = await _round_pot_base_units(app.state.db, round_id, int(getattr(settings, "TICKET_PRICE", 0)))
     return {
         "round_id": r[0],
         "status": r[1],
         "opens_at": r[2],
         "closes_at": r[3],
-        "pot": int(r[4] or 0),
+        "pot": pot_base,
         "winner": winner,
         "payout_sig": payout_sig,
         "entries": entries_count,
         "total_tickets": total_tickets,
-        "server_seed_hash": r[5],
-        "server_seed_reveal": r[6],
-        "finalize_slot": r[7],                 
+        "server_seed_hash": r[4],
+        "server_seed_reveal": r[5],
+        "finalize_slot": r[6],
         "entropy": entropy,
     }
 
@@ -1580,16 +1608,11 @@ async def helius_webhook(request: Request):
             try:
                 await app.state.db.execute("BEGIN")
                 if tickets > 0:
-                    # ignore duplicate tx_sig (Helius retries)
+                    # idempotent insert; pot is derived, so we do NOT update rounds.pot
                     await app.state.db.execute(
                         "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?) "
                         "ON CONFLICT(tx_sig) DO NOTHING",
                         (round_id, sender_raw, tickets, tx_sig),
-                    )
-                    # pot only increases if insert actually happened
-                    await app.state.db.execute(
-                        "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
-                        (tickets * settings.TICKET_PRICE, round_id),
                     )
                 if remainder > 0:
                     key = f"raffle_credit:{sender_raw}"
@@ -1612,10 +1635,12 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
     rid = await dbmod.kv_get(app.state.db, "current_round_id")
 
     # Load round basics
-    async with app.state.db.execute("SELECT pot, opens_at, closes_at, server_seed_hash, server_seed_reveal, finalize_slot FROM rounds WHERE id=?", (rid,)) as cur:
+    async with app.state.db.execute("SELECT opens_at, closes_at, server_seed_hash, server_seed_reveal, finalize_slot FROM rounds WHERE id=?", (rid,)) as cur:
         r = await cur.fetchone()
-    pot = int(r[0] if r else 0)
-    finalize_slot = int(r[5] or 0) if r else 0
+    # derive pot from entries to avoid any unit drift
+    pot = await _round_pot_base_units(app.state.db, rid, int(getattr(settings, "TICKET_PRICE", 0)))
+    finalize_slot = int(r[4] or 0) if r else 0
+
 
     # Gather entries
     async with app.state.db.execute("SELECT user, tickets FROM entries WHERE round_id=?", (rid,)) as cur:
@@ -1757,16 +1782,13 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
         if credit >= settings.TICKET_PRICE:
             extra_tix = credit // settings.TICKET_PRICE
             rem = credit % settings.TICKET_PRICE
-            await app.state.db.execute(
-                "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
-                (new_id, owner, extra_tix, f"auto_credit_{new_id}_{owner[:6]}"),
-            )
-            # note: pot increases only by tickets*price
-            await app.state.db.execute(
-                "UPDATE rounds SET pot = COALESCE(pot,0) + ? WHERE id=?",
-                (extra_tix * settings.TICKET_PRICE, new_id),
-            )
-            await dbmod.kv_set(app.state.db, k, str(rem))
+           await app.state.db.execute(
+               "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
+               (new_id, owner, extra_tix, f"auto_credit_{new_id}_{owner[:6]}"),
+           )
+           # pot is derived from entries; no UPDATE to rounds.pot
+           await dbmod.kv_set(app.state.db, k, str(rem))
+
     await app.state.db.commit()
 
     return {
