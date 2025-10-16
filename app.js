@@ -1438,7 +1438,12 @@ export async function getAta(owner, mint) {
       if(r && r.status === "SETTLED") settled = r;
       else await new Promise(res=>setTimeout(res, 500));
     }
-    if(!settled) throw new Error("Settlement timeout — check webhook/ingestor.");
+    if (!settled) {
+      const coin = document.getElementById("coin");
+      coin?.classList?.remove("spin");
+      toast("Settlement timeout — check history later.");
+      return;
+    }
 
     // 4) Visuals + banner + FX + refresh balance
     const landed = String(settled.result || "").toUpperCase(); // <-- fixed field
@@ -1480,9 +1485,21 @@ export async function getAta(owner, mint) {
   // ==========================
   (function initWheel() {
     const API = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
-    const DECIMALS = Number(window.TREATZ_CONFIG?.token?.decimals || 6);
-    const TEN = 10 ** DECIMALS;
-
+    let DECIMALS = 6, TEN = 10 ** 6;
+    // Load config up-front so mint/decimals/price are correct
+    (async () => {
+      const cfg = await ensureConfig();
+      DECIMALS = Number(cfg?.token?.decimals || 6);
+      TEN = 10 ** DECIMALS;
+      // Set the price labels from config if present
+      const priceWhole = Number(cfg?.wheel?.spin_price_whole || 100_000);
+      const txt = priceWhole.toLocaleString();
+      const elPrice = document.getElementById("wheel-price");
+      const elPriceBtn = document.getElementById("wheel-price-btn");
+      if (elPrice) elPrice.textContent = txt;
+      if (elPriceBtn) elPriceBtn.textContent = txt;
+    })().catch(()=>{});
+    
     // DOM refs
     const elSvg = document.getElementById("wheel-svg");
     const elSpin = document.getElementById("wheel-spin");
@@ -1678,7 +1695,8 @@ export async function getAta(owner, mint) {
               refreshWheelCredit();
               const amt = outcome.amount ? ` +${(outcome.amount / TEN).toLocaleString()} $TREATZ` : "";
               const fs  = outcome.free   ? ` +${outcome.free} free` : "";
-              pushHistory(`[PAID] ${outcome.label}${amt}${fs}`);
+              const me = window.PUBKEY ? ` (${window.PUBKEY.slice(0,4)}…${window.PUBKEY.slice(-4)})` : "";
+              pushHistory(`[PAID] ${outcome.label}${amt}${fs}${me}`);
             }, 4600);
             return;
           }
@@ -1713,7 +1731,8 @@ export async function getAta(owner, mint) {
       }).then(r=>r.json());
       elCommit.textContent = `Commit: ${spin.server_seed_hash.slice(0,12)}…`;
 
-      const mintPk  = new PublicKey(window.TREATZ_CONFIG?.token?.mint);
+      await ensureConfig();
+      const mintPk  = new PublicKey(CONFIG.token.mint);
       const payerPk = new PublicKey(window.PUBKEY);
       const tokenProgramId = await getTokenProgramForMint(mintPk);
 
@@ -1904,7 +1923,7 @@ export async function getAta(owner, mint) {
       const bal = await connection.getTokenAccountBalance(realSrc, "confirmed").catch(() => null);
       const haveBase = Number(bal?.value?.amount || 0);
       const needBase = Number(amountBase);
-      const dec = Number(CONFIG?.token?.decimals || TOKEN.decimals || 6); // <— consistent decimals
+      const dec = Number(CONFIG?.token?.decimals ?? 6); // <— consistent decimals
       if (haveBase < needBase) {
         const haveHuman = haveBase / (10 ** dec);
         const needHuman = needBase / (10 ** dec);
