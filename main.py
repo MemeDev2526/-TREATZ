@@ -1477,6 +1477,7 @@ def _parse_token_transfer(ev: dict):
 async def helius_webhook(request: Request):
     # Optional signature check (disabled unless header name configured)
     raw = await request.body()
+    print("[HELIUS] received", len(raw), "bytes")
     if not _verify_helius_signature(request, raw):
         raise HTTPException(401, "Signature verification failed")
 
