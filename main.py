@@ -487,18 +487,14 @@ async def alloc_next_round_id() -> str:
     return f"R{n:04d}"
 
 # --- Derived pot helper: always compute from entries ---
-async def _round_pot_base_units(conn, rid: str, ticket_price_base: int) -> int:
-    """
-    Pot (base units) = SUM(entries.tickets) * TICKET_PRICE
-    This removes all unit drift from rounds.pot.
-    """
+async def _round_pot_base_units(conn, rid: str) -> int:
+    """Pot (base units) = SUM(entries.tickets) * TICKET_PRICE"""
     async with conn.execute(
         "SELECT COALESCE(SUM(tickets),0) FROM entries WHERE round_id=?", (rid,)
     ) as cur:
         row = await cur.fetchone()
     total_tickets = int(row[0] or 0)
     return total_tickets * int(getattr(settings, "TICKET_PRICE", 0))
-
 
 # =========================================================
 # Lifecycle
@@ -826,7 +822,7 @@ async def rounds_current():
     next_open_dt = closes_dt + timedelta(minutes=ROUND_BREAK)
 
     # derive pot from entries (base units)
-    pot_base = await _round_pot_base_units(app.state.db, rid, int(getattr(settings, "TICKET_PRICE", 0)))
+    pot_base = await _round_pot_base_units(app.state.db, rid)
 
     return RoundCurrentResp(
         round_id=row[0],
@@ -860,7 +856,7 @@ async def rounds_recent(limit: int = 10):
     result: list[RecentRoundResp] = []
     for r in rows:
         rid = str(r[0])
-        pot_base = await _round_pot_base_units(app.state.db, rid, int(getattr(settings, "TICKET_PRICE", 0)))
+        pot_base = await _round_pot_base_units(app.state.db, rid)
         result.append(RecentRoundResp(id=rid, pot=pot_base))
 
     if not result:
@@ -902,7 +898,7 @@ async def rounds_list(search: Optional[str] = Query(None), limit: int = Query(25
     result = []
     for r in rows:
         rid = r[0]
-        pot_base = await _round_pot_base_units(app.state.db, rid, int(getattr(settings, "TICKET_PRICE", 0)))
+        pot_base = await _round_pot_base_units(app.state.db, rid)
         result.append({
             "id": rid,
             "pot": pot_base,
@@ -996,7 +992,7 @@ async def get_round_winner(round_id: str):
             "SELECT id,status,opens_at,closes_at,server_seed_hash,server_seed_reveal,finalize_slot FROM rounds WHERE id=?",
             (round_id,),
         ) as cur:
-            r = await cur.fetchone())
+            r = await cur.fetchone()
     except Exception as e:
         print("[get_round_winner] DB error for", round_id, ":", e, flush=True)
         traceback.print_exc()
@@ -1022,7 +1018,7 @@ async def get_round_winner(round_id: str):
     entropy = await dbmod.kv_get(app.state.db, f"round:{round_id}:entropy")
 
     # derive pot
-    pot_base = await _round_pot_base_units(app.state.db, round_id, int(getattr(settings, "TICKET_PRICE", 0)))
+    pot_base = await _round_pot_base_units(app.state.db, round_id)
     return {
         "round_id": r[0],
         "status": r[1],
@@ -1638,7 +1634,7 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
     async with app.state.db.execute("SELECT opens_at, closes_at, server_seed_hash, server_seed_reveal, finalize_slot FROM rounds WHERE id=?", (rid,)) as cur:
         r = await cur.fetchone()
     # derive pot from entries to avoid any unit drift
-    pot = await _round_pot_base_units(app.state.db, rid, int(getattr(settings, "TICKET_PRICE", 0)))
+    pot = await _round_pot_base_units(app.state.db, rid)
     finalize_slot = int(r[4] or 0) if r else 0
 
 
@@ -1782,12 +1778,12 @@ async def admin_close_round(auth: bool = Depends(admin_guard)):
         if credit >= settings.TICKET_PRICE:
             extra_tix = credit // settings.TICKET_PRICE
             rem = credit % settings.TICKET_PRICE
-           await app.state.db.execute(
-               "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
-               (new_id, owner, extra_tix, f"auto_credit_{new_id}_{owner[:6]}"),
-           )
-           # pot is derived from entries; no UPDATE to rounds.pot
-           await dbmod.kv_set(app.state.db, k, str(rem))
+            await app.state.db.execute(
+                "INSERT INTO entries(round_id,user,tickets,tx_sig) VALUES(?,?,?,?)",
+                (new_id, owner, extra_tix, f"auto_credit_{new_id}_{owner[:6]}"),
+            )
+            # pot is derived from entries; no UPDATE to rounds.pot
+            await dbmod.kv_set(app.state.db, k, str(rem))
 
     await app.state.db.commit()
 
