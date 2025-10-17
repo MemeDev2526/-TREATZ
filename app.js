@@ -118,7 +118,7 @@ export async function getAta(owner, mint) {
     const candidates = [
       (window.phantom && window.phantom.solana) || null,
       (window.solana && window.solana.isPhantom ? window.solana : null) || null,
-      (window.backpack && window.backpack.isBackpack ? window.backpack : null) || null,
+      (window.backpack?.solana && window.backpack.isBackpack ? window.backpack.solana : null) || null,
       (window.solflare && window.solflare.isSolflare ? window.solflare : null) || null,
     ].filter(Boolean);
     const connected = candidates.find(p => p.publicKey || p.isConnected);
@@ -1294,7 +1294,7 @@ export async function getAta(owner, mint) {
             void coin.offsetWidth;
           }
           try { setCoinVisual(landed); } catch (err) { console.warn("setCoinVisual failed", err); }
-          try { playResultFX(landed); } catch (err) { console.warn("playResultFX failed", err); }
+          try { playResultFX(win ? "WIN" : "LOSS"); } catch (err) { console.warn("playResultFX failed", err); }
           try { showWinBanner(win ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`); } catch (err) {}
 
           const statusEl = document.getElementById("cf-status");
@@ -1375,7 +1375,8 @@ export async function getAta(owner, mint) {
     const amountHuman = Number(document.getElementById("bet-amount").value || "0");
     if(!amountHuman || amountHuman <= 0) throw new Error("Enter a positive amount.");
 
-    const amountBase = Math.floor(amountHuman * (10 ** (CONFIG?.token?.decimals || 6)));
+    const dec = Number(CONFIG?.token?.decimals || 6);
+    const amountBase = BigInt(String((amountHuman).toFixed(dec)).replace('.', '')); // precise
 
     // 1) Create bet server-side
     const bet = await jfetch(`${API}/bets`, {
@@ -1416,7 +1417,14 @@ export async function getAta(owner, mint) {
     if (createDestIx) tx.add(createDestIx);
     tx.add(
       createTransferCheckedInstruction(
-        fromAta, mintPk, toAta, payer, BigInt(amountBase), CONFIG.token.decimals, [], tokenProgramId
+        fromAta,
+        mintPk,
+        toAta,
+        payer,
+        amountBase,                              // already a BigInt
+        Number(CONFIG?.token?.decimals ?? 6),    // ensure number
+        [],
+        tokenProgramId
       ),
       memoIx(bet.memo) // "BET:<bet_id>:<TRICK|TREAT>"
     );
@@ -1446,10 +1454,10 @@ export async function getAta(owner, mint) {
     }
 
     // 4) Visuals + banner + FX + refresh balance
-    const landed = String(settled.result || "").toUpperCase(); // <-- fixed field
+    const landed = String(settled.result || "").toUpperCase(); // TRICK | TREAT
     const youWon = !!settled.win;
     try { setCoinVisual(landed); } catch(e){}
-    try { playResultFX(youWon ? "TREAT" : "TRICK"); } catch(e){}
+    try { playResultFX(youWon ? "WIN" : "LOSS"); } catch(e){}
     showWinBanner(youWon ? `${landed} — YOU WIN! 🎉` : `${landed} — YOU LOSE 💀`, !youWon);
 
     document.getElementById("cf-status")?.replaceChildren(
@@ -1465,11 +1473,11 @@ export async function getAta(owner, mint) {
       try {
         const b = await jfetch(`${API}/bets/${betId}`);
         if ((b.status || "").toUpperCase() === "SETTLED") {
-          const win = !!b.win;
-          const result = win ? "TREAT" : "TRICK";
+          const win  = !!b.win;
+          const face = win ? "TREAT" : "TRICK";
 
-          setCoinVisual(result);
-          playResultFX(result);
+          setCoinVisual(face);
+          playResultFX(win ? "WIN" : "LOSS");
           showWinBanner(win ? "🎉 TREATZ! You win!" : "💀 TRICKZ! Maybe next time…");
 
           $("#cf-status")?.replaceChildren(document.createTextNode(win ? "WIN!" : "LOSS"));
@@ -1775,6 +1783,14 @@ export async function getAta(owner, mint) {
             spinToLabel(outcome.label);
             setTimeout(()=>{
               try { playResultFX(outcome.type==="loss"?"LOSS":"WIN"); } catch{}
+
+              // ✨ Cap glow on settle (PAID)
+              const cap = document.querySelector(".wheel-cap");
+              if (cap) {
+                cap.classList.add(outcome.type === "win" ? "glow-green" : "glow-red");
+                setTimeout(()=>cap.classList.remove("glow-green","glow-red"), 1200);
+            }
+
               toastWheel(resultLine(outcome));
               elStatus.textContent = outcome.type==="win" ? `WIN — ${outcome.label}` : (outcome.type==="free" ? `FREE — ${outcome.label}` : `LOSS — ${outcome.label}`);
               refreshWheelCredit();
@@ -1792,20 +1808,32 @@ export async function getAta(owner, mint) {
 
     // simulate (no wallet)
     function simulateSpin() {
-      const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
-      let r = Math.random()*sumW, pick = PRIZES[0];
-      for (const p of PRIZES) { r -= p.w; if (r <= 0) { pick = p; break; } }
-      elSvg.classList.add("spinning");
-      spinToLabel(pick.label);
-      setTimeout(()=>{
-        try { playResultFX(pick.type==="loss"?"LOSS":"WIN"); } catch{}
-        toastWheel(resultLine(pick));
-        elStatus.textContent = (pick.type==="win" ? `WIN — ${pick.label}` : (pick.type==="free" ? `FREE — ${pick.label}` : `LOSS — ${pick.label}`));
-        const amt = pick.amount ? ` +${pick.amount.toLocaleString()} $TREATZ` : "";
-        const fs  = pick.free   ? ` +${pick.free} free` : "";
-        pushHistory(`[SIM] ${pick.label}${amt}${fs}`);
-      }, 4600);
-    }
+    // pick a weighted prize
+    const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
+    let r = Math.random()*sumW, pick = PRIZES[0];
+    for (const p of PRIZES) { r -= p.w; if (r <= 0) { pick = p; break; } }
+
+    // animate to the selected label
+    spinToLabel(pick.label);
+
+    // settle visuals/FX
+    setTimeout(()=>{
+      try { playResultFX(pick.type==="loss"?"LOSS":"WIN"); } catch{}
+
+      // ✨ Cap glow on settle (SIM)
+      const cap = document.querySelector(".wheel-cap");
+      if (cap) {
+        cap.classList.add(pick.type === "win" ? "glow-green" : "glow-red");
+        setTimeout(()=>cap.classList.remove("glow-green","glow-red"), 1200);
+      }
+
+      toastWheel(resultLine(pick));
+      elStatus.textContent = (pick.type==="win" ? `WIN — ${pick.label}` : (pick.type==="free" ? `FREE — ${pick.label}` : `LOSS — ${pick.label}`));
+      const amt = pick.amount ? ` +${pick.amount.toLocaleString()} $TREATZ` : "";
+      const fs  = pick.free   ? ` +${pick.free} free` : "";
+      pushHistory(`[SIM] ${pick.label}${amt}${fs}`);
+    }, 4600);
+  }
 
     // paid spin (on-chain) — FIXED to accept ATA or owner & Token-2022 aware
     async function spinOnChain() {
@@ -1846,8 +1874,14 @@ export async function getAta(owner, mint) {
       if (createDstIx) ixs.push(createDstIx);
       ixs.push(
         createTransferCheckedInstruction(
-          srcAta, mintPk, dstAta, payerPk, BigInt(spin.amount),
-          Number(window.TREATZ_CONFIG?.token?.decimals || 6), [], tokenProgramId
+          srcAta,
+          mintPk,
+          dstAta,
+          payerPk,
+          BigInt(spin.amount),
+          Number(CONFIG?.token?.decimals ?? 6),   // use loaded config + ensure number
+          [],
+          tokenProgramId
         ),
         memoIx(spin.memo)
       );
@@ -1883,6 +1917,14 @@ export async function getAta(owner, mint) {
         setTimeout(()=>{
           const type = r.prize_amount>0 ? "win" : (r.free_spins>0 ? "free" : "loss");
           try { playResultFX(type==="loss"?"LOSS":"WIN"); } catch{}
+
+          // ✨ Cap glow on settle (FREE)
+          const cap = document.querySelector(".wheel-cap");
+          if (cap) {
+            cap.classList.add(type === "win" ? "glow-green" : "glow-red");
+            setTimeout(()=>cap.classList.remove("glow-green","glow-red"), 1200);
+          }
+
           toastWheel(type==="win" ? `${r.outcome_label} — 🎉` : (type==="free" ? `${r.outcome_label} — 🌕` : `${r.outcome_label} — 💀`));
           elStatus.textContent = type.toUpperCase() + " — " + r.outcome_label;
           refreshWheelCredit();
