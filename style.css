@@ -141,7 +141,7 @@ a, .btn--outline { color: var(--slime); }
 .wm:not([hidden]) .wm__card { transform: scale(1); opacity: 1; }
 
 /* Ensure wallet & modals sit above FX layer */
-.tokenbar__actions, .wallet, { position: relative; z-index: 100100; }
+.tokenbar__actions, .wallet { position: relative; z-index: 100100; }
 
 /* =========================================================
    Top Banner & Global Countdown
@@ -633,14 +633,6 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   --scale: 1;
   transform: translate3d(-50%,-50%,0) scale(var(--scale));
 }
-.fx-layer{
-  position: fixed !important;
-  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
-  width: 100vw !important; height: 100vh !important;
-  pointer-events: none !important; overflow: visible !important;
-  z-index: 99999 !important; transform: none !important; contain: none !important; isolation: isolate;
-  will-change: auto;
-}
 
 /* Containers created/used by app.js for specific FX */
 .fx-rain{ position: fixed; inset: 0; pointer-events:none; overflow:hidden; z-index: 35; }
@@ -783,14 +775,14 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 /* make slice colors darker regardless of gradient stops provided by JS */
 .slice-win, .slice-loss, .slice-free { filter: brightness(.88) saturate(.95); }
 
-/* slice labels: heavier + stroke for contrast */
+/* slice labels */
 .slice-label{
   font-family:"Rubik",system-ui,sans-serif; font-weight:900;
   fill:#fff; font-size:13px; text-anchor:middle;
   paint-order:stroke; stroke:#000; stroke-width:3px;
   letter-spacing:.2px;
+}
 
-/* rich slice fills via gradients (applied from JS) */
 .slice-win  { stroke: rgba(255,255,255,.14); stroke-width:1; }
 .slice-loss { stroke: rgba(255,255,255,.14); stroke-width:1; }
 .slice-free { stroke: rgba(255,255,255,.14); stroke-width:1; }
@@ -803,7 +795,7 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   .wheel{ width: 320px; height: 320px; }
   .slice-label{ font-size:11px; }
 }
-   
+
 /* thick rim and inner hub (drawn in JS, styled here) */
 .wheel-rim    { fill:none; stroke:#1b1b1b; stroke-width:20; filter: drop-shadow(0 10px 24px rgba(0,0,0,.55)); }
 .wheel-rim-outer { fill:none; stroke:rgba(0,0,0,.55); stroke-width:34; opacity:.65; }
