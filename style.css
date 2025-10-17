@@ -141,7 +141,7 @@ a, .btn--outline { color: var(--slime); }
 .wm:not([hidden]) .wm__card { transform: scale(1); opacity: 1; }
 
 /* Ensure wallet & modals sit above FX layer */
-.tokenbar__actions, .wallet, .wm { position: relative; z-index: 100001; }
+.tokenbar__actions, .wallet, { position: relative; z-index: 100100; }
 
 /* =========================================================
    Top Banner & Global Countdown
@@ -370,7 +370,10 @@ a, .btn--outline { color: var(--slime); }
 /* =========================================================
    Buttons
    ========================================================= */
-.btn{ cursor: pointer; pointer-events:none; user-select:none; border: none; padding: .7rem 1rem; border-radius: 12px; font-weight: 800; background: transparent; color: var(--white); }
+.btn{
+  cursor:pointer; border:none; padding:.7rem 1rem; border-radius:12px;
+  font-weight:800; background:transparent; color:var(--white);
+}
 .btn--primary{ background: linear-gradient(180deg, var(--orange), var(--orange-hi)); color: #1a0b00; }
 .btn--buy{ background: linear-gradient(90deg, var(--slime), #94DAFF); color: #032316; font-weight: 900; }
 .btn--outline{ background: transparent; color: var(--white); border: 1px solid var(--white); }
@@ -702,7 +705,7 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 .slice-free { fill: rgba(153,69,255,.32);  stroke: rgba(255,255,255,.12); stroke-width:1; }
 .wheel-glow { filter: drop-shadow(0 12px 24px rgba(0,0,0,.5)); opacity:.95 }
 
-.btnrow { display:flex; gap:.5rem; flex-wrap:wrap; pointer-events:none; user-select:none; }
+.btnrow { display:flex; gap:.5rem; flex-wrap:wrap; }
 #wheel-history-list { margin:.25rem 0 0; padding-left:1rem; }
 #wheel-freespin[disabled], #wheel-spin[disabled] { opacity:.6; pointer-events:none; }
 .tag { display:inline-block; padding:.1rem .4rem; border-radius:.35rem; background:rgba(255,255,255,.06); font-size:.75rem; }
@@ -785,22 +788,18 @@ body.flash { animation: screen-flash 0.9s ease both; }
 .coin__face { text-indent: -9999px; }
 
 /* Buttons the app disables via class or aria attribute */
-.btn.is-disabled,
-.btn[aria-disabled="true"] {
-  opacity: .6;
-  cursor: not-allowed;
-  pointer-events: none;
-}
+.btn.is-disabled, .btn[aria-disabled="true"], .btn:disabled{ opacity:.6; cursor:not-allowed; pointer-events:none; }
 
 /* Make deep-link/aux buttons look disabled when hidden via [hidden] */
 [hidden] { display: none !important; }
 
 /* Slightly stronger modal stacking in case other elements get higher z-index later */
-.wm { z-index: 100002; }
+.wm { z-index: 100200; }
 
 /* Wheel of Fate: crisper motion & block accidental text selection while spinning */
 .wheel { will-change: transform; user-select: none; }
-.wheel.spinning { pointer-events: none; }
+.wheel.spinning{ pointer-events:none; }
+.wheel.spinning ~ .btnrow .btn{ pointer-events:none; user-select:none; }
 
 /* =========================================================
    MEDIA QUERIES (TABLETS & PHONES) — grouped at bottom
