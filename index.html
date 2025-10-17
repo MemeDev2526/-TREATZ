@@ -58,13 +58,13 @@
 
   <!-- 1) TOP BANNER -->
   <div class="brand-banner">
-    <img src="/static/assets/Banner_Top.png" alt="$TREATZ banner" />
+    <img src="/static/assets/Banner_Top.png" alt="$TREATZ banner" decoding="async" fetchpriority="low" />
   </div>
 
   <!-- 2) HALLOWEEN COUNTDOWN BANNER -->
   <div class="countdown" id="countdown" aria-live="polite">
     <div class="countdown__inner">
-      <img id="countdown-logo" class="countdown__logo" src="/static/assets/TREATZ_Logo.png" alt="$TREATZ logo" />
+      <img id="countdown-logo" class="countdown__logo" src="/static/assets/TREATZ_Logo.png" alt="$TREATZ logo" decoding="async" />
       <span class="countdown__label">⏳ Countdown to Halloween:</span>
       <span class="countdown__timer" id="countdown-timer">--d --h --m --s</span>
     </div>
@@ -86,7 +86,7 @@
     <!-- Nav chips row -->
     <div class="nav__wrap">
       <a href="/" class="nav__brand" aria-label="$TREATZ Home">
-        <img src="/static/assets/TREATZ_Logo.png" alt="$TREATZ logo" height="44" />
+        <img src="/static/assets/TREATZ_Logo.png" alt="$TREATZ logo" height="44" decoding="async" />
         <span class="nav__brand-text">Home</span>
       </a>
 
@@ -191,7 +191,7 @@
     <section class="section" id="jackpot" aria-labelledby="jackpot-title">
       <h2 class="section__title" id="jackpot-title">🕯️ 🎃 Jack'O'Lantern Jackpot Raffle 🎃</h2>
 
-      <div class="card grid-3">
+      <div id="jackpot-card" class="card grid-3 grid-rows">
         <div class="card__col">
           <div class="stats">
             <div><span class="stat__label">Current Pot</span> <span class="stat__value"><strong id="round-pot">—</strong> $TREATZ</span></div>
@@ -201,12 +201,15 @@
             <div><span class="stat__label">Ticket Price</span> <span class="stat__value"><strong id="ticket-price">—</strong> $TREATZ</span></div>
             <div>
               <span class="stat__label">Seed</span>
-              <span class="stat__value">
-                commit: <code id="seed-commit">—</code> /
-                reveal: <code id="seed-reveal">—</code>
+              <p class="seedline stat__value">
+                <span class="label">Commit:</span>
+                <code id="seed-commit" class="mono break">—</code>
+                <span class="sep">/</span>
+                <span class="label">Reveal:</span>
+                <code id="seed-reveal" class="mono break">—</code>
                 <span class="muted">(salt on results)</span>
-            </span>
-          </div>
+              </p>
+            </div>
           </div>
           <div class="progress" aria-label="Time remaining">
             <div class="progress__bar" id="jp-progress" style="width:0%"></div>
@@ -282,7 +285,7 @@
         </div>
 
         <!-- 12) RECENT ROUNDS + 13) MY WALLET -->
-        <div class="card__col">
+        <div class="card__col jp__recent">
           <div class="mini-table" aria-live="polite">
             <div class="mini-table__head">
               <span>Recent Rounds</span>
@@ -406,7 +409,7 @@
 
   <!-- (FX) GLOBAL RENDER LAYER + FLOATING MASCOT -->
   <div id="fx-layer" aria-hidden="true"></div>
-  <img id="mascot-floater" src="/static/assets/Mascot.png" alt="Mascot" />
+  <img id="mascot-floater" src="/static/assets/Mascot.png" alt="Mascot" decoding="async" fetchpriority="low" />
 
   <!-- (Wallet modal markup kept if needed later) -->
   <div id="wallet-modal" class="wm" hidden>
