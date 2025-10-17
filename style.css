@@ -87,10 +87,10 @@ a, .btn--outline { color: var(--slime); }
    ========================================================= */
 .card{
   background: var(--card);
-  border: 1px solid var(--card-border);
-  box-shadow: 0 10px 24px rgba(0,0,0,.35), 0 0 24px rgba(57,255,20,.08);
+  border: 4px solid var(--card-border);
+  box-shadow: 0 12px 26px rgba(0,0,0,.35), 0 0 26px rgba(57,255,20,.08);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: 18px;
 }
 
 /* =========================================================
@@ -151,7 +151,7 @@ a, .btn--outline { color: var(--slime); }
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
 }
 .brand-banner img{
-  width: 100%; height: auto; max-height: var(--banner-max-h);
+  width: 120%; height: auto; max-height: var(--banner-max-h);
   object-fit: fill; display: block;
 }
 
@@ -230,7 +230,7 @@ a, .btn--outline { color: var(--slime); }
   text-shadow: 0 6px 18px rgba(0,0,0,.45);
 }
 .countdown__logo{
-  height: 120px;
+  height: 130px;
   width: auto;
   margin-right: .8rem;
   border-radius: 6px;
@@ -269,14 +269,14 @@ a, .btn--outline { color: var(--slime); }
 .treatz-title {
   font-family: "Creepster", "Chakra Petch", sans-serif;
   font-size: clamp(1.8rem, 2.8vw, 2.8rem);
-  font-weight: 800;
-  letter-spacing: 0.95px;
+  font-weight: 850;
+  letter-spacing: 0.97px;
   margin: 0;
   text-align: left;
-  line-height: 1.5;
+  line-height: 1.75;
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 8px;
 }
 .treatz-symbol {
   color: #5BFF64;
@@ -286,7 +286,7 @@ a, .btn--outline { color: var(--slime); }
   color: #3a0c5d; 
   position: relative;
   /* slime-green outline + glow */
-  -webkit-text-stroke: 2px var(--slime);
+  -webkit-text-stroke: 2.5px var(--slime);
   text-shadow:
     0 0 12px rgba(57,255,20,.60),
     0 0 24px rgba(57,255,20,.35),
@@ -306,7 +306,7 @@ a, .btn--outline { color: var(--slime); }
 }
 .treatz-sub {
   display: inline-block;
-  margin-left: 8px;
+  margin-left: 9px;
   font-size: clamp(1.35rem, 1.75vw, 1.55rem);
   color: #3a0c5d; 
   /* slime-green outline + glow */
@@ -322,13 +322,13 @@ a, .btn--outline { color: var(--slime); }
 /* Nav container */
 .nav { position: relative; z-index: 5; }
 .nav__wrap{
-  max-width: var(--max-width); margin: 6px auto 0; padding: 0 16px;
+  max-width: var(--max-width); margin: 8px auto 0; padding: 0 16px;
   display:flex; align-items:center; justify-content:space-between; gap:16px;
 }
 .nav__brand{ display:flex; align-items:center; gap:10px; }
-.nav__brand img{ height:44px; display:block; }
+.nav__brand img{ height:54px; display:block; }
 .nav__brand-text{
-  font-size: 1.3rem; color: var(--orange);
+  font-size: 1.5rem; color: var(--orange);
   text-shadow: 0 0 8px rgba(255,149,0,.4);
   display: none;
 }
@@ -344,7 +344,7 @@ a, .btn--outline { color: var(--slime); }
 }
 .nav__links a:hover{ color:#fff; background: rgba(255,255,255,.1); text-shadow: none; }
 .nav__link--disabled{
-  opacity: .55; pointer-events: none; cursor: default; filter: grayscale(.15); position: relative;
+  opacity: .50; pointer-events: none; cursor: default; filter: grayscale(.15); position: relative;
 }
 .nav__link--disabled::after{
   content: "coming soon";
@@ -357,11 +357,11 @@ a, .btn--outline { color: var(--slime); }
   max-width: var(--max-width); margin: 12px auto 16px; padding: 8px 16px;
   display: flex; align-items: center; justify-content: space-between; gap:16px; flex-wrap: wrap;
   background: linear-gradient(180deg, rgba(13,13,13,.85), rgba(13,13,13,.6));
-  border: 1px solid var(--card-border); border-radius: 16px;
+  border: 1.5px solid var(--card-border); border-radius: 16px;
   box-shadow: var(--shadow);
 }
 .tokenbar__label{ opacity: .85; margin-right: 6px; }
-.tokenbar__address code{ font-size: .95rem; user-select: all; }
+.tokenbar__address code{ font-size: 1.35rem; user-select: all; }
 .tokenbar__actions{ position: relative; z-index: 1010; display:flex; gap:10px; flex-wrap:wrap; }
 .tokenbar__balance b { font-weight: 900; }
 
@@ -490,7 +490,7 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   transform: rotateY(180deg);
   color: var(--slime); text-shadow: 0 0 10px rgba(57,255,20,.6);
 }
-.coin.spin{ animation: spin 1.6s cubic-bezier(.2,.6,.2,1) 1; animation-fill-mode: both; }
+.coin.spin{ animation: spin 2.2s cubic-bezier(.2,.6,.2,1) 1; animation-fill-mode: both; }
 @keyframes spin{ 0% { transform: rotateY(0); } 100% { transform: rotateY(720deg); } }
 .cf-status{ margin-top: 12px; font-weight: 700; }
 
