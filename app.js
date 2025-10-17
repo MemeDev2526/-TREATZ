@@ -2104,8 +2104,10 @@ export async function getAta(owner, mint) {
   async function loadHistory(query = "") {
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
 
+    const COLSPAN = 7; // table now has 7 columns
+
     if (!__recentCache.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="muted">Loading…</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="muted">Loading…</td></tr>`;
       try {
         const q = new URL(`${API}/rounds/recent`, location.origin);
         q.searchParams.set("limit", "25");
@@ -2114,7 +2116,7 @@ export async function getAta(owner, mint) {
         __recentCache = await res.json();
       } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="5" class="muted">Failed to load history from backend.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="muted">Failed to load history from backend.</td></tr>`;
         return;
       }
     }
@@ -2125,28 +2127,39 @@ export async function getAta(owner, mint) {
       : __recentCache;
 
     if (!Array.isArray(recent) || recent.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" class="muted">No history.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="muted">No history.</td></tr>`;
       return;
     }
+  
+    // choose explorer; you can switch to helius / solana.fm if you prefer
+    const txUrl = (sig) => sig ? `https://solscan.io/tx/${encodeURIComponent(sig)}${location.hostname.endsWith('.dev') ? '?cluster=devnet' : ''}` : '#';
 
     const rows = [];
     for (const r of recent) {
       const roundId = r.id || r.round_id || r[0] || "unknown";
       let w = null;
-      try { w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(roundId)}/winner`); } catch (e) {}
+      try { w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(roundId)}/winner`); } catch (_) {}
+
       const potHuman = (Number(r.pot || 0) / TEN_POW).toLocaleString();
-      const winner = w?.winner || "—";
-      const payout = w?.payout_sig || "—";
-      const proof = (w?.server_seed_hash || "-").slice(0, 10) + "…";
+      const winner   = w?.winner || "—";
+      const payout   = w?.payout_sig || "—";
+      const hash     = w?.server_seed_hash || "—";
+      const reveal   = w?.server_seed_reveal || "—";
+      const salt     = (w?.salt || w?.server_salt || "—");
+
+      const short = (s, n=10) => (typeof s === "string" && s.length > n+1) ? (s.slice(0,n) + "…") : s;
+  
       rows.push(`<tr>
         <td>${roundId}</td>
         <td>${potHuman} ${TOKEN.symbol}</td>
         <td>${winner}</td>
-        <td>${payout}</td>
-        <td>${proof}</td>
+        <td>${payout && payout !== "—" ? `<a href="${txUrl(payout)}" target="_blank" rel="noopener">${short(payout, 10)}</a>` : "—"}</td>
+        <td><code class="mono">${short(hash, 14)}</code></td>
+        <td><code class="mono">${short(reveal, 14)}</code></td>
+        <td><code class="mono">${short(String(salt), 10)}</code></td>
       </tr>`);
     }
-    tbody.innerHTML = rows.join("") || `<tr><td colspan="5" class="muted">No history.</td></tr>`;
+    tbody.innerHTML = rows.join("") || `<tr><td colspan="${COLSPAN}" class="muted">No history.</td></tr>`;
   }
 
   document.getElementById("history-search")?.addEventListener("input", (e) => {
