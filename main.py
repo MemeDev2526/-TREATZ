@@ -110,6 +110,18 @@ def admin_guard(creds: HTTPAuthorizationCredentials = Depends(_auth_scheme)):
 # =========================================================
 app = FastAPI(title="$TREATZ Backend", version="0.1.0")
 
+# --- normalize paths like //api/webhook/helius -> /api/webhook/helius
+import re
+from fastapi import Request
+
+@app.middleware("http")
+async def _normalize_double_slashes(request: Request, call_next):
+    path = request.scope.get("path", "")
+    norm = re.sub(r"//+", "/", path) or "/"
+    if norm != path:
+        request.scope["path"] = norm
+    return await call_next(request)
+    
 # Paths
 BASE_DIR = os.path.dirname(__file__)
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -1439,20 +1451,59 @@ async def redeem_free_spin(body: FreeSpinReq):
 # =========================================================
 def _verify_helius_signature(request: Request, raw_body: bytes) -> bool:
     """
-    Optional: verify Helius request signature if HELIUS_SIGNATURE_HEADER is set.
-    Helius sends hex-encoded HMAC-SHA256 over the raw body.
+    Verify the Helius webhook using one of:
+      A) Shared secret (static header value match), or
+      B) HMAC-SHA256 over the raw body (accept hex or base64).
+    Behavior is controlled by env:
+      - HELIUS_SIGNATURE_HEADER  -> the *name* of the header Helius will send
+      - WEBHOOK_SHARED_SECRET    -> if set, we accept exact match to this value
+      - HMAC_SECRET              -> if set, we compute HMAC and accept hex/base64 match
+    If HELIUS_SIGNATURE_HEADER is empty, verification is disabled (returns True).
     """
-    header_name = settings.HELIUS_SIGNATURE_HEADER or ""
+    header_name = (getattr(settings, "HELIUS_SIGNATURE_HEADER", "") or "").strip()
     if not header_name:
         return True  # verification disabled
-    sig = request.headers.get(header_name)
-    if not sig:
+
+    # Case-insensitive fetch
+    incoming = request.headers.get(header_name) or request.headers.get(header_name.lower())
+    if not incoming:
         return False
-    computed = hmac.new(settings.HMAC_SECRET.encode(), raw_body, hashlib.sha256).hexdigest()
-    try:
-        return hmac.compare_digest(computed, sig)
-    except Exception:
-        return False
+
+    # A) Static shared-secret mode
+    shared = getattr(settings, "WEBHOOK_SHARED_SECRET", "")
+    if shared:
+        try:
+            if hmac.compare_digest(incoming, shared):
+                return True
+        except Exception:
+            pass  # fall through to HMAC mode if configured
+
+    # B) HMAC mode (hex or base64)
+    hmac_secret = getattr(settings, "HMAC_SECRET", "")
+    if hmac_secret:
+        dig = hmac.new(hmac_secret.encode("utf-8"), raw_body, hashlib.sha256).digest()
+        hex_sig = dig.hex()
+        try:
+            import base64
+            b64_sig = base64.b64encode(dig).decode("ascii")
+        except Exception:
+            b64_sig = None
+
+        try:
+            if hmac.compare_digest(incoming, hex_sig):
+                return True
+        except Exception:
+            pass
+        if b64_sig:
+            try:
+                if hmac.compare_digest(incoming, b64_sig):
+                    return True
+            except Exception:
+                pass
+
+    # Nothing matched
+    return False
+
 
 def _parse_token_transfer(ev: dict):
     # Prefer tokenTransfers array (Helius), fallback to root fields
