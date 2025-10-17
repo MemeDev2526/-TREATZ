@@ -1524,9 +1524,9 @@ export async function getAta(owner, mint) {
       { label:"💀 Ghosted",           type:"loss", amount:0,        w:0.16 },
       { label:"🕸️ Cobwebs",           type:"loss", amount:0,        w:0.12 },
       { label:"🧟 Haunted Detour",    type:"loss", amount:0,        w:0.10 },
-      { label:"🕯️ Candle Went Out",  type:"loss", amount:0,        w:0.08 },
+      { label:"🕯️ Candle Went Out",   type:"loss", amount:0,        w:0.08 },
       { label:"🎃 Pumpkin Smash",     type:"loss", amount:0,        w:0.06 },
-      { label:"🧙‍♀️ Witch Tax",       type:"loss", amount:0,        w:0.04 },
+      { label:"🧙‍♀️ Witch Tax",         type:"loss", amount:0,        w:0.04 },
       { label:"👻 Phantom Fees",      type:"loss", amount:0,        w:0.02 },
 
       { label:"🍬 50,000",            type:"win",  amount:50_000,    w:0.09 },
@@ -1543,37 +1543,109 @@ export async function getAta(owner, mint) {
 
     // Draw wheel slices
     function drawWheel() {
-      const cx=200, cy=200, r=190;
+      const cx=200, cy=200, r=170;         // slightly smaller radius (room for rim)
       elSvg.innerHTML = "";
+
+      // === defs: gradients for slices ===
+      const defs = document.createElementNS("http://www.w3.org/2000/svg","defs");
+      const mkGrad = (id, stops) => {
+        const g = document.createElementNS(defs.namespaceURI,"radialGradient");
+        g.setAttribute("id", id);
+        g.setAttribute("cx","50%"); g.setAttribute("cy","50%"); g.setAttribute("r","75%");
+        stops.forEach(([o,c])=>{
+          const s = document.createElementNS(defs.namespaceURI,"stop");
+          s.setAttribute("offset", o); s.setAttribute("stop-color", c);
+          g.appendChild(s);
+        });
+        defs.appendChild(g);
+      };
+      // win (green), loss (orange/red), free (purple)
+      mkGrad("grad-win",  [["0%","#17ffa4"],["45%","#0fd37f"],["100%","#0a6b41"]]);
+      mkGrad("grad-loss", [["0%","#ffae66"],["45%","#ff6b00"],["100%","#7a2c00"]]);
+      mkGrad("grad-free", [["0%","#caa8ff"],["45%","#8a53ff"],["100%","#3b158e"]]);
+      elSvg.appendChild(defs);
+
+      // === outer shadow ring (subtle) ===
+      const rimOuter = document.createElementNS(elSvg.namespaceURI,"circle");
+      rimOuter.setAttribute("class","wheel-rim-outer");
+      rimOuter.setAttribute("cx",cx); rimOuter.setAttribute("cy",cy); rimOuter.setAttribute("r", r+20);
+      elSvg.appendChild(rimOuter);
+
+      // === slices ===
       const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
       let a0 = -Math.PI/2;
-      PRIZES.forEach((p)=>{
+      PRIZES.forEach((p,i)=>{
         const a1 = a0 + 2*Math.PI*(p.w/sumW);
         const x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0);
         const x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
         const large = (a1-a0) > Math.PI ? 1:0;
-        const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+
+        const path = document.createElementNS(elSvg.namespaceURI,"path");
         path.setAttribute("d", `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`);
-        path.setAttribute("class", p.type === "win" ? "slice-win" : (p.type==="free"?"slice-free":"slice-loss"));
+
+        // gradient per type
+        const fill = (p.type==="win" ? "url(#grad-win)" : (p.type==="free" ? "url(#grad-free)" : "url(#grad-loss)"));
+        path.setAttribute("fill", fill);
+        path.setAttribute("class", p.type==="win" ? "slice-win" : (p.type==="free" ? "slice-free" : "slice-loss"));
         elSvg.appendChild(path);
 
+        // spoke separator
+        const spoke = document.createElementNS(elSvg.namespaceURI,"line");
+        spoke.setAttribute("x1", cx); spoke.setAttribute("y1", cy);
+        spoke.setAttribute("x2", x0); spoke.setAttribute("y2", y0);
+        spoke.setAttribute("class","wheel-spoke");
+        elSvg.appendChild(spoke);
+
+        // label at mid-angle
         const am = (a0+a1)/2, lr = r*0.68;
-        const lx = cx + lr*Math.cos(am), ly = cy + lr*Math.sin(am);
-        const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+        const lx = cx + lr*Math.cos(am), ly = cy + lr*Math.sin(am) + 5;
+        const t = document.createElementNS(elSvg.namespaceURI,"text");
         t.setAttribute("x", lx.toFixed(1));
         t.setAttribute("y", ly.toFixed(1));
         t.setAttribute("class","slice-label");
-        t.textContent = p.label;
+        t.textContent = p.label.toUpperCase();
         elSvg.appendChild(t);
 
         a0 = a1;
       });
-      const ring = document.createElementNS("http://www.w3.org/2000/svg","circle");
-      ring.setAttribute("cx",cx); ring.setAttribute("cy",cy); ring.setAttribute("r",r-6);
-      ring.setAttribute("stroke","rgba(106,0,255,.45)"); ring.setAttribute("stroke-width","8"); ring.setAttribute("fill","none");
-      ring.setAttribute("class","wheel-glow");
-      elSvg.appendChild(ring);
+
+      // === inner & outer rim ===
+      const rim = document.createElementNS(elSvg.namespaceURI,"circle");
+      rim.setAttribute("class","wheel-rim");
+      rim.setAttribute("cx",cx); rim.setAttribute("cy",cy); rim.setAttribute("r", r+4);
+      elSvg.appendChild(rim);
+    
+      // === bolts around the rim ===
+      const bolts = 20;
+      for (let i=0;i<bolts;i++){
+        const ang = -Math.PI/2 + (i/bolts)*Math.PI*2;
+        const bx = cx + (r+4)*Math.cos(ang);
+        const by = cy + (r+4)*Math.sin(ang);
+        const bolt = document.createElementNS(elSvg.namespaceURI,"circle");
+        bolt.setAttribute("class","wheel-bolt");
+        bolt.setAttribute("cx",bx.toFixed(1)); bolt.setAttribute("cy",by.toFixed(1));
+        bolt.setAttribute("r","3.6");
+        elSvg.appendChild(bolt);
+      }
+
+      // === center hub + cap text ===
+      const hub = document.createElementNS(elSvg.namespaceURI,"circle");
+      hub.setAttribute("class","wheel-center"); hub.setAttribute("cx",cx); hub.setAttribute("cy",cy); hub.setAttribute("r","58");
+      elSvg.appendChild(hub);
+
+      const cap = document.createElementNS(elSvg.namespaceURI,"circle");
+      cap.setAttribute("class","wheel-cap"); cap.setAttribute("cx",cx); cap.setAttribute("cy",cy); cap.setAttribute("r","44");
+      elSvg.appendChild(cap);
+
+      const capText = document.createElementNS(elSvg.namespaceURI,"text");
+      capText.setAttribute("x", cx); capText.setAttribute("y", cy+6);
+      capText.setAttribute("text-anchor","middle");
+      capText.setAttribute("class","slice-label");
+      capText.style.fontSize = "22px";
+      capText.textContent = "$TREATZ";
+      elSvg.appendChild(capText);
     }
+
     drawWheel();
 
     // Wallet UI state
@@ -1640,6 +1712,7 @@ export async function getAta(owner, mint) {
 
     // animation math
     function spinToLabel(label) {
+      // compute the mid-angle of the target slice
       const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
       let a0 = -Math.PI/2;
       let targetAngle = 0;
@@ -1647,15 +1720,27 @@ export async function getAta(owner, mint) {
         const a1 = a0 + 2*Math.PI*(p.w/sumW);
         if (p.label === label) {
           const am = (a0+a1)/2;
+          // pointer is at 12 o’clock: convert so the slice mid aligns there
           targetAngle = (Math.PI*1.5) - am;
           break;
         }
         a0 = a1;
       }
-      const turns = 6 + Math.random()*2;
-      const deg = (turns*360) + (targetAngle*180/Math.PI);
+
+      // add full spins + tiny jitter so it doesn’t land robotically
+      const baseTurns = 6 + Math.random()*2;               // 6–8 spins
+      const jitter = (Math.random() - 0.5) * (Math.PI/90); // ~±2°
+      const deg = (baseTurns*360) + ((targetAngle + jitter) * 180/Math.PI);
+
       elSvg.classList.add("spinning");
+      // trigger the rotation
       elSvg.style.transform = `rotate(${deg.toFixed(2)}deg)`;
+
+      // pointer thunk near the end
+      setTimeout(()=>{
+        const ptr = document.querySelector(".wheel-pointer");
+        if (ptr) { ptr.classList.remove("pointer-tap"); void ptr.offsetWidth; ptr.classList.add("pointer-tap"); }
+      }, 4650);
     }
 
     function resultLine(outcome) {
