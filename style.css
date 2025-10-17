@@ -541,11 +541,31 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   border-radius:50%; filter: blur(3px);
 }
 
+/* Jackpot card layout: make "Recent Rounds" span full width on the next row */
+#jackpot-card{
+  display: grid;              /* ensure it's a grid even if a utility changed */
+  grid-template-columns: 2fr 1fr 1.2fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* The third child (.jp__recent) jumps to the next row and spans all columns */
+#jackpot-card .jp__recent{
+  grid-column: 1 / -1;        /* full width */
+}
+
+/* Mobile/tablet: stack normally */
+@media (max-width: 900px){
+  #jackpot-card{ grid-template-columns: 1fr; }
+  #jackpot-card .jp__recent{ grid-column: 1; }
+}
+
+
 /* =========================================================
    Mini Table (Recent Rounds) & Lists
    ========================================================= */
 .mini-table__head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-.mini-table__list{ list-style: none; margin: 0; padding: 0; max-height: 220px; overflow:auto; -webkit-overflow-scrolling:touch; }
+.mini-table__list{ list-style: none; margin: 0; padding: 0; max-height: 300px; overflow:auto; -webkit-overflow-scrolling:touch; }
 .mini-table__list{ scrollbar-color: rgba(255,255,255,.25) transparent; }
 .mini-table__list::-webkit-scrollbar{ width:10px; }
 .mini-table__list::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.2); border-radius:10px; border:2px solid transparent; background-clip:padding-box; }
