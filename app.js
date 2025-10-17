@@ -324,8 +324,7 @@ export async function getAta(owner, mint) {
       while (n && n !== document.documentElement) {
         const cs = getComputedStyle(n);
         if (cs.transform !== "none" || cs.perspective !== "none" || cs.filter !== "none" || /fixed|sticky/.test(cs.position)) {
-          found = true;
-          break;
+          found = true; break;
         }
         n = n.parentElement;
       }
@@ -617,6 +616,20 @@ export async function getAta(owner, mint) {
     const treatImg = (window.TREATZ_CONFIG?.assets?.coin_treat) || "/static/assets/coin_treatz.png";
     const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
     applyCoinFaces({ trickImg, treatImg });
+
+    // ← GPU promote / backface fixes to stop single-frame “cut” on rotateY
+    const coin = document.getElementById("coin") || document.querySelector(".coin");
+    if (coin) {
+      coin.style.willChange = "transform";
+      // keep transform chain “active” so compositor doesn’t drop the layer mid-spin
+      const t0 = getComputedStyle(coin).transform;
+      coin.style.transform = (t0 && t0 !== "none") ? t0 : "translateZ(0)";
+      coin.querySelectorAll(".coin__face").forEach(f => {
+        f.style.backfaceVisibility = "hidden";
+        f.style.transform = "translateZ(0)";
+        f.style.willChange = "transform";
+      });
+    }
   });
 
   // -------------------------
@@ -1274,9 +1287,18 @@ export async function getAta(owner, mint) {
       return /ms$/i.test(s) ? n : n * 1000;
     }
 
+    let __flipping = false;
+
     function simulateFlip() {
+      if (__flipping) return;
+      __flipping = true;
+
       const coin = document.getElementById("coin") || document.querySelector(".coin");
-      if (coin) { coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+      if (coin) {
+        coin.classList.remove("spin","coin--show-trick","coin--show-treat");
+        void coin.offsetWidth;                      // reflow to restart
+        requestAnimationFrame(() => coin.classList.add("spin"));  // safer enqueue
+      }
 
       const form = document.getElementById("bet-form");
       const side = (form ? (new FormData(form)).get("side") : null) || "TRICK";
@@ -1308,6 +1330,8 @@ export async function getAta(owner, mint) {
           }
         } catch (err) {
           console.error("coin flip settle handler error", err);
+        } finally {
+          __flipping = false;                         // ← RELEASE THE GUARD
         }
       }, getSpinMs());
     }
@@ -1368,6 +1392,9 @@ export async function getAta(owner, mint) {
 
   // placeCoinFlip: full backend flow when wallet available
   async function placeCoinFlip(){
+    if (__flipping) return;                 // ← avoid re-entrant spins
+    __flipping = true;
+  
     await ensureConfig();
     if(!PUBKEY) throw new Error("Wallet not connected");
     const form = document.getElementById("bet-form");
@@ -1434,7 +1461,11 @@ export async function getAta(owner, mint) {
 
     // 3) Poll until settled
     const coin = document.getElementById("coin"); 
-    if (coin){ coin.classList.remove("spin"); void coin.offsetWidth; coin.classList.add("spin"); }
+    if (coin){
+      coin.classList.remove("spin","coin--show-trick","coin--show-treat");
+      void coin.offsetWidth;
+      requestAnimationFrame(() => coin.classList.add("spin"));  // ← enqueue safely
+    }
 
     const poll = async() => {
       const r = await jfetch(`${API}/bets/${encodeURIComponent(bet.bet_id)}`).catch(()=>null);
@@ -1447,9 +1478,9 @@ export async function getAta(owner, mint) {
       else await new Promise(res=>setTimeout(res, 500));
     }
     if (!settled) {
-      const coin = document.getElementById("coin");
       coin?.classList?.remove("spin");
       toast("Settlement timeout — check history later.");
+      __flipping = false;                   // ← release on timeout
       return;
     }
 
@@ -1464,8 +1495,10 @@ export async function getAta(owner, mint) {
       document.createTextNode(youWon ? `WIN — ${landed}` : `LOSS — ${landed}`)
     );
     refreshWalletBalance().catch(()=>{});
-  }
 
+    setTimeout(() => { __flipping = false; }, 20); // ← release shortly after settle
+  }
+  
   async function pollBetUntilSettle(betId, timeoutMs = 45_000) {
     const t0 = Date.now();
     while (Date.now() - t0 < timeoutMs) {
@@ -1492,6 +1525,7 @@ export async function getAta(owner, mint) {
   // Wheel of Fate — Frontend
   // ==========================
   (function initWheel() {
+    let SLICES = PRIZES.slice(); // current visual order
     const API = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
     let DECIMALS = 6, TEN = 10 ** 6;
     // Load config up-front so mint/decimals/price are correct
@@ -1549,28 +1583,65 @@ export async function getAta(owner, mint) {
       { label:"🎁 Free Spin x3",      type:"free", amount:0,         w:0.01, free:3 },
     ];
 
+    const WHEEL_COLORS = {
+    win:  { center: "#14d07a", mid: "#0b9c56", edge: "#073b26" },   // green
+    loss: { center: "#f39a1d", mid: "#a95815", edge: "#3b1d09" },   // orange/brown
+    free: { center: "#c4a6ff", mid: "#6b36d1", edge: "#2b1269" },   // purple
+  };
+
+  function spreadPrizes(prizes) {
+    const byType = { win: [], loss: [], free: [] };
+    prizes.forEach(p => byType[p.type].push(p));
+    // light shuffle within types
+    Object.keys(byType).forEach(t => byType[t].sort(() => Math.random() - 0.5));
+
+    const total = prizes.length;
+    const order = [];
+    let last = null;
+
+    while (order.length < total) {
+      // prefer types we still have, excluding the last used type
+      const candidates = ["win", "loss", "free"].filter(t => byType[t].length && t !== last);
+      // if we painted ourselves into a corner, allow last type again
+      const pool = candidates.length ? candidates : ["win","loss","free"].filter(t => byType[t].length);
+      const t = pool[Math.floor(Math.random() * pool.length)];
+      order.push(byType[t].pop());
+      last = t;
+    }
+    // small random rotation so the pointer doesn’t always start on the same type
+    const offset = Math.floor(Math.random() * order.length);
+    return order.slice(offset).concat(order.slice(0, offset));
+  }
+
     // Draw wheel slices
     function drawWheel() {
-      const cx=200, cy=200, r=170;         // slightly smaller radius (room for rim)
-      elSvg.innerHTML = "";
+    // Draw in a fixed 500x500 viewBox; CSS controls actual render size.
+    elSvg.setAttribute("viewBox", "0 0 500 500");
+    elSvg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    const cx = 250, cy = 250, r = 205;   // larger wheel to fit labels cleanly
+    elSvg.innerHTML = "";
 
       // === defs: gradients for slices ===
       const defs = document.createElementNS("http://www.w3.org/2000/svg","defs");
-      const mkGrad = (id, stops) => {
-        const g = document.createElementNS(defs.namespaceURI,"radialGradient");
+      function mkGrad(id, {center, mid, edge}) {
+        const g = document.createElementNS(defs.namespaceURI, "radialGradient");
         g.setAttribute("id", id);
-        g.setAttribute("cx","50%"); g.setAttribute("cy","50%"); g.setAttribute("r","75%");
-        stops.forEach(([o,c])=>{
+        g.setAttribute("cx","50%"); g.setAttribute("cy","50%"); g.setAttribute("r","78%");
+        // Light in the center, darker to the rim
+        [
+          ["0%",  center],
+          ["52%", mid],
+          ["100%", edge],
+        ].forEach(([o,c]) => {
           const s = document.createElementNS(defs.namespaceURI,"stop");
           s.setAttribute("offset", o); s.setAttribute("stop-color", c);
           g.appendChild(s);
         });
         defs.appendChild(g);
-      };
-      // win (green), loss (orange/red), free (purple)
-      mkGrad("grad-win",  [["0%","#17ffa4"],["45%","#0fd37f"],["100%","#0a6b41"]]);
-      mkGrad("grad-loss", [["0%","#ffae66"],["45%","#ff6b00"],["100%","#7a2c00"]]);
-      mkGrad("grad-free", [["0%","#caa8ff"],["45%","#8a53ff"],["100%","#3b158e"]]);
+      }
+      mkGrad("grad-win",  WHEEL_COLORS.win);
+      mkGrad("grad-loss", WHEEL_COLORS.loss);
+      mkGrad("grad-free", WHEEL_COLORS.free);
       elSvg.appendChild(defs);
 
       // === outer shadow ring (subtle) ===
@@ -1582,7 +1653,8 @@ export async function getAta(owner, mint) {
       // === slices ===
       const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
       let a0 = -Math.PI/2;
-      PRIZES.forEach((p,i)=>{
+      const ORDERED = spreadPrizes(PRIZES);
+      ORDERED.forEach((p, i) => {
         const a1 = a0 + 2*Math.PI*(p.w/sumW);
         const x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0);
         const x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
@@ -1604,16 +1676,34 @@ export async function getAta(owner, mint) {
         spoke.setAttribute("class","wheel-spoke");
         elSvg.appendChild(spoke);
 
-        // label at mid-angle
-        const am = (a0+a1)/2, lr = r*0.68;
-        const lx = cx + lr*Math.cos(am), ly = cy + lr*Math.sin(am) + 5;
-        const t = document.createElementNS(elSvg.namespaceURI,"text");
+        // label at mid-angle, sized to fit arc, rotated for clean orientation
+        const am = (a0 + a1) / 2;
+        const arc   = (a1 - a0) * r;               // arc length in px
+        const pad   = 18;                          // breathing room inside slice
+        const textW = Math.max(40, arc - pad);     // target text width
+
+        const lr = r * 0.70;                       // label radius
+        const lx = cx + lr * Math.cos(am);
+        const ly = cy + lr * Math.sin(am);
+
+        const t = document.createElementNS(elSvg.namespaceURI, "text");
         t.setAttribute("x", lx.toFixed(1));
         t.setAttribute("y", ly.toFixed(1));
-        t.setAttribute("class","slice-label");
-        t.textContent = p.label.toUpperCase();
-        elSvg.appendChild(t);
+        t.setAttribute("class", "slice-label");
+        t.setAttribute("dominant-baseline", "middle");
+        t.setAttribute("textLength", textW.toFixed(0));           // fit to arc width
+        t.setAttribute("lengthAdjust", "spacingAndGlyphs");
 
+        // Rotate so the text follows the arc (tangent). Convert rad→deg and add 90°
+        const deg = (am * 180 / Math.PI) + 90;
+        t.setAttribute("transform", `rotate(${deg.toFixed(2)} ${lx.toFixed(1)} ${ly.toFixed(1)})`);
+
+        // If the slice is too narrow, shrink the font a touch (CSS has .slice-label.long)
+        if (arc < 90) t.classList.add("long");
+
+        t.textContent = String(p.label || "").toUpperCase();
+        elSvg.appendChild(t);
+        
         a0 = a1;
       });
 
@@ -1720,20 +1810,18 @@ export async function getAta(owner, mint) {
 
     // animation math
     function spinToLabel(label) {
-      // compute the mid-angle of the target slice
-      const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
-      let a0 = -Math.PI/2;
-      let targetAngle = 0;
-      for (const p of PRIZES) {
-        const a1 = a0 + 2*Math.PI*(p.w/sumW);
-        if (p.label === label) {
-          const am = (a0+a1)/2;
-          // pointer is at 12 o’clock: convert so the slice mid aligns there
-          targetAngle = (Math.PI*1.5) - am;
-          break;
-        }
-        a0 = a1;
+    const sumW = SLICES.reduce((s,p)=>s+p.w,0);
+    let a0 = -Math.PI/2;
+    let targetAngle = 0;
+    for (const p of SLICES) {           // << use SLICES, not PRIZES
+      const a1 = a0 + 2*Math.PI*(p.w/sumW);
+      if (p.label === label) {
+        const am = (a0+a1)/2;
+        targetAngle = (Math.PI*1.5) - am; // pointer at 12 o’clock
+        break;
       }
+      a0 = a1;
+    }
 
       // add full spins + tiny jitter so it doesn’t land robotically
       const baseTurns = 6 + Math.random()*2;               // 6–8 spins
