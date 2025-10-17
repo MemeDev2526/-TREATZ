@@ -7,6 +7,11 @@
   <title>$TREATZ — The Official Halloween Candy of Solana</title>
   <meta name="description" content="$TREATZ — Trick-or-Treat coin toss & Jackpot Raffle. Spooky season on Solana." />
   <meta name="theme-color" content="#0D0D0D" />
+  <meta property="og:title" content="$TREATZ — The Official Halloween Candy of Solana">
+  <meta property="og:description" content="Trick-or-Treat coin toss, Jack’o’Lantern Jackpot, and the Wheel of Fate. Spooky season on Solana.">
+  <meta property="og:image" content="/static/assets/og_treatz.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
  
    <!-- ========== FAVICON ========== -->
   <link rel="icon" type="image/png" href="/static/assets/favicon.png" sizes="512x512" />
@@ -168,7 +173,7 @@
         <!-- RIGHT: COIN + STATUS (FX will hook to #fx-layer) -->
         <div class="card__col">
           <div class="cf-display" id="cf-display" aria-live="polite">
-            <div class="coin" id="coin" aria-label="Coin">
+            <div class="coin" id="coin" role="img" aria-label="Coin showing TRICK or TREAT">
               <div class="coin__face coin__face--front">TRICK</div>
               <div class="coin__face coin__face--back">TREAT</div>
             </div>
@@ -187,7 +192,6 @@
       <h2 class="section__title" id="jackpot-title">🕯️ 🎃 Jack'O'Lantern Jackpot Raffle 🎃</h2>
 
       <div class="card grid-3">
-        <!-- 11) STATS BOX -->
         <div class="card__col">
           <div class="stats">
             <div><span class="stat__label">Current Pot</span> <span class="stat__value"><strong id="round-pot">—</strong> $TREATZ</span></div>
@@ -216,27 +220,48 @@
           </div>
 
           <script>
-          (function raffleHeartbeat(){
+          (function () {
+            const $ = (id)=>document.getElementById(id);
+            const fmt = (ms)=> {
+              const sec = Math.max(0, Math.floor(ms/1000));
+              return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
+            };
+            const parseIso = (s)=>{
+              if(!s) return null;
+              const t = String(s).trim();
+              return new Date(t.endsWith('Z') ? t : t.replace(/Z?$/,'Z'));
+            };
+
             async function tick(){
               try{
-                const h = await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());
-                const cur = await fetch('/api/rounds/current',{cache:'no-store'}).then(r=>r.json());
-                const s = document.getElementById('jp-status');
-                const hb = document.getElementById('jp-heartbeat');
-                  if(!s||!hb) return;
-                  const closes = new Date(String(cur.closes_at||'').replace(' ','T')+'Z');
-                  const left = Math.max(0, Math.floor((closes - Date.now())/1000));
-                  const m = Math.floor(left/60), sec = String(left%60).padStart(2,'0');
-                  s.textContent = `Round #${cur.round_id} — closes in ${m}:${sec}`;
-                  hb.classList.toggle('is-up', !!h.ok);
-                }catch(e){
-                  const s = document.getElementById('jp-status'); if(s) s.textContent = 'Raffle offline (backend unreachable)';
-                  document.getElementById('jp-heartbeat')?.classList.remove('is-up');
-                }
+                const [hRes, cur] = await Promise.all([
+                  fetch('/api/health',{cache:'no-store'}).then(r=>r.json()).catch(()=>({ok:false})),
+                  fetch('/api/rounds/current',{cache:'no-store'}).then(r=>r.json())
+                ]);
+                const closes = parseIso(cur?.closes_at);
+                const leftMs = closes ? (closes.getTime() - Date.now()) : 0;
+
+                // inline heartbeat line
+                const s = $('jp-status'); const hb = $('jp-heartbeat');
+                if(s) s.textContent = `Round #${cur?.round_id ?? '—'} — closes in ${fmt(leftMs)}`;
+                if(hb) hb.classList.toggle('is-up', !!hRes.ok);
+
+                // big “Closes In” stat + progress bar
+                const big = $('round-countdown'); if(big) big.textContent = fmt(leftMs);
+                const prog = $('jp-progress'); if(prog && cur?.open_at && closes){
+                  const open = parseIso(cur.open_at)?.getTime() ?? Date.now();
+                  const total = closes.getTime() - open;
+                  const pct = total > 0 ? Math.max(0, Math.min(100, (1 - (leftMs/total))*100)) : 0;
+                  prog.style.width = `${pct.toFixed(2)}%`;
               }
-              tick(); setInterval(tick, 3000);
-            })();
-            </script>
+              }catch(e){
+                const s = $('jp-status'); if(s) s.textContent = 'Raffle offline (backend unreachable)';
+                $('jp-heartbeat')?.classList.remove('is-up');
+              }
+            }
+            tick(); setInterval(tick, 1000);
+          })();
+          </script>
 
         </div>
        
@@ -280,18 +305,19 @@
     <section class="section" id="raffle-history" aria-labelledby="raffle-history-title">
       <h2 class="section__title" id="raffle-history-title">Raffle History</h2>
       <div class="card">
+        <label class="visually-hidden" for="history-search">Search round</label>
         <input id="history-search" type="text" placeholder="Search round (e.g., R1601)" />
         <div class="table-wrap" style="margin-top:.5rem;">
-          <table id="history-table">
-            <thead>
-              <tr>
-                <th>Round</th>
-                <th>Pot</th>
-                <th>Winner</th>
-                <th>Payout Tx</th>
-                <th>Proof (commit/reveal/salt)</th>
-              </tr>
-            </thead>
+          <table id="history-table" class="rf-table">
+            <thead><tr>
+              <th>Round</th>
+              <th>Pot</th>
+              <th>Winner</th>
+              <th>Payout Tx</th>
+              <th>Server Hash</th>
+              <th>Reveal</th>
+              <th>Salt</th>
+            </tr></thead>
             <tbody></tbody>
           </table>
         </div>
