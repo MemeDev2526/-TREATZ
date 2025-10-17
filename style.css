@@ -708,6 +708,68 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   z-index:-1;
 }
 
+/* ===== Wheel of Fate — visual polish ===== */
+.wheel-card .wheel-wrap {
+  position: relative; display:grid; place-items:center; min-height: 360px;
+}
+
+/* The SVG itself */
+.wheel {
+  width: 380px; height: 380px;
+  filter: drop-shadow(0 18px 34px rgba(0,0,0,.55));
+  transform: rotate(0deg);
+  transition: transform 4.8s cubic-bezier(.08,.8,.08,1);
+  will-change: transform;
+}
+
+/* when spinning, use a longer easing then ease out near the end */
+.wheel.spinning {
+  transition: transform 4.8s cubic-bezier(.1,.9,.05,1.02);
+}
+
+/* pointer as a metal arrow with glow & a little tap animation on finish */
+.wheel-pointer {
+  position:absolute; top:-6px; left:50%; transform: translateX(-50%);
+  width: 0; height: 0; border-left: 16px solid transparent; border-right: 16px solid transparent;
+  border-top: 28px solid var(--pumpkin);
+  filter: drop-shadow(0 6px 14px rgba(255,107,0,.45));
+}
+.wheel-pointer::after {
+  content:""; position:absolute; left:-12px; top:-6px; right:-12px; bottom:-22px;
+  border-radius: 8px; border:2px solid rgba(255,255,255,.25);
+  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(0,0,0,.2));
+  filter: blur(.5px);
+}
+.pointer-tap { animation: pointer-tap .25s ease-out 1; }
+@keyframes pointer-tap {
+  0% { transform: translateX(-50%) rotate(0deg); }
+  55% { transform: translateX(-50%) rotate(-12deg); }
+  100% { transform: translateX(-50%) rotate(0deg); }
+}
+
+/* slice labels: heavier + stroke for contrast */
+.slice-label {
+  font-family:"Rubik",system-ui,sans-serif; font-weight:900;
+  fill:#fff; font-size:14px; text-anchor:middle;
+  paint-order:stroke; stroke:#000; stroke-width:4px;
+}
+
+/* rich slice fills via gradients (applied from JS) */
+.slice-win  { stroke: rgba(255,255,255,.14); stroke-width:1; }
+.slice-loss { stroke: rgba(255,255,255,.14); stroke-width:1; }
+.slice-free { stroke: rgba(255,255,255,.14); stroke-width:1; }
+
+/* thick rim and inner hub (drawn in JS, styled here) */
+.wheel-rim    { fill:none; stroke:#1b1b1b; stroke-width:20; filter: drop-shadow(0 10px 24px rgba(0,0,0,.55)); }
+.wheel-rim-outer { fill:none; stroke:rgba(0,0,0,.55); stroke-width:34; opacity:.65; }
+.wheel-center { fill:#101010; stroke:#2a2a2a; stroke-width:6; filter: drop-shadow(0 6px 16px rgba(0,0,0,.6)); }
+.wheel-cap    { fill:#0b0b0b; stroke:#3a3a3a; stroke-width:2; }
+.wheel-bolt   { fill:#2b2b2b; stroke:#000; stroke-width:1; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+.wheel-spoke  { stroke: rgba(0,0,0,.6); stroke-width:2; }
+
+/* status line under wheel */
+#wheel-status { margin-top:.6rem; font-weight:700; text-shadow:0 2px 12px rgba(0,0,0,.5); }
+
 /* ===== Wheel of Fate ===== */
 .wheel-card .wheel-wrap { position: relative; display:grid; place-items:center; min-height: 320px; }
 .wheel { width: 320px; height: 320px; filter: drop-shadow(0 12px 24px rgba(0,0,0,.45)); transform: rotate(0deg); transition: transform 1.2s cubic-bezier(.2,.85,.2,1); }
