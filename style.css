@@ -447,8 +447,8 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
    ========================================================= */
 .cf-display{ display:flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; position: relative; }
 .cf-display::before{
-  content:""; width:250px; height:250px; border-radius:50%;
-  background: radial-gradient(circle, rgba(57,255,20,.18), transparent 62%);
+  content:""; width:220px; height:220px; border-radius:50%;
+  background: radial-gradient(circle, rgba(57,255,20,.16), transparent 64%);
   filter: blur(6px); position:absolute; z-index:-1;
 }
 
@@ -471,8 +471,8 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   transform-style: preserve-3d;
   transition: transform .6s ease;
   /* softer outer + inner glow */
-  box-shadow: 0 0 10px rgba(57,255,20,.18), inset 0 0 8px rgba(255,165,0,.28);
-  background: radial-gradient(circle at 50% 40%, #1a0828 0%, #0d0d0d 60%, #000 100%);
+  box-shadow: 0 0 10px rgba(57,255,20,.18), inset 0 0 8px rgba(255,165,0,.25);
+  background: radial-gradient(circle at 50% 42%, #160825 0%, #0b0b0b 58%, #000 100%);
 }
 /* image defaults so coin isn't blank before JS runs */
 .coin__face--front { /* TRICK */
@@ -618,7 +618,13 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 /* =========================================================
    $TREATZ FX Layer (falling wrappers / ghosts / candy)
    ========================================================= */
-#fx-layer, .fx-layer{ position:fixed; inset:0; pointer-events:none; z-index:100000; overflow:visible; contain: layout paint style; }
+#fx-layer, .fx-layer{
+  position: fixed; inset: 0; pointer-events: none;
+  z-index: 2147483000;            /* above everything */
+  overflow: visible;
+  contain: none;                   /* ensure drop-shadows/filters render outside */
+}
+
 /* base FX piece */
 .fx-piece{
   position: fixed; will-change: transform, opacity, left, top;
@@ -774,19 +780,30 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   100% { transform: translateX(-50%) rotate(0deg); }
 }
 
+/* make slice colors darker regardless of gradient stops provided by JS */
+.slice-win, .slice-loss, .slice-free { filter: brightness(.88) saturate(.95); }
+
 /* slice labels: heavier + stroke for contrast */
 .slice-label{
-  font-family:"Rubik",system-ui,sans-serif;
-  font-weight:900; font-size:14px; text-anchor:middle;
-  fill:#fff; paint-order: stroke fill;
-  stroke: rgba(0,0,0,.55); stroke-width: 3px;
-}
+  font-family:"Rubik",system-ui,sans-serif; font-weight:900;
+  fill:#fff; font-size:13px; text-anchor:middle;
+  paint-order:stroke; stroke:#000; stroke-width:3px;
+  letter-spacing:.2px;
 
 /* rich slice fills via gradients (applied from JS) */
 .slice-win  { stroke: rgba(255,255,255,.14); stroke-width:1; }
 .slice-loss { stroke: rgba(255,255,255,.14); stroke-width:1; }
 .slice-free { stroke: rgba(255,255,255,.14); stroke-width:1; }
 
+@media (max-width: 900px){
+  .wheel{ width: 420px; height: 420px; }
+  .slice-label{ font-size:12px; }
+}
+@media (max-width: 600px){
+  .wheel{ width: 320px; height: 320px; }
+  .slice-label{ font-size:11px; }
+}
+   
 /* thick rim and inner hub (drawn in JS, styled here) */
 .wheel-rim    { fill:none; stroke:#1b1b1b; stroke-width:20; filter: drop-shadow(0 10px 24px rgba(0,0,0,.55)); }
 .wheel-rim-outer { fill:none; stroke:rgba(0,0,0,.55); stroke-width:34; opacity:.65; }
