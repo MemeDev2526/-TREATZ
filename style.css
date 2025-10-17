@@ -570,11 +570,33 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 
 /* Jackpot card layout: make "Recent Rounds" span full width on the next row */
 #jackpot-card{
-  display: grid;              /* ensure it's a grid even if a utility changed */
-  grid-template-columns: 2fr 1fr 1.2fr;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: 1.8fr 1.1fr 1.1fr;  /* give the left column more room */
+  column-gap: 24px;
+  row-gap: 18px;
   align-items: start;
 }
+
+/* round/timer “stats” block breathing room */
+#jackpot-card .stats { margin-bottom: 14px; }
+
+/* commit/reveal live under the round block as distinct lines */
+#seed-commit, #seed-reveal {
+  display: block;
+  margin: 8px 0 0;
+  line-height: 1.35;
+  word-break: break-all;
+}
+#seed-commit::before { content: "Commit: "; font-weight: 900; color: #caffb9; }
+#seed-reveal::before { content: "Reveal: "; font-weight: 900; color: #caffb9; }
+
+/* buy panel spacing so it doesn’t crowd timers */
+#raffle-card .buy-panel { margin-top: 6px; }
+#raffle-card .buy-panel .help { margin-top: 8px; opacity: .9; }
+
+/* emphasize price/credits (you already added a block—keep this polish) */
+#raffle-card .ticket-price,
+#raffle-card .wallet-credit { font-size: 1.12rem; }
 
 /* The third child (.jp__recent) jumps to the next row and spans all columns */
 #jackpot-card .jp__recent{
@@ -605,6 +627,52 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 .muted { opacity:.75; }
 .small { font-size:.875rem; }
 .toast { transition: opacity .25s ease; }
+
+/* ===== Raffle History table ===== */
+#raffle-history { --gap: 14px; }
+#raffle-history .search { margin: 0 0 12px; }
+
+#raffle-history table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+#raffle-history thead th {
+  font-weight: 900;
+  font-size: 1.02rem;
+  color: #caffb9;                       /* mint header */
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+}
+#raffle-history tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px dashed rgba(255,255,255,.08);
+  word-break: break-all;                /* hashes don’t overflow */
+  font-variant-numeric: tabular-nums;
+}
+
+/* distribute columns to fill width nicely on desktop */
+#raffle-history thead th:nth-child(1),  /* Round  */
+#raffle-history tbody td:nth-child(1) { width: 8ch; }
+#raffle-history thead th:nth-child(2),  /* Pot    */
+#raffle-history tbody td:nth-child(2) { width: 10ch; }
+#raffle-history thead th:nth-child(3),  /* Winner */
+#raffle-history tbody td:nth-child(3) { width: 18ch; }
+#raffle-history thead th:nth-child(4),  /* Payout Tx */
+#raffle-history tbody td:nth-child(4) { width: 22ch; }
+#raffle-history thead th:nth-child(5),  /* Server Hash */
+#raffle-history tbody td:nth-child(5) { width: 22ch; }
+#raffle-history thead th:nth-child(6),  /* Commit */
+#raffle-history tbody td:nth-child(6) { width: 22ch; }
+#raffle-history thead th:nth-child(7),  /* Reveal */
+#raffle-history tbody td:nth-child(7) { width: 22ch; }
+#raffle-history thead th:nth-child(8),  /* Salt   */
+#raffle-history tbody td:nth-child(8) { width: 12ch; }
+
+/* smaller screens: let columns wrap */
+@media (max-width: 900px){
+  #raffle-history thead th,
+  #raffle-history tbody td { padding: 8px 10px; }
+  #raffle-history table { table-layout: auto; }
+}
 
 /* About readability */
 #about .card p{ font-size:1.05rem; line-height:1.8; }
@@ -740,12 +808,20 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 
 /* The SVG itself */
 .wheel {
-  width: 520px; height: 520px;           /* larger for readable labels */
+  width: 640px; height: 640px;           /* bigger so labels fit */
   filter: drop-shadow(0 18px 34px rgba(0,0,0,.55));
   transform: rotate(0deg);
   transition: transform 4.8s cubic-bezier(.08,.8,.08,1);
   will-change: transform;
 }
+
+/* darker slice palette regardless of fill coming from JS */
+.slice-win, .slice-loss, .slice-free { filter: brightness(.82) saturate(.9); }
+
+/* responsive downsizing */
+@media (max-width: 1200px){ .wheel{ width: 560px; height: 560px; } }
+@media (max-width: 900px) { .wheel{ width: 460px; height: 460px; } }
+@media (max-width: 600px) { .wheel{ width: 340px; height: 340px; } }
 
 /* when spinning, use a longer easing then ease out near the end */
 .wheel.spinning {
@@ -772,16 +848,25 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
   100% { transform: translateX(-50%) rotate(0deg); }
 }
 
-/* make slice colors darker regardless of gradient stops provided by JS */
-.slice-win, .slice-loss, .slice-free { filter: brightness(.88) saturate(.95); }
-
-/* slice labels */
-.slice-label{
-  font-family:"Rubik",system-ui,sans-serif; font-weight:900;
-  fill:#fff; font-size:13px; text-anchor:middle;
-  paint-order:stroke; stroke:#000; stroke-width:3px;
-  letter-spacing:.2px;
+/* slice labels: readable, centered, non-overflowing */
+.slice-label {
+  font-family: "Rubik", system-ui, sans-serif;
+  font-weight: 900;
+  fill: #fff;
+  font-size: clamp(12px, 1.35vw, 16px);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: #000;
+  stroke-width: 3px;
+  letter-spacing: .2px;
+  pointer-events: none;
+  /* if labels are placed in a <g> per slice, this keeps them inside the pie */
+  transform-origin: center center;
 }
+
+/* optional: tiny shrink if a label still barely collides with neighbors */
+.slice-label.long { font-size: clamp(11px, 1.2vw, 14px); }
 
 .slice-win  { stroke: rgba(255,255,255,.14); stroke-width:1; }
 .slice-loss { stroke: rgba(255,255,255,.14); stroke-width:1; }
@@ -810,10 +895,10 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 .glow-red   { filter: drop-shadow(0 0 16px rgba(255,80,80,.65)); }
 
 /* Wheel left column spacing/readability */
-#wheel-panel{ display:grid; gap:12px; }
-#wheel-panel .cta-row{ display:flex; gap:12px; align-items:center; }
-#wheel-panel .meta-line{ margin-top:6px; line-height:1.35; opacity:.9; }
-.wheel-wrapper{ display:grid; grid-template-columns: 1fr auto; gap:24px; align-items:center; }
+#wheel-panel{ display:grid; gap:14px; }
+#wheel-panel .cta-row{ display:flex; gap:14px; align-items:center; flex-wrap: wrap; }
+#wheel-panel .meta-line{ margin-top:8px; line-height:1.5; opacity:.95; }
+.wheel-wrapper{ display:grid; grid-template-columns: 1fr auto; column-gap: 28px; align-items:center; }
 
 
 /* =========================================================
