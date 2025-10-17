@@ -3,9 +3,10 @@
 $TREATZ — Config
 Centralized environment + constants, powered by pydantic-settings (Pydantic v2).
 """
+from __future__ import annotations
+
 import os
 
-from __future__ import annotations
 from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
