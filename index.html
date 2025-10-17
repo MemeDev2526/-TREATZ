@@ -364,7 +364,7 @@
             <div class="wheel-pointer">▲</div>
             <svg id="wheel-svg" class="wheel" viewBox="0 0 400 400" role="img" aria-label="Wheel of Fate"></svg>
           </div>
-          <div id="wheel-status" class="small" style="margin-top:.5rem;">Ready.</div>
+          <div id="wheel-status" class="small" style="margin-top:.5rem;" aria-live="polite">Ready.</div>
         </div>
       </div>
 
@@ -409,7 +409,7 @@
 
   <!-- (FX) GLOBAL RENDER LAYER + FLOATING MASCOT -->
   <div id="fx-layer" aria-hidden="true"></div>
-  <img id="mascot-floater" src="/static/assets/Mascot.png" alt="Mascot" decoding="async" fetchpriority="low" />
+  <img id="mascot-floater" src="/static/assets/Mascot.png" alt="Mascot" decoding="async" loading="lazy" fetchpriority="low" />
 
   <!-- (Wallet modal markup kept if needed later) -->
   <div id="wallet-modal" class="wm" hidden>
