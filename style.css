@@ -27,7 +27,7 @@
   --radius-lg: 16px;
   --radius-md: 12px;
   --focus-green: rgba(57,255,20,.85);
-  --coin-size: 200px;
+  --coin-size: 250px;
 
   /* FX default color (used as fallback) */
   --fx-color: #FF6B00;
@@ -87,16 +87,18 @@ a, .btn--outline { color: var(--slime); }
    ========================================================= */
 .card{
   background: var(--card);
-  border: 4px solid var(--card-border);
+  border: 1px solid var(--card-border);
   box-shadow: 0 12px 26px rgba(0,0,0,.35), 0 0 26px rgba(57,255,20,.08);
   border-radius: var(--radius-lg);
   padding: 18px;
+  outline: 1px solid rgba(255,255,255,.06);           /* faint inner edge */
+  outline-offset: -4px;
 }
 
 /* =========================================================
    Wallet UI (flyout + modal)
    ========================================================= */
-.wallet{ position: relative; display:inline-block; }
+.wallet{ position: relative; display:inline-block;  z-index:100100; }
 .wallet__menu{
   position: absolute; top: 110%; left: 0; min-width: 180px;
   background: rgba(13,13,13,.95); border: 1px solid rgba(255,255,255,.1);
@@ -111,7 +113,7 @@ a, .btn--outline { color: var(--slime); }
 /* Wallet modal */
 .wm[hidden]{ display: none!important; }
 .wm{
-  position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
+  position: fixed; inset: 0; z-index:100200;; display: grid; place-items: center;
 }
 .wm__backdrop{ position: absolute; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: saturate(.9) blur(2px); }
 .wm__card{
@@ -151,7 +153,7 @@ a, .btn--outline { color: var(--slime); }
   box-shadow: 0 2px 0 rgba(0,0,0,.35);
 }
 .brand-banner img{
-  width: 120%; height: auto; max-height: var(--banner-max-h);
+  width: 100%; height: auto; max-height: var(--banner-max-h);
   object-fit: fill; display: block;
 }
 
@@ -368,7 +370,7 @@ a, .btn--outline { color: var(--slime); }
 /* =========================================================
    Buttons
    ========================================================= */
-.btn{ cursor: pointer; border: none; padding: .7rem 1rem; border-radius: 12px; font-weight: 800; background: transparent; color: var(--white); }
+.btn{ cursor: pointer; pointer-events:none; user-select:none; border: none; padding: .7rem 1rem; border-radius: 12px; font-weight: 800; background: transparent; color: var(--white); }
 .btn--primary{ background: linear-gradient(180deg, var(--orange), var(--orange-hi)); color: #1a0b00; }
 .btn--buy{ background: linear-gradient(90deg, var(--slime), #94DAFF); color: #032316; font-weight: 900; }
 .btn--outline{ background: transparent; color: var(--white); border: 1px solid var(--white); }
@@ -540,8 +542,11 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
    Mini Table (Recent Rounds) & Lists
    ========================================================= */
 .mini-table__head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-.mini-table__list{ list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
-.mini-table__list li{ display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-bottom:1px dashed rgba(255,255,255,.12); }
+.mini-table__list{ list-style: none; margin: 0; padding: 0; max-height: 220px; overflow:auto; -webkit-overflow-scrolling:touch; }
+.mini-table__list{ scrollbar-color: rgba(255,255,255,.25) transparent; }
+.mini-table__list::-webkit-scrollbar{ width:10px; }
+.mini-table__list::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.2); border-radius:10px; border:2px solid transparent; background-clip:padding-box; }
+.mini-table__list li{ display:flex; align-items:center; justify-content:space-between; padding:12px 8px; border-bottom:1px dashed rgba(255,255,255,.12); }
 .mini-round__pill{ padding:.25rem .5rem; border:1px solid var(--card-border); border-radius: 999px; font-size:.85rem; opacity:.9; }
 
 .recent-list { list-style:none; padding:0; margin:0; }
@@ -563,7 +568,7 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 /* =========================================================
    $TREATZ FX Layer (falling wrappers / ghosts / candy)
    ========================================================= */
-#fx-layer, .fx-layer{ position:fixed; inset:0; pointer-events:none; z-index:100000; overflow:visible; }
+#fx-layer, .fx-layer{ position:fixed; inset:0; pointer-events:none; z-index:100000; overflow:visible; contain: layout paint style; }
 /* base FX piece */
 .fx-piece{
   position: fixed; will-change: transform, opacity, left, top;
@@ -697,7 +702,7 @@ input::placeholder{ color: #cfcfcf; opacity: .7; }
 .slice-free { fill: rgba(153,69,255,.32);  stroke: rgba(255,255,255,.12); stroke-width:1; }
 .wheel-glow { filter: drop-shadow(0 12px 24px rgba(0,0,0,.5)); opacity:.95 }
 
-.btnrow { display:flex; gap:.5rem; flex-wrap:wrap; }
+.btnrow { display:flex; gap:.5rem; flex-wrap:wrap; pointer-events:none; user-select:none; }
 #wheel-history-list { margin:.25rem 0 0; padding-left:1rem; }
 #wheel-freespin[disabled], #wheel-spin[disabled] { opacity:.6; pointer-events:none; }
 .tag { display:inline-block; padding:.1rem .4rem; border-radius:.35rem; background:rgba(255,255,255,.06); font-size:.75rem; }
@@ -772,7 +777,6 @@ body.flash { animation: screen-flash 0.9s ease both; }
 /* =========================================================
    Misc helpers & small overrides
    ========================================================= */
-#about .card p{ font-size: 1.05rem; line-height: 1.8; }
 .toast { transition: opacity .25s ease; }
 
 /* --- $TREATZ small polish patch --- */
@@ -809,14 +813,15 @@ body.flash { animation: screen-flash 0.9s ease both; }
    Tablet (<= 900px)
    ———————– */
 @media (max-width: 900px) {
-  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .bg{ background-attachment: scroll; }
+   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .countdown__logo { height: 72px; }
   .nav__wrap { padding: 0 12px; }
   .ticker { padding: .5rem .6rem; }
   .tokenbar { padding: 8px 12px; border-radius: 14px; }
   .treatz-title { font-size: clamp(1.6rem, 3.4vw, 2.4rem); line-height: 1.4; gap: 6px; }
   /* scale down coin and ticker spacing */
-  .coin { width: 140px; height: 140px; }
+  .coin { width: 170px; height: 170px; }
   .cf-display::before{ width: 200px; height:200px; }
   .countdown__inner { padding: .5rem .9rem; gap: .6rem; min-height: 64px; }
   .about-backtop-wrap { padding: 20px 8px 40px; }
@@ -842,8 +847,8 @@ body.flash { animation: screen-flash 0.9s ease both; }
   .nav__brand img { height: 36px; }
   .treatz-sub { display: none; } /* save space on phones */
   .tokenbar { flex-direction: column; align-items: flex-start; gap: 8px; padding: 8px 12px; }
-  .tokenbar__actions { align-self: stretch; display:flex; justify-content: flex-end; width:100%; }
-  .coin { width: 140px; height: 140px; }
+  .tokenbar__actions { align-self: stretch; display:flex;  z-index:100100; justify-content: flex-end; width:100%; }
+  .coin { width: 150px; height: 150px; }
   .cf-display { min-height: 200px; }
 
   #mascot-floater { left: 10px; top: auto; bottom: 10px; width: 110px; }
