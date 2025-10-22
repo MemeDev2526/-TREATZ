@@ -632,6 +632,21 @@ export async function getAta(owner, mint) {
     }
   });
 
+    // ← GPU promote / backface fixes to stop single-frame “cut” on rotateY
+    const coin = document.getElementById("coin") || document.querySelector(".coin");
+    if (coin) {
+      coin.style.willChange = "transform";
+      // keep transform chain “active” so compositor doesn’t drop the layer mid-spin
+      const t0 = getComputedStyle(coin).transform;
+      coin.style.transform = (t0 && t0 !== "none") ? t0 : "translateZ(0)";
+      coin.querySelectorAll(".coin__face").forEach(f => {
+        f.style.backfaceVisibility = "hidden";
+        f.style.transform = "translateZ(0)";
+        f.style.willChange = "transform";
+      });
+    }
+  });
+
   // -------------------------
   // Countdown helpers (Halloween)
   // -------------------------
@@ -1394,7 +1409,7 @@ export async function getAta(owner, mint) {
   async function placeCoinFlip(){
     if (__flipping) return;                 // ← avoid re-entrant spins
     __flipping = true;
-  
+
     await ensureConfig();
     if(!PUBKEY) throw new Error("Wallet not connected");
     const form = document.getElementById("bet-form");
