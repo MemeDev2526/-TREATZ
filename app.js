@@ -1654,6 +1654,7 @@ export async function getAta(owner, mint) {
       const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
       let a0 = -Math.PI/2;
       const ORDERED = spreadPrizes(PRIZES);
+      SLICES = ORDERED;  
       ORDERED.forEach((p, i) => {
         const a1 = a0 + 2*Math.PI*(p.w/sumW);
         const x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0);
@@ -1903,8 +1904,8 @@ export async function getAta(owner, mint) {
     // simulate (no wallet)
     function simulateSpin() {
     // pick a weighted prize
-    const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
-    let r = Math.random()*sumW, pick = PRIZES[0];
+    const sumW = SLICES.reduce((s,p)=>s+p.w,0);
+    let r = Math.random()*sumW, pick = SLICES[0];
     for (const p of SLICES) { r -= p.w; if (r <= 0) { pick = p; break; } }
 
     // animate to the selected label
@@ -2316,7 +2317,11 @@ export async function getAta(owner, mint) {
         } catch (err) { console.warn("refreshRound failed", err); }
       }
       refreshRound(); setInterval(refreshRound, 12000);
-    } catch (e) { errOut("init", e.message || e); }
+    } catch (e) {
+      errOut("init", e.message || e);
+      const hb = document.getElementById("jp-status");
+      if (hb) hb.textContent = "Raffle offline (backend unreachable)";
+    }
   })();
 
   // -------------------------
