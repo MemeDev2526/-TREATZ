@@ -7,16 +7,17 @@
 // NOTE: This is intended as a drop-in replacement for the original app.js at:
 // https://github.com/MemeDev2526/-TREATZ/blob/9a0930dc1809002caca7111194c6d2c34ac27c6f/app.js
 
-// [polyfills] -------------------------------------------------
-// Buffer/Process shims are injected by esbuild (see build-app.js).
-// Do not import "buffer" here—browsers cannot resolve it.
+// ============================================================================
+// [POLYFILLS / SHIMS]
+// ============================================================================
 if (typeof window !== "undefined") {
   if (!window.global) window.global = window; // some libs expect global
   if (!window.process) window.process = { env: { NODE_ENV: "production" } };
 }
-// ------------------------------------------------------------
 
-// 1) Solana + SPL Token imports (ESM)
+// ============================================================================
+// [IMPORTS: SOLANA + SPL-TOKEN]
+// ============================================================================
 import { Connection, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
@@ -45,7 +46,9 @@ if (typeof window !== "undefined") {
   };
 }
 
-// 2) RPC connection
+// ============================================================================
+// [RPC CONNECTION + CONFIG]
+// ============================================================================
 const API_BASE = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
 
 // Prefer backend-configured absolute URL if available (set after /api/config loads)
@@ -65,7 +68,6 @@ console.log({ API_BASE, cfgRpc, bootRpc, RPC_URL });
 
 const connection = new Connection(RPC_URL, { commitment: "confirmed" });
 
-
 // Warm-up probe so we fail fast & show a friendly message if RPC blocks the browser
 (async () => {
   try {
@@ -78,7 +80,14 @@ const connection = new Connection(RPC_URL, { commitment: "confirmed" });
   }
 })();
 
-// 2b) Token program resolver (module-scope, used by exports and by the IIFE)
+// ============================================================================
+// [MODULE-SCOPE STATE / CONSTANTS]
+// ============================================================================
+let __flipping = false; // ← reentrancy guard shared by coin-flip UI and placeCoinFlip()
+
+// ============================================================================
+// [TOKEN PROGRAM RESOLVER + EXPORTS]
+// ============================================================================
 export async function getTokenProgramForMint(mintPk) {
   try {
     const mint = new PublicKey(mintPk);
@@ -93,7 +102,6 @@ export async function getTokenProgramForMint(mintPk) {
   }
 }
 
-// 3) Exported helper (used by other modules / tests)
 export async function getAta(owner, mint) {
   const ownerPk = new PublicKey(owner);
   const mintPk  = new PublicKey(mint);
@@ -103,17 +111,22 @@ export async function getAta(owner, mint) {
   return ata;
 }
 
-// 4) App IIFE — core initialization & module wiring
+// ============================================================================
+// [APP IIFE — CORE INITIALIZATION & WIRING]
+// ============================================================================
 (function () {
   "use strict";
 
-  // GLOBAL CONFIG
+  // --------------------------------------------------------------------------
+  // [GLOBAL CONFIG]
+  // --------------------------------------------------------------------------
   const C = window.TREATZ_CONFIG || {};
   const API = (C.apiBase || "/api").replace(/\/$/, "");
   const TOKEN = C.token || { symbol: "$TREATZ", decimals: 6 };
 
-  // --- Wallet Helpers ---
-  // --- Wallet detection + universal sender ---
+  // --------------------------------------------------------------------------
+  // [WALLET HELPERS]
+  // --------------------------------------------------------------------------
   function getInjectedProvider() {
     const candidates = [
       (window.phantom && window.phantom.solana) || null,
@@ -128,57 +141,46 @@ export async function getAta(owner, mint) {
   async function ensureBlockhashAndPayer(connection, tx, feePayerPubkey) {
     if (!tx.feePayer) tx.feePayer = feePayerPubkey;
     if (!tx.recentBlockhash) {
-      const { blockhash } = await connection.getLatestBlockhash("finalized");
+      const { blockhash } = await connection.getLatestBlockhash("confirmed"); // ← consistency fix
       tx.recentBlockhash = blockhash;
     }
     return tx;
   }
 
-  async function sendTxUniversal({ connection, tx }) {
-    const provider = getInjectedProvider();
-    if (!provider) {
-      throw new Error("WALLET_NOT_FOUND");
-    }
-    try {
-      if (!provider.publicKey) {
-        await provider.connect?.();
-      }
-    } catch (e) {
-      throw new Error("WALLET_CONNECT_REJECTED");
-    }
+  // Always capture a signature and best-effort confirm once (no matter the path)
+  async function sendSignedTransaction(tx) {
+    const provider = WALLET || getInjectedProvider();
+    if (!provider) throw new Error("WALLET_NOT_FOUND");
+    const payerPk = provider.publicKey || (PUBKEY && new PublicKey(PUBKEY)) || tx.feePayer;
+    await ensureBlockhashAndPayer(connection, tx, payerPk);
 
-    await ensureBlockhashAndPayer(connection, tx, provider.publicKey);
+    let sig;
 
     if (typeof provider.transact === "function") {
-      const sig = await provider.transact(async (wallet) => {
-        const res = await wallet.signAndSendTransaction(tx);
-        return res?.signature || res;
-      });
-      return sig;
-    }
-    if (typeof provider.signAndSendTransaction === "function") {
+      const res = await provider.transact(async (w) => w.signAndSendTransaction(tx));
+      sig = res?.signature || res;
+    } else if (typeof provider.signAndSendTransaction === "function") {
       const res = await provider.signAndSendTransaction(tx);
-      return res?.signature || res;
-    }
-    if (typeof provider.signTransaction === "function") {
+      sig = res?.signature || res;
+    } else if (typeof provider.signTransaction === "function") {
       const signed = await provider.signTransaction(tx);
-      const raw = signed.serialize();
-      const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
-      return sig;
+      sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 });
+    } else if (typeof provider.sendTransaction === "function") {
+      sig = await provider.sendTransaction(tx, connection);
+    } else {
+      throw new Error("WALLET_NO_SEND_METHOD");
     }
-    if (typeof provider.signAllTransactions === "function") {
-      const [signed] = await provider.signAllTransactions([tx]);
-      const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 });
-      return sig;
-    }
-    throw new Error("WALLET_NO_SEND_METHOD");
+
+    try { await connection.confirmTransaction(sig, "confirmed"); } catch {}
+    return sig;
   }
 
-  // DOM helpers (defensive)
+  // --------------------------------------------------------------------------
+  // [DOM & UTILS]
+  // --------------------------------------------------------------------------
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel || ""));
 
-  // Number formatting helpers
   let DECIMALS = Number(TOKEN.decimals || 6);
   let TEN_POW = 10 ** DECIMALS;
   const fmtUnits = (units, decimals = DECIMALS) => {
@@ -187,7 +189,6 @@ export async function getAta(owner, mint) {
     return t >= 1 ? t.toFixed(2) : t.toFixed(4);
   };
 
-  // Network-safe fetch helpers
   async function jfetch(url, opts) {
     const r = await fetch(url, opts);
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
@@ -195,11 +196,12 @@ export async function getAta(owner, mint) {
   }
   async function jfetchStrict(url, opts) { return jfetch(url, opts); }
 
-  // Lightweight toast
   const toast = (msg) => {
     try {
       const t = document.createElement("div");
       t.className = "toast";
+      t.setAttribute("role", "status");       // ← ARIA for SRs
+      t.setAttribute("aria-live", "polite");
       t.textContent = msg;
       Object.assign(t.style, {
         position: "fixed", right: "16px", bottom: "16px",
@@ -214,12 +216,11 @@ export async function getAta(owner, mint) {
     } catch (e) { console.warn("toast failed", e); }
   };
 
-  // Simple random helpers
   const rand = (min, max) => Math.random() * (max - min) + min;
 
-  // -------------------------
-  // Diagnostics — visible bar for debugging (optional)
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [DIAGNOSTICS BAR (OPTIONAL)]
+  // --------------------------------------------------------------------------
   (function diagnostics() {
     if (!window.__TREATZ_DEBUG) return;
 
@@ -234,19 +235,10 @@ export async function getAta(owner, mint) {
         bar = document.createElement("div");
         bar.id = "__treatz_diag";
         bar.style.cssText = [
-          "position:fixed",
-          "left:0",
-          "right:0",
-          "top:0",
-          "z-index:99999",
-          "padding:10px 14px",
-          "font:14px/1.3 Rubik,system-ui,sans-serif",
-          "color:#fff",
-          "background:#c01",
-          "box-shadow:0 6px 20px rgba(0,0,0,.5)",
-          "display:flex",
-          "flex-direction:column",
-          "gap:4px",
+          "position:fixed","left:0","right:0","top:0","z-index:99999",
+          "padding:10px 14px","font:14px/1.3 Rubik,system-ui,sans-serif",
+          "color:#fff","background:#c01","box-shadow:0 6px 20px rgba(0,0,0,.5)",
+          "display:flex","flex-direction:column","gap:4px",
         ].join(";");
         document.body.appendChild(bar);
       }
@@ -281,9 +273,9 @@ export async function getAta(owner, mint) {
     });
   })();
 
-  // -------------------------
-  // FX: fx-layer root and primitives
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [FX LAYER + EFFECTS]
+  // --------------------------------------------------------------------------
   const fxRoot = (() => {
     try {
       let n = document.getElementById("fx-layer");
@@ -300,14 +292,8 @@ export async function getAta(owner, mint) {
       }
       Object.assign(n.style, {
         position: "fixed",
-        top: "0",
-        left: "0",
-        width: "100vw",
-        height: "100vh",
-        pointerEvents: "none",
-        overflow: "visible",
-        zIndex: "99999",
-        transform: "none",
+        top: "0", left: "0", width: "100vw", height: "100vh",
+        pointerEvents: "none", overflow: "visible", zIndex: "99999", transform: "none",
       });
       return n;
     } catch (e) {
@@ -339,7 +325,6 @@ export async function getAta(owner, mint) {
     } catch (e) { console.warn("ensureFxRootTopLevel failed", e); }
   })();
 
-  // SVG helpers
   function svgWrapper(color = "#FF6B00") {
     return `
 <svg width="84" height="40" viewBox="0 0 84 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="$TREATZ">
@@ -400,7 +385,18 @@ export async function getAta(owner, mint) {
 </svg>`;
   }
 
-  // spawn piece primitive
+  function solidifySVG(el){
+    try {
+      el.querySelectorAll('svg, path, rect, circle, ellipse, polygon, text, stop, g').forEach(n => {
+        const fill = n.getAttribute('fill');
+        if (!fill || fill === 'none') n.setAttribute('fill', 'currentColor');
+        n.style.opacity = '1';
+        n.setAttribute('fill-opacity', '1');
+        n.setAttribute('stroke-opacity', '1');
+      });
+    } catch(e) {}
+  }
+
   function spawnPiece(kind, xvw = 50, sizeScale = 1, duration = 4.2, opts = {}) {
     try {
       let root = document.getElementById("fx-layer") || fxRoot;
@@ -491,18 +487,6 @@ export async function getAta(owner, mint) {
     }
   }
 
-  function solidifySVG(el){
-    try {
-      el.querySelectorAll('svg, path, rect, circle, ellipse, polygon, text, stop, g').forEach(n => {
-        const fill = n.getAttribute('fill');
-        if (!fill || fill === 'none') n.setAttribute('fill', 'currentColor');
-        n.style.opacity = '1';
-        n.setAttribute('fill-opacity', '1');
-        n.setAttribute('stroke-opacity', '1');
-      });
-    } catch(e) {}
-  }
-
   const WRAP_COLORS = ['#6b2393', '#00c96b', '#ff7a00'];
 
   function rainTreatz({ count = 24, wrappers = true, candies = true, minDur = 4.5, maxDur = 7 } = {}) {
@@ -556,9 +540,9 @@ export async function getAta(owner, mint) {
   window.hauntTrick = hauntTrick;
   window.spawnPiece = spawnPiece;
 
-  // -------------------------
-  // Coin faces & visuals
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [COIN VISUALS]
+  // --------------------------------------------------------------------------
   function setCoinFaces(trickImg, treatImg) {
     const front = document.querySelector(".coin__face--front");
     const back = document.querySelector(".coin__face--back");
@@ -605,8 +589,7 @@ export async function getAta(owner, mint) {
     el.classList.remove('loss','show');
     el.textContent = text || '';
     if(isLoss) el.classList.add('loss');
-    // force reflow to replay
-    void el.offsetWidth;
+    void el.offsetWidth; // replay
     el.classList.add('show');
     clearTimeout(el.__t);
     el.__t = setTimeout(()=> el.classList.remove('show'), 2200);
@@ -617,11 +600,9 @@ export async function getAta(owner, mint) {
     const trickImg = (window.TREATZ_CONFIG?.assets?.coin_trick) || "/static/assets/coin_trickz.png";
     applyCoinFaces({ trickImg, treatImg });
 
-    // ← GPU promote / backface fixes to stop single-frame “cut” on rotateY
     const coin = document.getElementById("coin") || document.querySelector(".coin");
     if (coin) {
       coin.style.willChange = "transform";
-      // keep transform chain “active” so compositor doesn’t drop the layer mid-spin
       const t0 = getComputedStyle(coin).transform;
       coin.style.transform = (t0 && t0 !== "none") ? t0 : "translateZ(0)";
       coin.querySelectorAll(".coin__face").forEach(f => {
@@ -632,9 +613,9 @@ export async function getAta(owner, mint) {
     }
   });
 
-  // -------------------------
-  // Countdown helpers (Halloween)
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [HALLOWEEN COUNTDOWN]
+// --------------------------------------------------------------------------
   function nextHalloween() {
     const now = new Date();
     const m = now.getMonth();
@@ -699,9 +680,9 @@ export async function getAta(owner, mint) {
   initHalloweenCountdown();
   document.addEventListener("visibilitychange", () => { if (!document.hidden) initHalloweenCountdown(); });
 
-  // -------------------------
-  // Static links, deep-links, mascot float, copy token
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [STATIC LINKS, DEEP-LINKS, MASCOT, COPY TOKEN]
+// --------------------------------------------------------------------------
   const link = (id, href) => { const el = document.getElementById(id); if (el && href) el.href = href; };
   link("link-telegram", C.links?.telegram);
   link("link-twitter", C.links?.twitter);
@@ -726,7 +707,7 @@ export async function getAta(owner, mint) {
   function updateDeepLinkVisibility(PUBKEY = null) {
     if (!deepLinks.length) return;
     const href = phantomDeepLinkForThisSite();
-    const hasProvider = !!(getPhantomProvider() || getSolflareProvider() || getBackpackProvider());
+    const hasProvider = !!getInjectedProvider(); // ← simplified detection
     const shouldShow = isMobile() && !hasProvider && !PUBKEY;
     for (const a of deepLinks) {
       a.href = href;
@@ -742,7 +723,7 @@ export async function getAta(owner, mint) {
   const cdLogo = $("#countdown-logo");
   if (C.assets?.logo && cdLogo) { cdLogo.src = C.assets.logo; cdLogo.alt = "$TREATZ"; }
 
-  // Mascot float
+  // Mascot float (unchanged behavior)
   (function mascotFloat() {
     const mascotImg = $("#mascot-floater");
     if (!mascotImg || !C.assets?.mascot) return;
@@ -846,7 +827,6 @@ export async function getAta(owner, mint) {
     })();
   })();
 
-  // Copy token address button
   $("#btn-copy")?.addEventListener("click", () => {
     navigator.clipboard.writeText(C.tokenAddress || "").then(
       () => toast("Token address copied"),
@@ -854,7 +834,6 @@ export async function getAta(owner, mint) {
     );
   });
 
-  // Unwrap / enter page button
   document.getElementById("btn-unwrap")?.addEventListener("click", () => {
     const overlay = document.getElementById("entry-overlay");
     if (overlay) overlay.remove();
@@ -863,9 +842,9 @@ export async function getAta(owner, mint) {
     try { announceLastWinner(); } catch (_) { }
   });
 
-  // -------------------------
-  // Wallet plumbing (provider-agnostic)
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [WALLET PLUMBING (PROVIDER-AGNOSTIC)]
+  // --------------------------------------------------------------------------
   function getPhantomProvider() {
     const p = (window.phantom && window.phantom.solana) || window.solana;
     return (p && p.isPhantom) ? p : null;
@@ -1135,9 +1114,9 @@ export async function getAta(owner, mint) {
     } catch {}
   })();
 
-  // -------------------------
-  // Ticker (faux feed)
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [FOMO TICKER]
+// --------------------------------------------------------------------------
   (function initCoinFlipTicker() {
     const el = document.getElementById("fomo-ticker");
     if (!el) return;
@@ -1178,9 +1157,9 @@ export async function getAta(owner, mint) {
     setInterval(render, 25000);
   })();
 
-  // -------------------------
-  // Player stats loader (requires PUBKEY)
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [PLAYER STATS LOADER]
+// --------------------------------------------------------------------------
   async function loadPlayerStats() {
     const panel = document.getElementById("player-stats");
     if (!panel) return;
@@ -1206,9 +1185,9 @@ export async function getAta(owner, mint) {
   }
   setInterval(loadPlayerStats, 15000);
 
-  // -------------------------
-  // SPL token helpers
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [SPL-TOKEN HELPERS]
+// --------------------------------------------------------------------------
   async function getOrCreateATA(owner, mintPk, payer) {
     const ownerPk   = new PublicKey(owner);
     const mintPkObj = new PublicKey(mintPk);
@@ -1243,41 +1222,9 @@ export async function getAta(owner, mint) {
     });
   }
 
-  async function sendSignedTransaction(tx) {
-    const provider = WALLET || getInjectedProvider();
-    if (!provider) throw new Error("WALLET_NOT_FOUND");
-    const payerPk =
-      provider.publicKey ||
-      (PUBKEY && new PublicKey(PUBKEY)) ||
-      tx.feePayer;
-    await ensureBlockhashAndPayer(connection, tx, payerPk);
-
-    if (typeof provider.transact === "function") {
-      const res = await provider.transact(async (w) => w.signAndSendTransaction(tx));
-      return res?.signature || res;
-    }
-    if (typeof provider.signAndSendTransaction === "function") {
-      const res = await provider.signAndSendTransaction(tx);
-      return res?.signature || res;
-    }
-    if (typeof provider.signTransaction === "function") {
-      const signed = await provider.signTransaction(tx);
-      const raw = signed.serialize();
-      const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 3 });
-      try { await connection.confirmTransaction(sig, "confirmed"); } catch {}
-      return sig;
-    }
-    if (typeof provider.sendTransaction === "function") {
-      const sig = await provider.sendTransaction(tx, connection);
-      try { await connection.confirmTransaction(sig, "confirmed"); } catch {}
-      return sig;
-    }
-    throw new Error("WALLET_NO_SEND_METHOD");
-  }
-
-  // -------------------------
-  // Coin flip UI
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [COIN FLIP UI]
+// --------------------------------------------------------------------------
   (function wireCoinFlipUI() {
     function getSpinMs() {
       const coin = document.getElementById("coin") || document.querySelector(".coin");
@@ -1287,7 +1234,7 @@ export async function getAta(owner, mint) {
       return /ms$/i.test(s) ? n : n * 1000;
     }
 
-    let __flipping = false;
+    // (removed) let __flipping = false;  ← now module-scope
 
     function simulateFlip() {
       if (__flipping) return;
@@ -1296,8 +1243,8 @@ export async function getAta(owner, mint) {
       const coin = document.getElementById("coin") || document.querySelector(".coin");
       if (coin) {
         coin.classList.remove("spin","coin--show-trick","coin--show-treat");
-        void coin.offsetWidth;                      // reflow to restart
-        requestAnimationFrame(() => coin.classList.add("spin"));  // safer enqueue
+        void coin.offsetWidth;
+        requestAnimationFrame(() => coin.classList.add("spin"));
       }
 
       const form = document.getElementById("bet-form");
@@ -1331,7 +1278,7 @@ export async function getAta(owner, mint) {
         } catch (err) {
           console.error("coin flip settle handler error", err);
         } finally {
-          __flipping = false;                         // ← RELEASE THE GUARD
+          __flipping = false;
         }
       }, getSpinMs());
     }
@@ -1392,7 +1339,7 @@ export async function getAta(owner, mint) {
 
   // placeCoinFlip: full backend flow when wallet available
   async function placeCoinFlip(){
-    if (__flipping) return;                 // ← avoid re-entrant spins
+    if (__flipping) return; // guard
     __flipping = true;
 
     await ensureConfig();
@@ -1417,19 +1364,16 @@ export async function getAta(owner, mint) {
     const payer  = new PublicKey(PUBKEY);
     const depositStr = String(bet.deposit);
 
-    // Resolve token program
     const tokenProgramId = await getTokenProgramForMint(mintPk);
 
-    // Payer source ATA (ensure exists)
     const { ata: fromAta, ix: createSrcIx } = await getOrCreateATA(payer, mintPk, payer);
 
-    // Destination token account: accept ATA or owner
     let toAta = null, createDestIx = null;
     try {
       const pk = new PublicKey(depositStr);
       const info = await connection.getAccountInfo(pk, "confirmed");
       if (info && info.owner && info.owner.equals(tokenProgramId)) {
-        toAta = pk; // already a token account
+        toAta = pk;
       }
     } catch (_) {}
     if (!toAta) {
@@ -1448,23 +1392,22 @@ export async function getAta(owner, mint) {
         mintPk,
         toAta,
         payer,
-        amountBase,                              // already a BigInt
-        Number(CONFIG?.token?.decimals ?? 6),    // ensure number
+        amountBase,                              // BigInt
+        Number(CONFIG?.token?.decimals ?? 6),
         [],
         tokenProgramId
       ),
-      memoIx(bet.memo) // "BET:<bet_id>:<TRICK|TREAT>"
+      memoIx(bet.memo)
     );
 
     const sig = await sendSignedTransaction(tx);
     if (window.__TREATZ_DEBUG) console.log("[coinflip] deposit sig:", sig);
 
-    // 3) Poll until settled
     const coin = document.getElementById("coin"); 
     if (coin){
       coin.classList.remove("spin","coin--show-trick","coin--show-treat");
       void coin.offsetWidth;
-      requestAnimationFrame(() => coin.classList.add("spin"));  // ← enqueue safely
+      requestAnimationFrame(() => coin.classList.add("spin"));
     }
 
     const poll = async() => {
@@ -1472,7 +1415,7 @@ export async function getAta(owner, mint) {
       return r && r.status ? r : null;
     };
     let settled=null, tries=0;
-    while(!settled && tries++ < 40){ // ~20s
+    while(!settled && tries++ < 40){
       const r = await poll();
       if(r && r.status === "SETTLED") settled = r;
       else await new Promise(res=>setTimeout(res, 500));
@@ -1480,11 +1423,10 @@ export async function getAta(owner, mint) {
     if (!settled) {
       coin?.classList?.remove("spin");
       toast("Settlement timeout — check history later.");
-      __flipping = false;                   // ← release on timeout
+      __flipping = false;
       return;
     }
 
-    // 4) Visuals + banner + FX + refresh balance
     const landed = String(settled.result || "").toUpperCase(); // TRICK | TREAT
     const youWon = !!settled.win;
     try { setCoinVisual(landed); } catch(e){}
@@ -1496,9 +1438,9 @@ export async function getAta(owner, mint) {
     );
     refreshWalletBalance().catch(()=>{});
 
-    setTimeout(() => { __flipping = false; }, 20); // ← release shortly after settle
+    setTimeout(() => { __flipping = false; }, 20);
   }
-  
+
   async function pollBetUntilSettle(betId, timeoutMs = 45_000) {
     const t0 = Date.now();
     while (Date.now() - t0 < timeoutMs) {
@@ -1521,18 +1463,17 @@ export async function getAta(owner, mint) {
     $("#cf-status")?.replaceChildren(document.createTextNode("Waiting for network / webhook…"));
   }
 
-  // ==========================
-  // Wheel of Fate — Frontend
-  // ==========================
+  // --------------------------------------------------------------------------
+  // [WHEEL OF FATE — FRONTEND]
+// --------------------------------------------------------------------------
   (function initWheel() {
     const API = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
     let DECIMALS = 6, TEN = 10 ** 6;
-    // Load config up-front so mint/decimals/price are correct
+
     (async () => {
       const cfg = await ensureConfig();
       DECIMALS = Number(cfg?.token?.decimals || 6);
       TEN = 10 ** DECIMALS;
-      // Set the price labels from config if present
       const priceWhole = Number(cfg?.wheel?.spin_price_whole || 100_000);
       const txt = priceWhole.toLocaleString();
       const elPrice = document.getElementById("wheel-price");
@@ -1585,49 +1526,42 @@ export async function getAta(owner, mint) {
     let SLICES = PRIZES.slice();
     
     const WHEEL_COLORS = {
-      win:  { center: "#16e27a", mid: "#0fb967", edge: "#073b26" }, // slime green
-      loss: { center: "#ff9d2d", mid: "#c26416", edge: "#3b1d09" }, // pumpkin/brass
-      free: { center: "#c4a6ff", mid: "#7036d4", edge: "#2b1269" }, // witch purple
+      win:  { center: "#16e27a", mid: "#0fb967", edge: "#073b26" },
+      loss: { center: "#ff9d2d", mid: "#c26416", edge: "#3b1d09" },
+      free: { center: "#c4a6ff", mid: "#7036d4", edge: "#2b1269" },
     };
 
-  function spreadPrizes(prizes) {
-    const byType = { win: [], loss: [], free: [] };
-    prizes.forEach(p => byType[p.type].push(p));
-    // light shuffle within types
-    Object.keys(byType).forEach(t => byType[t].sort(() => Math.random() - 0.5));
+    function spreadPrizes(prizes) {
+      const byType = { win: [], loss: [], free: [] };
+      prizes.forEach(p => byType[p.type].push(p));
+      Object.keys(byType).forEach(t => byType[t].sort(() => Math.random() - 0.5));
 
-    const total = prizes.length;
-    const order = [];
-    let last = null;
+      const total = prizes.length;
+      const order = [];
+      let last = null;
 
-    while (order.length < total) {
-      // prefer types we still have, excluding the last used type
-      const candidates = ["win", "loss", "free"].filter(t => byType[t].length && t !== last);
-      // if we painted ourselves into a corner, allow last type again
-      const pool = candidates.length ? candidates : ["win","loss","free"].filter(t => byType[t].length);
-      const t = pool[Math.floor(Math.random() * pool.length)];
-      order.push(byType[t].pop());
-      last = t;
+      while (order.length < total) {
+        const candidates = ["win", "loss", "free"].filter(t => byType[t].length && t !== last);
+        const pool = candidates.length ? candidates : ["win","loss","free"].filter(t => byType[t].length);
+        const t = pool[Math.floor(Math.random() * pool.length)];
+        order.push(byType[t].pop());
+        last = t;
+      }
+      const offset = Math.floor(Math.random() * order.length);
+      return order.slice(offset).concat(order.slice(0, offset));
     }
-    // small random rotation so the pointer doesn’t always start on the same type
-    const offset = Math.floor(Math.random() * order.length);
-    return order.slice(offset).concat(order.slice(0, offset));
-  }
 
-    // Draw wheel slices
     function drawWheel() {
-    // Draw in a fixed 500x500 viewBox; CSS controls actual render size.
-    elSvg.setAttribute("viewBox", "0 0 500 500");
-    elSvg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    const cx = 250, cy = 250, r = 212; // more breathing room for labels + rim   // larger wheel to fit labels cleanly
-    elSvg.innerHTML = "";
+      elSvg.setAttribute("viewBox", "0 0 500 500");
+      elSvg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      const cx = 250, cy = 250, r = 212;
+      elSvg.innerHTML = "";
 
-      // === defs: gradients for slices ===
       const defs = document.createElementNS("http://www.w3.org/2000/svg","defs");
       function mkGrad(id, {center, mid, edge}) {
         const g = document.createElementNS(defs.namespaceURI, "radialGradient");
         g.setAttribute("id", id);
-        g.setAttribute("cx","50%"); g.setAttribute("cy","45%"); g.setAttribute("r","78%"); // light a bit higher
+        g.setAttribute("cx","50%"); g.setAttribute("cy","45%"); g.setAttribute("r","78%");
         [
           ["0%",  center],
           ["55%", mid],
@@ -1644,17 +1578,16 @@ export async function getAta(owner, mint) {
       mkGrad("grad-free", WHEEL_COLORS.free);
       elSvg.appendChild(defs);
 
-      // === outer shadow ring (subtle) ===
       const rimOuter = document.createElementNS(elSvg.namespaceURI,"circle");
       rimOuter.setAttribute("class","wheel-rim-outer");
       rimOuter.setAttribute("cx",cx); rimOuter.setAttribute("cy",cy); rimOuter.setAttribute("r", r+20);
       elSvg.appendChild(rimOuter);
 
-      // === slices ===
-      const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
-      let a0 = -Math.PI/2;
       const ORDERED = spreadPrizes(PRIZES);
-      SLICES = ORDERED;  
+      SLICES = ORDERED;                     // ← record render order
+      const sumW = SLICES.reduce((s,p)=>s+p.w,0); // ← weight from SLICES
+
+      let a0 = -Math.PI/2;
       ORDERED.forEach((p, i) => {
         const a1 = a0 + 2*Math.PI*(p.w/sumW);
         const x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0);
@@ -1663,27 +1596,23 @@ export async function getAta(owner, mint) {
 
         const path = document.createElementNS(elSvg.namespaceURI,"path");
         path.setAttribute("d", `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`);
-
-        // gradient per type
         const fill = (p.type==="win" ? "url(#grad-win)" : (p.type==="free" ? "url(#grad-free)" : "url(#grad-loss)"));
         path.setAttribute("fill", fill);
         path.setAttribute("class", p.type==="win" ? "slice-win" : (p.type==="free" ? "slice-free" : "slice-loss"));
         elSvg.appendChild(path);
 
-        // spoke separator
         const spoke = document.createElementNS(elSvg.namespaceURI,"line");
         spoke.setAttribute("x1", cx); spoke.setAttribute("y1", cy);
         spoke.setAttribute("x2", x0); spoke.setAttribute("y2", y0);
         spoke.setAttribute("class","wheel-spoke");
         elSvg.appendChild(spoke);
 
-        // label at mid-angle, sized to fit arc, rotated for clean orientation
         const am = (a0 + a1) / 2;
-        const arc   = (a1 - a0) * r;               // arc length in px
-        const pad   = 18;                          // breathing room inside slice
-        const textW = Math.max(40, arc - pad);     // target text width
+        const arc   = (a1 - a0) * r;
+        const pad   = 18;
+        const textW = Math.max(40, arc - pad);
 
-        const lr = r * 0.70;                       // label radius
+        const lr = r * 0.70;
         const lx = cx + lr * Math.cos(am);
         const ly = cy + lr * Math.sin(am);
 
@@ -1692,14 +1621,12 @@ export async function getAta(owner, mint) {
         t.setAttribute("y", ly.toFixed(1));
         t.setAttribute("class", "slice-label");
         t.setAttribute("dominant-baseline", "middle");
-        t.setAttribute("textLength", textW.toFixed(0));           // fit to arc width
+        t.setAttribute("textLength", textW.toFixed(0));
         t.setAttribute("lengthAdjust", "spacingAndGlyphs");
 
-        // Rotate so the text follows the arc (tangent). Convert rad→deg and add 90°
         const deg = (am * 180 / Math.PI) + 90;
         t.setAttribute("transform", `rotate(${deg.toFixed(2)} ${lx.toFixed(1)} ${ly.toFixed(1)})`);
 
-        // If the slice is too narrow, shrink the font a touch (CSS has .slice-label.long)
         if (arc < 90) t.classList.add("long");
 
         t.textContent = String(p.label || "").toUpperCase();
@@ -1708,13 +1635,11 @@ export async function getAta(owner, mint) {
         a0 = a1;
       });
 
-      // === inner & outer rim ===
       const rim = document.createElementNS(elSvg.namespaceURI,"circle");
       rim.setAttribute("class","wheel-rim");
       rim.setAttribute("cx",cx); rim.setAttribute("cy",cy); rim.setAttribute("r", r+4);
       elSvg.appendChild(rim);
     
-      // === bolts around the rim ===
       const bolts = 20;
       for (let i=0;i<bolts;i++){
         const ang = -Math.PI/2 + (i/bolts)*Math.PI*2;
@@ -1727,7 +1652,6 @@ export async function getAta(owner, mint) {
         elSvg.appendChild(bolt);
       }
 
-      // === center hub + cap text ===
       const hub = document.createElementNS(elSvg.namespaceURI,"circle");
       hub.setAttribute("class","wheel-center"); hub.setAttribute("cx",cx); hub.setAttribute("cy",cy); hub.setAttribute("r","58");
       elSvg.appendChild(hub);
@@ -1747,7 +1671,6 @@ export async function getAta(owner, mint) {
 
     drawWheel();
 
-    // Wallet UI state
     function short(k) { return k ? (k.slice(0,4) + "…" + k.slice(-4)) : ""; }
     function updateWheelWalletUI() {
       const connected = !!(window.PUBKEY && window.WALLET);
@@ -1773,17 +1696,13 @@ export async function getAta(owner, mint) {
       if (globalBtn) globalBtn.click(); else window.open("https://phantom.app/", "_blank", "noopener");
     });
 
-    // price label (from config; fallback to 100k)
     try {
       const envPrice = Number(window.TREATZ_CONFIG?.wheelPrice || 100_000);
       const txt = envPrice.toLocaleString();
       if (elPrice) elPrice.textContent = txt;
       if (elPriceBtn) elPriceBtn.textContent = txt;
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
 
-    // toasts + history helpers
     function toastWheel(msg) {
       elToast.hidden = false;
       elToast.textContent = msg;
@@ -1797,7 +1716,6 @@ export async function getAta(owner, mint) {
       while (elHistList.children.length > 10) elHistList.lastChild.remove();
     }
 
-    // credit poller
     async function refreshWheelCredit() {
       try {
         if (!window.PUBKEY) { elFree.textContent = "0"; return; }
@@ -1810,36 +1728,35 @@ export async function getAta(owner, mint) {
     document.addEventListener("DOMContentLoaded", refreshWheelCredit);
 
     function getWheelSpinMs() {
+      // handle comma-separated durations; use the last token and respect units
       const d = getComputedStyle(elSvg).transitionDuration || "5.2s";
-      const n = parseFloat(d) || 5.2;
-      return /ms$/i.test(d) ? n : n * 1000;
+      const parts = d.split(",").map(s => s.trim());
+      const last = parts[parts.length - 1] || "5.2s";
+      const val = parseFloat(last) || 5.2;
+      return /ms$/i.test(last) ? val : val * 1000;
     }
 
-    // animation math
     function spinToLabel(label) {
-    const sumW = SLICES.reduce((s,p)=>s+p.w,0);
-    let a0 = -Math.PI/2;
-    let targetAngle = 0;
-    for (const p of SLICES) {           // << use SLICES, not PRIZES
-      const a1 = a0 + 2*Math.PI*(p.w/sumW);
-      if (p.label === label) {
-        const am = (a0+a1)/2;
-        targetAngle = (Math.PI*1.5) - am; // pointer at 12 o’clock
-        break;
+      const sumW = SLICES.reduce((s,p)=>s+p.w,0);
+      let a0 = -Math.PI/2;
+      let targetAngle = 0;
+      for (const p of SLICES) {
+        const a1 = a0 + 2*Math.PI*(p.w/sumW);
+        if (p.label === label) {
+          const am = (a0+a1)/2;
+          targetAngle = (Math.PI*1.5) - am;
+          break;
+        }
+        a0 = a1;
       }
-      a0 = a1;
-    }
 
-      // add full spins + tiny jitter so it doesn’t land robotically
-      const baseTurns = 6 + Math.random()*2;               // 6–8 spins
-      const jitter = (Math.random() - 0.5) * (Math.PI/90); // ~±2°
+      const baseTurns = 6 + Math.random()*2;
+      const jitter = (Math.random() - 0.5) * (Math.PI/90);
       const deg = (baseTurns*360) + ((targetAngle + jitter) * 180/Math.PI);
 
       elSvg.classList.add("spinning");
-      // trigger the rotation
       elSvg.style.transform = `rotate(${deg.toFixed(2)}deg)`;
 
-      // pointer thunk near the end
       setTimeout(()=>{
         const ptr = document.querySelector(".wheel-pointer");
         if (ptr) { ptr.classList.remove("pointer-tap"); void ptr.offsetWidth; ptr.classList.add("pointer-tap"); }
@@ -1866,7 +1783,6 @@ export async function getAta(owner, mint) {
       return `${outcome.label} — ${msgsLoss[Math.floor(Math.random()*msgsLoss.length)]}`;
     }
 
-    // polling for paid spin settlement
     async function pollSpin(spinId, timeoutMs=45000) {
       const t0 = Date.now();
       while (Date.now()-t0 < timeoutMs) {
@@ -1879,12 +1795,11 @@ export async function getAta(owner, mint) {
             setTimeout(()=>{
               try { playResultFX(outcome.type==="loss"?"LOSS":"WIN"); } catch{}
 
-              // ✨ Cap glow on settle (PAID)
               const cap = document.querySelector(".wheel-cap");
               if (cap) {
                 cap.classList.add(outcome.type === "win" ? "glow-green" : "glow-red");
                 setTimeout(()=>cap.classList.remove("glow-green","glow-red"), 1200);
-            }
+              }
 
               toastWheel(resultLine(outcome));
               elStatus.textContent = outcome.type==="win" ? `WIN — ${outcome.label}` : (outcome.type==="free" ? `FREE — ${outcome.label}` : `LOSS — ${outcome.label}`);
@@ -1901,36 +1816,30 @@ export async function getAta(owner, mint) {
       toastWheel("Settlement taking longer than usual. Check history later.");
     }
 
-    // simulate (no wallet)
     function simulateSpin() {
-    // pick a weighted prize
-    const sumW = SLICES.reduce((s,p)=>s+p.w,0);
-    let r = Math.random()*sumW, pick = SLICES[0];
-    for (const p of SLICES) { r -= p.w; if (r <= 0) { pick = p; break; } }
+      const sumW = SLICES.reduce((s,p)=>s+p.w,0);
+      let r = Math.random()*sumW, pick = SLICES[0];
+      for (const p of SLICES) { r -= p.w; if (r <= 0) { pick = p; break; } }
 
-    // animate to the selected label
-    spinToLabel(pick.label);
+      spinToLabel(pick.label);
 
-    // settle visuals/FX
-    setTimeout(()=>{
-      try { playResultFX(pick.type==="loss"?"LOSS":"WIN"); } catch{}
+      setTimeout(()=>{
+        try { playResultFX(pick.type==="loss"?"LOSS":"WIN"); } catch{}
 
-      // ✨ Cap glow on settle (SIM)
-      const cap = document.querySelector(".wheel-cap");
-      if (cap) {
-        cap.classList.add(pick.type === "win" ? "glow-green" : "glow-red");
-        setTimeout(()=>cap.classList.remove("glow-green","glow-red"), 1200);
-      }
+        const cap = document.querySelector(".wheel-cap");
+        if (cap) {
+          cap.classList.add(pick.type === "win" ? "glow-green" : "glow-red");
+          setTimeout(()=>cap.classList.remove("glow-green","glow-red"), 1200);
+        }
 
-      toastWheel(resultLine(pick));
-      elStatus.textContent = (pick.type==="win" ? `WIN — ${pick.label}` : (pick.type==="free" ? `FREE — ${pick.label}` : `LOSS — ${pick.label}`));
-      const amt = pick.amount ? ` +${pick.amount.toLocaleString()} $TREATZ` : "";
-      const fs  = pick.free   ? ` +${pick.free} free` : "";
-      pushHistory(`[SIM] ${pick.label}${amt}${fs}`);
-    }, Math.max(0, getWheelSpinMs() - 250));
-  }
+        toastWheel(resultLine(pick));
+        elStatus.textContent = (pick.type==="win" ? `WIN — ${pick.label}` : (pick.type==="free" ? `FREE — ${pick.label}` : `LOSS — ${pick.label}`));
+        const amt = pick.amount ? ` +${pick.amount.toLocaleString()} $TREATZ` : "";
+        const fs  = pick.free   ? ` +${pick.free} free` : "";
+        pushHistory(`[SIM] ${pick.label}${amt}${fs}`);
+      }, Math.max(0, getWheelSpinMs() - 250));
+    }
 
-    // paid spin (on-chain) — FIXED to accept ATA or owner & Token-2022 aware
     async function spinOnChain() {
       elStatus.textContent = "Preparing spin…";
       const body = { client_seed: Math.random().toString(16).slice(2) };
@@ -1944,10 +1853,8 @@ export async function getAta(owner, mint) {
       const payerPk = new PublicKey(window.PUBKEY);
       const tokenProgramId = await getTokenProgramForMint(mintPk);
 
-      // Source ATA (ensure)
       const { ata: srcAta, ix: createSrcIx } = await getOrCreateATA(payerPk, mintPk, payerPk);
 
-      // Destination: if API gave ATA, use it; else derive from owner and create if needed
       const depositStr = String(spin.deposit);
       let dstAta = null, createDstIx = null;
       try {
@@ -1974,7 +1881,7 @@ export async function getAta(owner, mint) {
           dstAta,
           payerPk,
           BigInt(spin.amount),
-          Number(CONFIG?.token?.decimals ?? 6),   // use loaded config + ensure number
+          Number(CONFIG?.token?.decimals ?? 6),
           [],
           tokenProgramId
         ),
@@ -1993,7 +1900,6 @@ export async function getAta(owner, mint) {
       pollSpin(spin.spin_id).catch(()=>{});
     }
 
-    // Free spin via API (requires connected wallet)
     async function doFreeSpin() {
       if (!window.PUBKEY) { toastWheel("Connect wallet to use free spins."); return; }
       try {
@@ -2013,7 +1919,6 @@ export async function getAta(owner, mint) {
           const type = r.prize_amount>0 ? "win" : (r.free_spins>0 ? "free" : "loss");
           try { playResultFX(type==="loss"?"LOSS":"WIN"); } catch{}
 
-          // ✨ Cap glow on settle (FREE)
           const cap = document.querySelector(".wheel-cap");
           if (cap) {
             cap.classList.add(type === "win" ? "glow-green" : "glow-red");
@@ -2036,24 +1941,28 @@ export async function getAta(owner, mint) {
       }
     }
 
-    // Button handlers (simulate fallback if no wallet)
+    // Disable buttons while a spin is in progress to guard double-clicks
     elSpin.addEventListener("click", async (e)=>{
       e.preventDefault();
+      if (elSvg.classList.contains("spinning")) return;
+      elSpin.disabled = true;
       try {
         const hasWallet = !!(window.PUBKEY && window.WALLET);
-        if (hasWallet) return spinOnChain();
-        toastWheel("Simulating — connect wallet to play for real.");
-        simulateSpin();
+        if (hasWallet) await spinOnChain();
+        else { toastWheel("Simulating — connect wallet to play for real."); simulateSpin(); }
       } catch (err) {
         alert(err?.message || "Spin failed.");
+      } finally {
+        setTimeout(()=> { elSpin.disabled = false; }, Math.max(600, getWheelSpinMs()));
       }
     });
+
     elFreeBtn?.addEventListener("click", (e)=>{ e.preventDefault(); doFreeSpin(); });
   })();
 
-  // -------------------------
-  // Jackpot / Raffle UI
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [JACKPOT / RAFFLE UI]
+// --------------------------------------------------------------------------
   document.getElementById("jp-buy")?.addEventListener("click", async () => {
     try {
       if (!PUBKEY && !window.PUBKEY) {
@@ -2088,7 +1997,6 @@ export async function getAta(owner, mint) {
       if (!roundId) throw new Error("No active raffle round");
 
       const ticketBase = Number(CONFIG?.raffle?.ticket_price ?? CONFIG?.token?.ticket_price ?? 0);
-      if (!ticketBase) console.warn("Ticket price not in config; will rely on purchase.amount");
 
       const purchase = await jfetch(`${API}/rounds/${encodeURIComponent(roundId)}/buy`, {
         method: "POST",
@@ -2142,13 +2050,13 @@ export async function getAta(owner, mint) {
         realSrc = best.pubkey;
       }
 
+      // BigInt-safe balance check
       const bal = await connection.getTokenAccountBalance(realSrc, "confirmed").catch(() => null);
-      const haveBase = Number(bal?.value?.amount || 0);
-      const needBase = Number(amountBase);
-      const dec = Number(CONFIG?.token?.decimals ?? 6); // <— consistent decimals
-      if (haveBase < needBase) {
-        const haveHuman = haveBase / (10 ** dec);
-        const needHuman = needBase / (10 ** dec);
+      const haveBaseBI = BigInt(bal?.value?.amount ?? "0");
+      const dec = Number(CONFIG?.token?.decimals ?? 6);
+      if (haveBaseBI < amountBase) {
+        const haveHuman = Number(haveBaseBI) / (10 ** dec);
+        const needHuman = Number(amountBase) / (10 ** dec);
         toast(`Insufficient ${TOKEN.symbol}: have ${haveHuman.toLocaleString()}, need ${needHuman.toLocaleString()}`);
         return;
       }
@@ -2187,6 +2095,9 @@ export async function getAta(owner, mint) {
     }
   };
 
+  // --------------------------------------------------------------------------
+  // [RAFFLE STATUS / SCHEDULE / RECENT]
+// --------------------------------------------------------------------------
   let __recentCache = [];
 
   (async function initRaffleUI() {
@@ -2303,7 +2214,6 @@ export async function getAta(owner, mint) {
             if (elId) elId.textContent = round.round_id;
             if (elPot) elPot.textContent = (Number(round.pot || 0) / TEN_POW).toLocaleString();
 
-            // NEW: read commit/reveal from /winner for the *new* round
             try {
               const w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(round.round_id)}/winner`);
               const commitEl = document.getElementById("seed-commit");
@@ -2324,13 +2234,13 @@ export async function getAta(owner, mint) {
     }
   })();
 
-  // -------------------------
-  // History table load
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [HISTORY TABLE LOAD — PARALLEL WINNER FETCH]
+// --------------------------------------------------------------------------
   async function loadHistory(query = "") {
     const tbody = document.querySelector("#history-table tbody"); if (!tbody) return;
 
-    const COLSPAN = 7; // table now has 7 columns
+    const COLSPAN = 7;
 
     if (!__recentCache.length) {
       tbody.innerHTML = `<tr><td colspan="7" class="muted">Loading…</td></tr>`;
@@ -2356,15 +2266,19 @@ export async function getAta(owner, mint) {
       tbody.innerHTML = `<tr><td colspan="7" class="muted">No history.</td></tr>`;
       return;
     }
-  
-    // choose explorer; you can switch to helius / solana.fm if you prefer
-    const txUrl = (sig) => sig ? `https://solscan.io/tx/${encodeURIComponent(sig)}${location.hostname.endsWith('.dev') ? '?cluster=devnet' : ''}` : '#';
 
+    const ids = recent.map(r => r.id || r.round_id || r[0] || "unknown");
+    const winners = await Promise.all(
+      ids.map(id => jfetchStrict(`${API}/rounds/${encodeURIComponent(id)}/winner`).catch(() => null))
+    );
+
+    const txUrl = (sig) => sig ? `https://solscan.io/tx/${encodeURIComponent(sig)}${location.hostname.endsWith('.dev') ? '?cluster=devnet' : ''}` : '#';
     const rows = [];
-    for (const r of recent) {
-      const roundId = r.id || r.round_id || r[0] || "unknown";
-      let w = null;
-      try { w = await jfetchStrict(`${API}/rounds/${encodeURIComponent(roundId)}/winner`); } catch (_) {}
+
+    for (let i = 0; i < recent.length; i++) {
+      const r = recent[i];
+      const w = winners[i];
+      const roundId = ids[i];
 
       const potHuman = (Number(r.pot || 0) / TEN_POW).toLocaleString();
       const winner   = w?.winner || "—";
@@ -2374,7 +2288,7 @@ export async function getAta(owner, mint) {
       const salt     = (w?.salt || w?.server_salt || "—");
 
       const short = (s, n=10) => (typeof s === "string" && s.length > n+1) ? (s.slice(0,n) + "…") : s;
-  
+
       rows.push(`<tr>
         <td>${roundId}</td>
         <td>${potHuman} ${TOKEN.symbol}</td>
@@ -2427,9 +2341,9 @@ export async function getAta(owner, mint) {
     } catch (e) { console.error(e); }
   }
 
-  // -------------------------
-  // Ambient audio arm
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [AMBIENT AUDIO]
+// --------------------------------------------------------------------------
   function armAmbient() {
     const a = document.getElementById("bg-ambient");
     if (!a) return;
@@ -2450,9 +2364,9 @@ export async function getAta(owner, mint) {
   }
   armAmbient();
 
-  // -------------------------
-  // Back-to-top wiring & expose utilities
-  // -------------------------
+  // --------------------------------------------------------------------------
+  // [BACK TO TOP + EXPORTS]
+// --------------------------------------------------------------------------
   document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('#back-to-top');
     if (!b) return;
@@ -2484,4 +2398,4 @@ export async function getAta(owner, mint) {
   // Boot log
   document.addEventListener("DOMContentLoaded", () => { console.log("[TREATZ] Frontend initialized"); });
 
-})();
+})(); // end IIFE
