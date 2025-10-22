@@ -1540,7 +1540,6 @@ export async function getAta(owner, mint) {
   // Wheel of Fate — Frontend
   // ==========================
   (function initWheel() {
-    let SLICES = PRIZES.slice(); // current visual order
     const API = (window.TREATZ_CONFIG?.apiBase || "/api").replace(/\/$/, "");
     let DECIMALS = 6, TEN = 10 ** 6;
     // Load config up-front so mint/decimals/price are correct
@@ -1598,11 +1597,13 @@ export async function getAta(owner, mint) {
       { label:"🎁 Free Spin x3",      type:"free", amount:0,         w:0.01, free:3 },
     ];
 
+    let SLICES = PRIZES.slice();
+    
     const WHEEL_COLORS = {
-    win:  { center: "#14d07a", mid: "#0b9c56", edge: "#073b26" },   // green
-    loss: { center: "#f39a1d", mid: "#a95815", edge: "#3b1d09" },   // orange/brown
-    free: { center: "#c4a6ff", mid: "#6b36d1", edge: "#2b1269" },   // purple
-  };
+      win:  { center: "#16e27a", mid: "#0fb967", edge: "#073b26" }, // slime green
+      loss: { center: "#ff9d2d", mid: "#c26416", edge: "#3b1d09" }, // pumpkin/brass
+      free: { center: "#c4a6ff", mid: "#7036d4", edge: "#2b1269" }, // witch purple
+    };
 
   function spreadPrizes(prizes) {
     const byType = { win: [], loss: [], free: [] };
@@ -1633,7 +1634,7 @@ export async function getAta(owner, mint) {
     // Draw in a fixed 500x500 viewBox; CSS controls actual render size.
     elSvg.setAttribute("viewBox", "0 0 500 500");
     elSvg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    const cx = 250, cy = 250, r = 205;   // larger wheel to fit labels cleanly
+    const cx = 250, cy = 250, r = 212; // more breathing room for labels + rim   // larger wheel to fit labels cleanly
     elSvg.innerHTML = "";
 
       // === defs: gradients for slices ===
@@ -1641,11 +1642,10 @@ export async function getAta(owner, mint) {
       function mkGrad(id, {center, mid, edge}) {
         const g = document.createElementNS(defs.namespaceURI, "radialGradient");
         g.setAttribute("id", id);
-        g.setAttribute("cx","50%"); g.setAttribute("cy","50%"); g.setAttribute("r","78%");
-        // Light in the center, darker to the rim
+        g.setAttribute("cx","50%"); g.setAttribute("cy","45%"); g.setAttribute("r","78%"); // light a bit higher
         [
           ["0%",  center],
-          ["52%", mid],
+          ["55%", mid],
           ["100%", edge],
         ].forEach(([o,c]) => {
           const s = document.createElementNS(defs.namespaceURI,"stop");
@@ -1823,6 +1823,12 @@ export async function getAta(owner, mint) {
     setInterval(refreshWheelCredit, 12000);
     document.addEventListener("DOMContentLoaded", refreshWheelCredit);
 
+    function getWheelSpinMs() {
+      const d = getComputedStyle(elSvg).transitionDuration || "5.2s";
+      const n = parseFloat(d) || 5.2;
+      return /ms$/i.test(d) ? n : n * 1000;
+    }
+
     // animation math
     function spinToLabel(label) {
     const sumW = SLICES.reduce((s,p)=>s+p.w,0);
@@ -1851,7 +1857,7 @@ export async function getAta(owner, mint) {
       setTimeout(()=>{
         const ptr = document.querySelector(".wheel-pointer");
         if (ptr) { ptr.classList.remove("pointer-tap"); void ptr.offsetWidth; ptr.classList.add("pointer-tap"); }
-      }, 4650);
+      }, Math.max(0, getWheelSpinMs() - 350));
     }
 
     function resultLine(outcome) {
@@ -1901,7 +1907,7 @@ export async function getAta(owner, mint) {
               const fs  = outcome.free   ? ` +${outcome.free} free` : "";
               const me = window.PUBKEY ? ` (${window.PUBKEY.slice(0,4)}…${window.PUBKEY.slice(-4)})` : "";
               pushHistory(`[PAID] ${outcome.label}${amt}${fs}${me}`);
-            }, 4600);
+            }, Math.max(0, getWheelSpinMs() - 250));
             return;
           }
         } catch {}
@@ -1914,7 +1920,7 @@ export async function getAta(owner, mint) {
     // pick a weighted prize
     const sumW = PRIZES.reduce((s,p)=>s+p.w,0);
     let r = Math.random()*sumW, pick = PRIZES[0];
-    for (const p of PRIZES) { r -= p.w; if (r <= 0) { pick = p; break; } }
+    for (const p of SLICES) { r -= p.w; if (r <= 0) { pick = p; break; } }
 
     // animate to the selected label
     spinToLabel(pick.label);
@@ -1935,7 +1941,7 @@ export async function getAta(owner, mint) {
       const amt = pick.amount ? ` +${pick.amount.toLocaleString()} $TREATZ` : "";
       const fs  = pick.free   ? ` +${pick.free} free` : "";
       pushHistory(`[SIM] ${pick.label}${amt}${fs}`);
-    }, 4600);
+    }, Math.max(0, getWheelSpinMs() - 250));
   }
 
     // paid spin (on-chain) — FIXED to accept ATA or owner & Token-2022 aware
@@ -2036,7 +2042,7 @@ export async function getAta(owner, mint) {
           pushHistory(`[FREE] ${r.outcome_label}${amt}${fs}`);
           elFreeBtn.disabled = false;
           elSpin.disabled = false;
-        }, 4600);
+        }, Math.max(0, getWheelSpinMs() - 250));
       } catch (e) {
         elFreeBtn.disabled = false;
         elSpin.disabled = false;
